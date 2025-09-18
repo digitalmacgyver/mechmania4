@@ -9,8 +9,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Add compile options
 add_compile_options(-Wall -Wextra -g)
 
-# Option to build with graphics (disabled by default for initial testing)
-option(BUILD_WITH_GRAPHICS "Build with SDL2 graphics support" OFF)
+# Option to build with graphics (now enabled by default)
+option(BUILD_WITH_GRAPHICS "Build with SDL2 graphics support" ON)
+option(USE_SDL2 "Use SDL2 for graphics instead of X11" ON)
 
 # Source directory
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/team/src)
@@ -54,16 +55,33 @@ set(TEAM_SOURCES
 
 # Graphics sources (only if enabled)
 if(BUILD_WITH_GRAPHICS)
-    find_package(SDL2 REQUIRED)
-    find_package(SDL2_image REQUIRED)
+    if(USE_SDL2)
+        # Find SDL2 packages
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SDL2 REQUIRED sdl2)
+        pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
+        pkg_check_modules(SDL2_TTF REQUIRED SDL2_ttf)
 
-    set(GRAPHICS_SOURCES
-        ${SRC_DIR}/Observer.C
-        ${SRC_DIR}/ObserverImage.C
-        ${SRC_DIR}/SpaceViewer.C
-    )
+        set(GRAPHICS_SOURCES
+            ${SRC_DIR}/SDL2Graphics.C
+            ${SRC_DIR}/ObserverSDL.C
+        )
 
-    add_compile_definitions(BUILD_WITH_GRAPHICS)
+        add_compile_definitions(BUILD_WITH_GRAPHICS USE_SDL2)
+        message(STATUS "Building with SDL2 graphics support")
+    else()
+        # Original X11 graphics (kept for reference)
+        find_package(X11 REQUIRED)
+
+        set(GRAPHICS_SOURCES
+            ${SRC_DIR}/Observer.C
+            ${SRC_DIR}/ObserverImage.C
+            ${SRC_DIR}/SpaceViewer.C
+        )
+
+        add_compile_definitions(BUILD_WITH_GRAPHICS)
+        message(STATUS "Building with X11 graphics support")
+    endif()
 else()
     set(GRAPHICS_SOURCES)
     message(STATUS "Building without graphics support (headless mode)")
@@ -95,18 +113,46 @@ target_link_libraries(mm4team mm4_common pthread)
 
 # Observer executable (only if graphics enabled)
 if(BUILD_WITH_GRAPHICS)
+    if(USE_SDL2)
+        set(OBS_MAIN ${SRC_DIR}/mm4obs_sdl.C)
+    else()
+        set(OBS_MAIN ${SRC_DIR}/mm4obs.C)
+    endif()
+
     add_executable(mm4obs
-        ${SRC_DIR}/mm4obs.C
+        ${OBS_MAIN}
         ${CLIENT_SOURCES}
         ${GRAPHICS_SOURCES}
+        ${SRC_DIR}/ServerTeam.C  # Needed for observer
     )
-    target_link_libraries(mm4obs
-        mm4_common
-        pthread
-        ${SDL2_LIBRARIES}
-        ${SDL2_IMAGE_LIBRARIES}
-    )
-    target_include_directories(mm4obs PRIVATE ${SDL2_INCLUDE_DIRS})
+
+    if(USE_SDL2)
+        target_link_libraries(mm4obs
+            mm4_common
+            pthread
+            ${SDL2_LIBRARIES}
+            ${SDL2_IMAGE_LIBRARIES}
+            ${SDL2_TTF_LIBRARIES}
+        )
+        target_include_directories(mm4obs PRIVATE
+            ${SDL2_INCLUDE_DIRS}
+            ${SDL2_IMAGE_INCLUDE_DIRS}
+            ${SDL2_TTF_INCLUDE_DIRS}
+        )
+        target_compile_options(mm4obs PRIVATE
+            ${SDL2_CFLAGS_OTHER}
+            ${SDL2_IMAGE_CFLAGS_OTHER}
+            ${SDL2_TTF_CFLAGS_OTHER}
+        )
+    else()
+        target_link_libraries(mm4obs
+            mm4_common
+            pthread
+            ${X11_LIBRARIES}
+            ${X11_Xpm_LIB}
+        )
+        target_include_directories(mm4obs PRIVATE ${X11_INCLUDE_DIR})
+    endif()
 endif()
 
 # Installation rules

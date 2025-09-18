@@ -14,7 +14,7 @@ class CParser
   ~CParser();
 
   char hostname[128],gfxreg[128];
-  int port,numteams,gfxflag, needhelp, retry;
+  int port,numteams,gfxflag, needhelp, retry, reconnect;
 
  protected:
   void SetDefaults();

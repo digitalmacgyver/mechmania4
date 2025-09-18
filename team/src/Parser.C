@@ -27,7 +27,7 @@ CParser::CParser(int argc, char **argv)
       case 'h': memccpy(hostname,argv[i]+2,0,128); break;
       case 'g': memccpy(gfxreg,argv[i]+2,0,128); break;
       case 'G': gfxflag=1; break;
-      case 'R': retry=1; break;
+      case 'R': retry=1; reconnect=1; break;
       case 'p': port=atoi(argv[i]+2); break;
       case 'T': numteams=atoi(argv[i]+2); break;
       default: needhelp=1;
@@ -55,4 +55,5 @@ void CParser::SetDefaults()
   gfxflag=0;
   needhelp=0;
   retry=0;
+  reconnect=0;
 }
