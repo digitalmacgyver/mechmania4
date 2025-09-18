@@ -1,0 +1,88 @@
+head	1.3;
+access;
+symbols
+	Penult:1.3
+	ThirdWorkingVersion:1.3
+	SecondWorkingVersion:1.3
+	InitialWorkingVersion:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	98.10.04.04.59.23;	author team13;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.10.03.20.39.13;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.20.25.40;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@""
+@
+text
+@// MagicBag.h
+
+#ifndef __MAGICBAG_H__
+#define __MAGICBAG_H__
+
+#include "Entry.h"
+
+class MagicBag {
+ private:
+  Entry ***table;
+  unsigned int *length;
+  unsigned int num_drones;
+  unsigned int num_stuff;
+
+ public:
+  MagicBag(unsigned int drones = 4, unsigned int len = 100);
+  ~MagicBag();
+  
+  Entry *getEntry(unsigned int drone, unsigned int elem);
+  void addEntry(unsigned int drone, Entry *entry);
+};
+
+#endif
+@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@d13 1
+@
+
+
+1.1
+log
+@that's my magic bag, baby!
+@
+text
+@a2 2
+#include "Entry.h"
+
+d6 2
+d10 1
+a10 1
+  Entry **table;
+d15 1
+a15 1
+  MagicBag(unsigned int drones = 4, unsigned int length = 100);
+@
+

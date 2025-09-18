@@ -1,0 +1,40 @@
+#include "GetVinyl.h"
+#include "Team.h"
+#include "FuelTraj.h"
+#include "Thing.h"
+#include "Groogroo.h"
+#include "MagicBag.h"
+
+GetVinyl::GetVinyl()
+{ 
+}
+
+GetVinyl::~GetVinyl()
+{ }
+
+
+void GetVinyl::Decide()
+{
+  //can't fire and drive cause of alcohol breath
+
+  //double fuel;
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pmyTeam->GetWorld();
+
+  int shipnum=pShip->GetShipNumber();
+  MagicBag *mbp=((Groogroo *)pmyTeam)->mb;
+  Entry *e;
+  Entry *best_e=NULL;
+  //  for(int i=0,e=mbp->GetEntry(shipnum, i);e!=NULL;e=mbp->GetEntry(shipnum, i),i++) {
+  //  if(e->thing->GetKind() != ASTEROID) {
+  //   continue;
+  //  }
+  //  if((best_e == NULL) || ((e->fueltraj).traj.rho < (best_e->fueltraj).traj.rho)) {
+  //    best_e=e;
+  //  }
+  //  }
+  pShip->ResetOrders();
+  if(best_e != NULL) {
+    pShip->SetOrder(best_e->fueltraj->order_kind,best_e->fueltraj->order_mag);
+  }
+}

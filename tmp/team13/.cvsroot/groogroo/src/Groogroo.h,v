@@ -1,0 +1,141 @@
+head	1.2;
+access;
+symbols
+	Penult:1.2
+	ThirdWorkingVersion:1.2
+	SecondWorkingVersion:1.2
+	InitialWorkingVersion:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	98.10.03.16.04.38;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.15.12.48;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@/* Groogroo.h
+ * Header for the Chrome Funkadelic
+ * Sample team
+ */
+
+#ifndef _GROOGROO_
+#define _GROOGROO_
+
+#include "Team.h"
+#include "Brain.h"
+
+//////////////////////////////////////
+// Main class: Chrome Funkadelic team
+
+class Groogroo : public CTeam
+{
+ public:
+  Groogroo();
+  ~Groogroo();
+
+  void Init();
+  void Turn();
+};
+
+/////////////////////////////////////
+// Ship AI classes
+
+//-----------------------------
+
+class Voyager : public CBrain
+// A short-lived class to depart from base
+{
+ public:
+  CBrain *pLastBrain;
+
+  Voyager(CBrain* pLB=NULL);
+  ~Voyager();
+
+  void Decide();
+};
+
+//-----------------------------
+
+class Stalker : public CBrain
+{
+ public:
+  CThing *pTarget;
+
+  Stalker() { pTarget=NULL; }
+  ~Stalker() { }
+
+  void Decide();
+};
+
+//----------------------------
+
+class Shooter : public Stalker
+// Shooter will exhibit ability to Stalk
+{
+ public:
+  Shooter() { }
+  ~Shooter() { }
+
+  void Decide();
+};
+
+//-----------------------------
+
+class Gatherer : public Shooter
+// Gatherer will exhibit both Stalker 
+// and Shooter personalities
+{
+ public:
+  Gatherer();
+  ~Gatherer();
+
+  void Decide();
+
+  UINT SelectTarget();
+  void AvoidCollide();
+};
+
+#endif  // _GROOGROO_
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d1 1
+a1 1
+/* ChromeFunk.h
+d6 2
+a7 2
+#ifndef _CHROME_FUNKADELIC_
+#define _CHROME_FUNKADELIC_
+d15 1
+a15 1
+class ChromeFunk : public CTeam
+d18 2
+a19 2
+  ChromeFunk();
+  ~ChromeFunk();
+d83 1
+a83 1
+#endif  // _CHROME_FUNKADELIC_
+@
+

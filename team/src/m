@@ -1,0 +1,6 @@
+#!/bin/csh
+./mm4serv &;
+./mm4team &;
+#./mm4team1 &;
+~/tmp/team13/team/mm4team &;
+./mm4obs &;

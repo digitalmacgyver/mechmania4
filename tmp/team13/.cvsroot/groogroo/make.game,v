@@ -1,0 +1,81 @@
+head	1.2;
+access;
+symbols
+	Penult:1.2
+	ThirdWorkingVersion:1.2
+	SecondWorkingVersion:1.2
+	InitialWorkingVersion:1.2
+	funkfoo:1.1.1.1
+	groogroo:1.1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	98.10.04.04.59.23;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.14.47.14;	author team13;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	98.10.03.14.47.14;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@""
+@
+text
+@# # # Makefile by Misha Voloshin 9/1/98
+# # # Based on Makefile by Swetland 1/25/98
+# # # Haked by Erik Gilling
+
+include make.conf
+
+CXXFLAGS = $($(BUILD)_FLAGS) $($(ARCH)_FLAGS) -Isrc -g
+CXX = $($(ARCH)_CC)
+
+LIBNAME = mm4
+
+all: ${TEAM_NAME}  
+
+clean: clean_team 
+
+clean_team:
+	rm -f $(CLI_OBJS) $(TEAM_OBJS) mm4team.o ${TEAM_NAME} core
+
+${TEAM_NAME}: $(TEAM_OBJS) mm4team.o
+	$(PURIFY) $(CXX) -o ${TEAM_NAME} mm4team.o $(TEAM_OBJS) \
+	$(NLIBS) -lm -L. -l${LIBNAME}
+
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d7 1
+a7 1
+CXXFLAGS = $($(BUILD)_FLAGS) $($(ARCH)_FLAGS) -Isrc
+@
+
+
+1.1.1.1
+log
+@initial
+@
+text
+@@

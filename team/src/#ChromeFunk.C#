@@ -1,0 +1,345 @@
+/* Chrome Funkadelic 
+ * Sample team
+ * MechMania IV: The Vinyl Frontier
+ * Misha Voloshin 9/26/98
+ */
+
+#include "ChromeFunk.h"
+
+// Tell the game to use our class
+CTeam* CTeam::CreateTeam()
+{
+  return new ChromeFunk;
+}
+
+//////////////////////////////////////////
+// Chrome Funkadelic class
+
+ChromeFunk::ChromeFunk()
+{ }
+
+ChromeFunk::~ChromeFunk()
+{ 
+  CShip *pSh;
+  CBrain *pBr;
+
+  for (UINT i=0; i<1 ; i++) { /*GetShipCount(); i++) {*/
+    pSh = GetShip(i);
+    if (pSh==NULL) continue;  // Ship is dead
+
+    pBr = pSh->GetBrain();
+    if (pBr!=NULL) delete pBr;  
+    // Clean up after ourselves
+  }
+}
+
+void ChromeFunk::Init()
+{
+  srand(time(NULL));
+  SetTeamNumber(1+(rand()%16));
+  SetName("Chrome Funkadelic");
+  GetStation()->SetName("HeartLand");
+
+  GetShip(0)->SetName("SS TurnTable");
+  //  GetShip(1)->SetName("Bell Bottoms");
+  //GetShip(2)->SetName("DiscoInferno");
+  //GetShip(3)->SetName("PurpleVelvet");
+
+  for (UINT i=0; i<1 ; i++) { //GetShipCount(); i++) {
+    GetShip(i)->SetCapacity(S_FUEL,45.0);
+    GetShip(i)->SetCapacity(S_CARGO,15.0); // Redundant, but be safe
+    GetShip(i)->SetBrain(new Gatherer);     // Set a gatherer AI for each ship
+  }
+}
+
+void ChromeFunk::Turn()
+{
+  CShip *pSh;
+
+  for (UINT i=0; i<1 ; i++) { //GetShipCount(); i++) {
+    pSh=GetShip(i);
+    if (pSh==NULL) continue;
+
+    pSh->GetBrain()->Decide();
+  }
+}
+
+///////////////////////////////////////////////
+
+Voyager::Voyager(CBrain *pLB)
+{
+  pLastBrain=pLB;  // Store who we're replacing
+  if (pLB->pShip !=NULL)
+    pLB->pShip->SetBrain(this); // Replace it
+}
+
+Voyager::~Voyager()
+{
+  if (pShip!=NULL)
+    pShip->SetBrain(pLastBrain);  // Put everything back
+}
+
+void Voyager::Decide()
+{
+  if (pShip==NULL) return;
+  if (!pShip->IsDocked()) {
+    delete this;  // Don't need us anymore
+    return;  // Let's blow this pop stand
+  }
+
+  double tang = (double)(pShip->GetShipNumber()) * PI/2.0;
+  // Desired angle of station departure
+
+  tang -= pShip->GetOrient();
+  if (tang<-PI) tang+=PI2;
+  if (tang>PI) tang-=PI2;
+  pShip->SetOrder(O_TURN,tang);
+
+  if (fabs(tang)<0.2)
+    pShip->SetOrder(O_THRUST,maxspeed);
+}
+
+//------------------------------------------
+
+void Stalker::Decide()
+{
+  if (pTarget==NULL ||     // No valid target
+      pShip==NULL ||       // No valid ship assigned to this AI
+      *pShip==*pTarget) return;  // Can't home in on ourselves!
+  
+  // First of all, are we going to crash into them anyway?
+  double dt = pShip->DetectCollisionCourse(*pTarget);
+  if (dt!=NO_COLLIDE) {
+    pShip->SetOrder(O_THRUST,0.0);  // Yup. Cancel thrust orders, if any
+    return;          // Our work here is done
+  }
+
+  // First let's estimate how long interception will take
+  // Most of these calculations are completely arbitrary...
+  CTraj RelVel = pShip->RelativeVelocity(*pTarget);
+  double dist = pShip->GetPos().DistTo(pTarget->GetPos());
+  dt = sqrt(dist/RelVel.rho);
+  dt += 1000.0/dist;
+  // dt isn't a very good estimate, since it doesn't take
+  //  direction of velocity into account, but it's good  
+  //  enough for the Chrome Funkadelic.  It'll still
+  //  intercept even if the time estimate isn't dead on,
+  //  which it probably never will be.
+
+  double dang = pShip->AngleToIntercept(*pTarget,dt);
+  // This is how much we need to turn
+  // dang is an angle between -PI and PI
+
+  pShip->SetOrder(O_TURN,1.2*dang);
+  // Let's set the turn order for now. 
+  // Multiply by 1.2 so we'll make sharper turns
+  // If we end up deciding to thrust, thrusting
+  //  will over-ride the turn order anyway
+
+  double tol=1.0;  // Angle tolerance, dependent on distance
+  tol *= dist/1000.0;  // Directly proportional, with an arbitrary constant
+
+  if (fabs(dang)<tol) {  // We're facing our target's future posn
+    pShip->SetOrder(O_THRUST,10.0);   // Accelerate fairly quickly
+  }
+  else if (fabs(dang)>(PI-0.15)) { // We're oriented away from it
+    pShip->SetOrder(O_THRUST,-10.0);  // Cheaper to blast backwards
+  }
+}
+
+//------------------------------------
+
+void Shooter::Decide()
+{
+  if (pTarget==NULL ||     // No valid target
+      pShip==NULL ||       // No valid ship assigned to this AI
+      *pShip==*pTarget) return;  // Can't attack ourselves!
+
+  // Guage laser range
+  double drange=pShip->GetPos().DistTo(pTarget->GetPos());
+  
+  if (drange>350.0) {  // Too far away, will cost too much fuel
+    Stalker::Decide();  // Home in on our prey
+    return;          // That's all we'll do for now
+  } 
+
+  drange += 100.0;  // We want another 100 miles left on the beam
+  // when it hits our poor helpless target
+
+  CCoord MyPos,TargPos;
+  MyPos = pShip->PredictPosition(1.0);
+  TargPos = pTarget->PredictPosition(1.0);
+  // We're shooting 1 second from now, since the physics
+  //  model computes movement before lasers
+
+  CTraj TurnVec = MyPos.VectTo(TargPos);
+  TurnVec.theta -= pShip->GetOrient();
+  TurnVec.Normalize();
+  double dang = TurnVec.theta;
+
+  pShip->SetOrder(O_THRUST,0.0);  // Stabilize, get a decent shot
+
+  pShip->SetOrder(O_TURN,dang);  // Turn to face him
+  pShip->SetOrder(O_LASER,drange+100.0);  // Fry the sucker!
+  // Our lasers will fire 1 second from now.  Hence, by the time the
+  // turn order is complete, we'll be looking right at him.
+  // Unless, of course, he's thrusted or hit something.
+}
+
+//-------------------------------------
+
+Gatherer::Gatherer()
+{ 
+  pTarget=NULL;
+}
+
+Gatherer::~Gatherer()
+{ }
+
+
+UINT Gatherer::SelectTarget()
+{
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pShip->GetWorld();
+  char shipmsg[128]; // Ship message
+
+  if (pShip->GetAmount(S_CARGO)>0.0) {    // We have cargo, let's go home
+    if (pTarget!=pmyTeam->GetStation()) {
+      sprintf (shipmsg,"%s gets %.1f tons of vinyl and goes home\n",
+	       pShip->GetName(), pShip->GetAmount(S_CARGO));
+      strcat(pmyTeam->MsgText,shipmsg);
+    }
+    return pmyTeam->GetStation()->GetWorldIndex();
+  }
+
+  UINT index, indbest=BAD_INDEX;
+  CThing *pTh;
+  ThingKind ThKind;
+  AsteroidKind AsMat;
+  double dist,dbest=-1.0;  // initialize dbest with some useless value
+
+  for (index=pmyWorld->UFirstIndex;  // Let's iterate through the
+       index<=pmyWorld->ULastIndex;  // things in the world, seeking
+       index = pmyWorld->GetNextIndex(index))  // stuff to take
+    {
+    pTh = pmyWorld->GetThing(index);  // Get ptr to CThing object
+    ThKind = pTh->GetKind();   // What are you?
+
+    if (ThKind==SHIP && pTh->GetTeam()!=pShip->GetTeam()) {
+      return index;
+    }
+
+    if (ThKind!=ASTEROID) continue;  // We're only looking for asteroids, so
+    // let's go on with the next cycle of the loop
+
+    AsMat = ((CAsteroid*)pTh)->GetMaterial();
+    if (pShip->GetAmount(S_FUEL)<20.0) {     // Are we low on fuel?
+	if (AsMat==VINYL) continue;     // If we are, only look for fuel asteroids
+    }
+
+    // If we've made it this far into the looping block,
+    // then this asteroid must be something we want
+    dist = pShip->GetPos().DistTo(pTh->GetPos());  // Distance to this Thing
+    
+    if (dbest<dist // If this is better than all previous potential targets
+	|| indbest==BAD_INDEX) {  // Or if this is our first potential target 
+      indbest = index;  // Rem7ember this is our best target candidate
+      dbest = dist;   // Remember the best calculated distance
+    }    
+  }
+
+  return indbest;  // Best target asteroid found
+}
+
+
+void Gatherer::AvoidCollide()
+{
+  UINT index;
+  CThing *pTh;
+  double dsec;
+  char shipmsg[128];  // Ship might print a message
+  CTraj RelMom;
+
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pShip->GetWorld();
+
+  for (index=pmyWorld->UFirstIndex;  // Let's iterate through the
+       index<=pmyWorld->ULastIndex;  // things in the world, seeking
+       index = pmyWorld->GetNextIndex(index))  // stuff to take
+    {
+    pTh = pmyWorld->GetThing(index);  // Get ptr to CThing object
+    //if (pTarget==pTh) continue;  // Okay to collide with target
+    if (pTh==pShip) continue;  // Won't collide with yourself
+
+    dsec = pShip->DetectCollisionCourse(*pTh);
+    if (dsec==NO_COLLIDE) continue;  // No collision pending
+    if (dsec>15.0) continue;  // Collision won't happen for a while
+
+    // If we made it this far into this block of code,
+    // we need to take evasive action
+
+    // First, though, are we already accelerating anyway?
+    if (pShip->GetOrder(O_THRUST)!=0.0
+	|| pShip->GetJettison(VINYL)!=0.0
+	|| pShip->GetJettison(URANIUM)!=0.0) continue;
+    // We're ejecting something, so we'll probably move out
+    // of the way anyway
+
+    // Nope, we need to dodge an impact
+    // Do we have enough time to get away?
+    if (dsec>15.0) {
+      // This can be done much better than it's being done here,
+      //  but this is merely a sample client
+      pShip->SetOrder(O_THRUST,-15.0);  // Accelerate 
+      sprintf (shipmsg,"%s brakes for %s\n",
+	       pShip->GetName(),pTh->GetName());
+      strcat(pmyTeam->MsgText,shipmsg);
+      return;  // We already know we need to move.
+    }
+    else {   // No time to get out of the way
+      pTarget = pTh;
+      Shooter::Decide();  // Let's just shoot it
+      return;  // That's all we can handle for this turn
+    }
+  }
+
+  // Loop finishes without any impending impacts detected
+}
+
+
+void Gatherer::Decide()
+{
+  if (pShip->IsDocked()) {
+    new Voyager(this);  // Voyager will take command until we
+    return;   // have left the station
+  } 
+
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pmyTeam->GetWorld();
+
+  UINT TargIndex = SelectTarget();
+  if (TargIndex!=BAD_INDEX)
+    pTarget = pmyWorld->GetThing(TargIndex);
+  else return;
+
+  Stalker::Decide();  // Set sail for the target!
+
+  if (pTarget->GetKind()==ASTEROID   // If the target's an asteroid
+      && !(pShip->AsteroidFits((CAsteroid*)pTarget))) { 
+    // And we can't eat it...
+    // Let's blast it!
+    Shooter::Decide();  // Blast it if we can
+  }
+
+  if (pShip->GetAmount(S_FUEL)<5.0   // Fuel is dangerously low!!!
+      && pShip->GetAmount(S_CARGO)>5.0) {  // Cargo's weighing us down
+    pShip->SetJettison(VINYL,5.0);
+    // Eject cargo so we can maneuver more easily
+  }
+
+  // Last but not least, let's keep ourselves from dying
+  if (pShip->GetAmount(S_SHIELD)<30.0) 
+    pShip->SetOrder(O_SHIELD,3.0);
+  if (pTarget->GetKind()!=STATION)  // If we're not going home
+    AvoidCollide();  // Worry excessively about bumping into stuff
+}

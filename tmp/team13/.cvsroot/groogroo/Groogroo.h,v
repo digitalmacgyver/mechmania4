@@ -1,0 +1,287 @@
+head	1.9;
+access;
+symbols
+	Penult:1.9
+	ThirdWorkingVersion:1.8
+	SecondWorkingVersion:1.8
+	InitialWorkingVersion:1.8;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	98.10.04.15.58.29;	author team13;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	98.10.04.00.29.08;	author team13;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	98.10.03.23.52.26;	author team13;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	98.10.03.21.29.19;	author team13;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	98.10.03.21.30.17;	author team13;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	98.10.03.21.05.33;	author team13;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	98.10.03.21.04.53;	author team13;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.10.03.15.04.01;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.14.48.22;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@""
+@
+text
+@/* Groogroo.h
+ * Header for the Chrome Funkadelic
+ * Sample team
+ */
+
+#ifndef _GROOGROO_
+#define _GROOGROO_
+
+#include "Team.h"
+#include "Brain.h"
+#include "MagicBag.h"
+#include "Collision.h"
+#include "Traj.h"
+#include "FuelTraj.h"
+#include "Ship.h"
+
+//////////////////////////////////////
+// Main class: Groogroo team
+
+class Groogroo : public CTeam
+{
+ public:
+  Groogroo();
+  ~Groogroo();
+  MagicBag * mb;
+  double uranium_left;
+  double vinyl_left;
+
+  void Init();
+  void Turn();
+  void PopulateMagicBag();
+  
+  FuelTraj determine_orders(CThing *thing, double time, CShip *ship);
+  double determine_probable_fuel_cost(CThing *thing, double time, CShip *ship);
+  Collision detect_collisions_on_path(CThing *thing, double time, CShip *ship);
+};
+
+/////////////////////////////////////
+
+#endif  // _GROOGROO_
+@
+
+
+1.8
+log
+@*** empty log message ***
+@
+text
+@d26 2
+@
+
+
+1.7
+log
+@""
+@
+text
+@d15 1
+d32 2
+a33 2
+  double determine_probable_fuel_cost(CThing *thing, double time);
+  Collision detect_collisions_on_path(CThing *thing, double time);
+@
+
+
+1.6
+log
+@*** empty log message ***
+@
+text
+@d14 1
+a14 7
+
+class FuelTraj 
+{
+ public:
+  double fuel_used;
+  CTraj traj;
+};
+@
+
+
+1.5
+log
+@*** empty log message ***
+@
+text
+@d36 1
+a36 1
+  FuelTraj determine_orders(CThing *thing, double time);
+@
+
+
+1.4
+log
+@*** empty log message ***
+@
+text
+@d19 1
+a19 4
+  CTraj *traj;
+
+  FuelTraj();
+  ~FuelTraj();
+d36 3
+a38 3
+  FuelTraj *determine_orders(CThing thing, double time);
+  double determine_probable_fuel_cost(CThing thing, double time);
+  Collision *detect_collisions_on_path(CThing thing, double time);
+@
+
+
+1.3
+log
+@*** empty log message ***
+@
+text
+@d12 12
+d38 4
+a44 3
+
+
+
+@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@d11 1
+d14 1
+a14 1
+// Main class: Chrome Funkadelic team
+d21 1
+d25 1
+a28 1
+// Ship AI classes
+a29 1
+//-----------------------------
+a30 24
+class Voyager : public CBrain
+// A short-lived class to depart from base
+{
+ public:
+  CBrain *pLastBrain;
+
+  Voyager(CBrain* pLB=NULL);
+  ~Voyager();
+
+  void Decide();
+};
+
+//-----------------------------
+
+class Stalker : public CBrain
+{
+ public:
+  CThing *pTarget;
+
+  Stalker() { pTarget=NULL; }
+  ~Stalker() { }
+
+  void Decide();
+};
+a31 27
+//----------------------------
+
+class Shooter : public Stalker
+// Shooter will exhibit ability to Stalk
+{
+ public:
+  Shooter() { }
+  ~Shooter() { }
+
+  void Decide();
+};
+
+//-----------------------------
+
+class Gatherer : public Shooter
+// Gatherer will exhibit both Stalker 
+// and Shooter personalities
+{
+ public:
+  Gatherer();
+  ~Gatherer();
+
+  void Decide();
+
+  UINT SelectTarget();
+  void AvoidCollide();
+};
+@
+
+
+1.1
+log
+@whee
+@
+text
+@d1 1
+a1 1
+/* ChromeFunk.h
+d6 2
+a7 2
+#ifndef _CHROME_FUNKADELIC_
+#define _CHROME_FUNKADELIC_
+d15 1
+a15 1
+class ChromeFunk : public CTeam
+d18 2
+a19 2
+  ChromeFunk();
+  ~ChromeFunk();
+d83 1
+a83 1
+#endif  // _CHROME_FUNKADELIC_
+@
+

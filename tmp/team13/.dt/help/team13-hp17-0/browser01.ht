@@ -1,0 +1,540 @@
+<TOPIC charset ISO-8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+Common Desktop Environment
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+Overview and Basic Desktop Skills  * Using Help  * File Manager  * Front Panel  * Application Manager  * Print Manager  * Style Manager  * Mailer  * Text Editor  * Calendar Manager  * Icon Editor  * Terminal Emulator  * Calculator  * Create Action  * Login Manager and Environment Variables  * Application Administration
+</P>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Intromgr.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Introducing the Desktop
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This help volume describes features of the desktop and the basic skills required to use them. 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Help4Help.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Desktop Help System
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Help for using the Common Desktop Environment Help System 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Filemgr.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+File Manager Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Basic File Management Skills * Using the Desktop * Using the Trash Can * Locating Files * File Manager Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "FPanel.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Front Panel Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Using the Front Panel * Customizing the Front Panel * Front Panel Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Appmanager.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Application Manager Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Using the Application Manager * Application Manager Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Printmgr.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Printing Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Printing * Cancelling Print Jobs * Finding Print Jobs * Print Manager Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Stylemgr.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Style Manager Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Changing Colors * Creating Custom Palettes * Changing Workspace Backdrops * Choosing a Font Size * Customizing System Behavior (Keyboard, Mouse, Audio) * Changing Window Behavior * Style Manager Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Mailer.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Mailer Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This help volume provides information about using Mailer to send, receive, and save messages, and to customize Mailer properties. 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Textedit.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Text Editor Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Starting Text Editor * Opening and Saving Documents * Creating and Editing Documents * Formatting and Printing Documents * Text Editor Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Calendar.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Calendar Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This help volume provides information about using Calendar to schedule appointments and To Do items, trigger reminders, schedule group appointments, and view and print your calendar. 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Iconed.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Icon Editor Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Creating and Editing Icons * Color Usage in Icons * How Icons are Found * Icon Editor Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Terminal.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Terminal Emulator Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Using Terminal Emulators * Configuring Terminal Emulators * dtterm 1x man page * Terminal Escape Sequences 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Calculator.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Calculator Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Calculator Help * Overview * Basic Operation * Selected Calculator Tasks 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "CreatAct.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Create Action Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Using the Create Action application to create actions and data types 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Loginmgr.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Login Manager Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+* Starting and Ending Desktop Sessions * Customizing Login Manager Behavior * Login Manager Reference 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "SysAdmin.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Administering Desktop Applications
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+Help for Administering Desktop Applications 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset ISO-8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+Overview and Basic Desktop Skills
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+Overview and Basic Desktop Skills for the                 Common Desktop Environment.
+</P>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "Intromgr.sdl _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Introducing the Desktop
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This help volume describes features of the desktop and the basic skills required to use them. 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP-UX 10.20 Operating System Help
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+HP-UX 10.20 Operating System Help Topics  <CHAR symbol><0xA8></> Common HP-UX Tasks  <CHAR symbol><0xA8></> HP-UX Release Notes  <CHAR symbol><0xA8></> Customer Comments 
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "hpuxtask _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Common HP-UX Tasks
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+HP-UX Operating System Tasks      <CHARACTERSET symbol><0xA8></> Files      <CHARACTERSET symbol><0xA8></> Directories      <CHARACTERSET symbol><0xA8></> Commands      <CHARACTERSET symbol><0xA8></> Shells      <CHARACTERSET symbol><0xA8></> Mailers      <CHARACTERSET symbol><0xA8></> Printers      <CHARACTERSET symbol><0xA8></> Networking      <CHARACTERSET symbol><0xA8></> System Information
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "hpuxreno _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Release Notes
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+This volume of help screens contains Release Notes.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "hpuxreply _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Customer Comments
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+Provides a way for you to send feedback to Hewlett-Packard about the online help.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+Using Your HP Workstation
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+How to get started and do basic tasks with your HP workstation. 
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "vueux _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Using Your HP Workstation
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+Basic tasks for using your workstation      <CHARACTERSET symbol><0xA8></> Getting Started      <CHARACTERSET symbol><0xA8></> Introducing HP VUE      <CHARACTERSET symbol><0xA8></> Learning Basic Skills      <CHARACTERSET symbol><0xA8></> Working with Files      <CHARACTERSET symbol><0xA8></> Editing Files      <CHARACTERSET symbol><0xA8></> Using Electronic Mail      <CHARACTERSET symbol><0xA8></> Using Multimedia      <CHARACTERSET symbol><0xA8></> Using Applications      <CHARACTERSET symbol><0xA8></> Printing      <CHARACTERSET symbol><0xA8></> Communicating over a Network      <CHARACTERSET symbol><0xA8></> Customizing Your System
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP DCE/9000, Version 1.5
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+Welcome to HP DCE/9000 Online Help  <CHAR symbol><0xA8></> Guide to HP DCE/9000 Hardcopy Documentation  <CHAR symbol><0xA8></> HP DCE/9000 Man Pages <CHAR symbol><0xA8></> DCE Glossary 
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "DCEwelcome.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Welcome to HP DCE/9000 Online Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+An introduction to the online help provided for HP DCE/9000.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "DCEdocguide.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Guide to HP DCE/9000 Hardcopy Documentation
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+List and describes the hardcopy manuals shipped with the current version of HP DCE/9000.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "DCEman.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP DCE/9000 Man Pages
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+A list of the man pages in the current version of HP DCE/9000, with hyperlinks to the actual man pages.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "DCEgloss.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+DCE Glossary
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+The DCE Glossary provides online access               to definitions for user, programming, and administration               terminology associated with the Distributed Computing               Environment.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+Multimedia Tools
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+The General Toolbox has Media tools for image and sound. You can display, edit, and print bit-mapped images, capture screen images, and record, play, and edit sound.  
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "image.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+ImageView
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+ImageView lets you double click on bit-mapped image files to view their contents, make and save simple changes, and print what you save.  Viewable images include TIFF images, JPEG-compressed images, and various X images.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "capture.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Capture Screen
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+Capture Screen provides a window you can use to capture all or part of your screen. If started from the Media Toolbox (in the General Toolbox) Capture Screen lets you save what you capture in one several types of files.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "IVEaudio.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Audio
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+Starting the Audio Editor   <CHARACTERSET symbol><0xA8></> Playing audio data   <CHARACTERSET symbol><0xA8></> Editing audio files   <CHARACTERSET symbol><0xA8></> Saving audio data
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+SharedPrint/UX
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+SharedPrint/UX is Graphical User Interface to the HP-UX lp command.
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "sharedpr.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+SharedPrint/UX
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+SharedPrint/UX is a graphical user interface for printing multiple types of files on multiple types of printers.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "sharedpra.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+SharedPrint/UX Manager
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+The SharedPrint/UX Manager lets you check the status of printers and print requests and administer SharedPrint/UX printers.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP C Online Reference 
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+HP C Help Topics  <CHAR symbol><0xA8></> Compiler Command Syntax  <CHAR symbol><0xA8></> Compile-Line Options  <CHAR symbol><0xA8></> Compiler Pragmas  <CHAR symbol><0xA8></> Data Types and Storage Classes  <CHAR symbol><0xA8></> Expressions and Operators  <CHAR symbol><0xA8></> Statements  <CHAR symbol><0xA8></> Preprocessing Directives  <CHAR symbol><0xA8></> Getting Help on Error Messages  <CHAR symbol><0xA8></> Concepts and Tutorials 
+</P>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "c _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP C Online Reference
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This is the online help system for HP C on the HP 9000 Series 700   and 800 computer systems.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP-PEX
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+HP-PEX Tutorial and Reference
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "PEXRef.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP PEX 5.1v1/5.1v2/5.1v3/5.1v4 On-Line Documentation
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+On-line reference/tutorial material for HP PEX 5.1 Versions 1,2,3,4.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP/PAK, Version 7.0
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+Welcome to Puma Help  <CHAR symbol><0xA8></> Overview  <CHAR symbol><0xA8></> Invoking and Exiting Puma  <CHAR symbol><0xA8></> Collecting Performance Data  <CHAR symbol><0xA8></> Analyzing Performance Data  <CHAR symbol><0xA8></> Commenting on the Puma Online Help System
+</P>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "pumahelp _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Puma, Version 7.0
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This help system provides on-line task and reference information    for the Puma performance analysis tool.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP Help System, Version 3.0
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+Online reference for authors and programmers using the HP Help System.
+</P>
+<CHARACTERSET ?.ISO-8859-1>
+<LINK 0 "HPHelpKit.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP Help System Developer's Guide
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET ?.ISO-8859-1>
+Organizing and Writing and Online Help Volume   <CHARACTERSET symbol><0xA8></>  Integrating the HP Help System into an Application   <CHARACTERSET symbol><0xA8></>  HP HelpTag Markup Summary   <CHARACTERSET symbol><0xA8></>  API Summary 
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "helpdemo.hv _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Helpdemo (Sample Application)
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This online help volume is used with the `helpdemo' program            that demonstrates how to use the HP Help System in an OSF/Motif     Application.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>
+<TOPIC charset iso8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+HP C++ Online Programmer's Guide
+</SIZE></WEIGHT></TYPE></TITLE>
+<P before 1 first 1 left 1>
+HP C++ Help Topics  <CHAR symbol><0xA8></> Getting Started with HP C++  <CHAR symbol><0xA8></> What's New in this Release of HP C++  <CHAR symbol><0xA8></> Concepts and Tutorials  <CHAR symbol><0xA8></> Compiler Command Syntax  <CHAR symbol><0xA8></> Compile-Line Options  <CHAR symbol><0xA8></> Compiler Pragmas  <CHAR symbol><0xA8></> Getting Help on Error Messages  <CHAR symbol><0xA8></> C++ Language Quick Reference  <CHAR symbol><0xA8></> Customer Comments  <CHAR symbol><0xA8></> Documentation Map
+</P>
+<CHARACTERSET C.ISO-8859-1>
+<LINK 0 "CXX _hometopic">
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP C++ Online Programmer's Guide
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+<CHARACTERSET C.ISO-8859-1>
+This is the online help system for HP C++.
+</CHARACTERSET>
+</P>
+</CHARACTERSET>
+</PARAGRAPH>
+</TOPIC>

@@ -1,0 +1,34 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.04.05.08.57;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@""
+@
+text
+@#include "Entry.h"
+
+Entry::Entry() {
+}
+
+Entry::~Entry() {
+}
+@

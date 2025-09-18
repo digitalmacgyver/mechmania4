@@ -1,0 +1,62 @@
+# # # Makefile by Misha Voloshin 9/1/98
+# # # Based on Makefile by Swetland 1/25/98
+
+include make.conf
+
+CXXFLAGS = $($(BUILD)_FLAGS) $($(ARCH)_FLAGS)
+CXX = $($(ARCH)_CC)
+
+PHYS_OBJS = Sendable.o Coord.o Traj.o \
+	Thing.o Asteroid.o Station.o Ship.o \
+	World.o Team.o
+SERV_OBJS = Network.o Parser.o ServerNet.o Server.o 
+CLI_OBJS = Network.o Parser.o ClientNet.o Client.o
+GFX_OBJS = ObserverImage.o SpaceViewer.o Observer.o 
+ALL_OBJS = $(PHYS_OBJS) $(SERV_OBJS) $(CLI_OBJS) $(GFX_OBJS)
+TEAMFILES = Makefile make.conf mm4team.C libmm4.a ChromeFunk.C ChromeFunk.h
+SRCTEAM = Asteroid.C ChromeFunk.C Client.C ClientNet.C Coord.C EmptyTeam.C \
+	Network.C Observer.C ObserverImage.C Parser.C Sendable.C Server.C \
+	ServerNet.C ServerTeam.C Ship.C SpaceViewer.C Station.C Team.C Thing.C \
+	Traj.C World.C main.C mm4obs.C mm4serv.C mm4team.C Asteroid.h Brain.h \
+	ChromeFunk.h Client.h ClientNet.h Coord.h EmptyTeam.h Network.h \
+	Observer.h ObserverImage.h Parser.h Sendable.h Server.h ServerNet.h \
+	ServerTeam.h Ship.h SpaceViewer.h Station.h Team.h Thing.h Traj.h \
+	World.h stdafx.h xpm.h Makefile make.conf make.game 
+LIBNAME = mm4
+LIBTARGET = lib${LIBNAME}.a
+
+all: ${LIBTARGET} ${TEAM_NAME} mm4serv mm4obs 
+
+clean: clean_team clean_obs clean_serv
+
+clean_team:
+	rm -f $(CLI_OBJS) $(TEAM_OBJS) mm4team.o ${TEAM_NAME} core
+
+clean_obs:
+	rm -f $(CLI_OBJS) $(GFX_OBJS) mm4obs.o mm4obs core
+
+clean_serv:
+	rm -f $(PHYS_OBJS) $(SERV_OBJS) mm4serv.o mm4serv core
+
+${LIBTARGET}: ${ALL_OBJS}
+	-rm ${LIBTARGET}
+	ar cr ${LIBTARGET} ${ALL_OBJS}
+
+${TEAM_NAME}: ${LIBTARGET} $(TEAM_OBJS) mm4team.o
+	$(PURIFY) $(CXX) -o ${TEAM_NAME} mm4team.C $(TEAM_OBJS) \
+	$(NLIBS) -lm -L. -l${LIBNAME}
+
+mm4obs: ${LIBTARGET} mm4obs.o
+	$(CXX) -o mm4obs mm4obs.C ServerTeam.C -L. -l${LIBNAME} \
+	$(XLIBS) $(NLIBS) -lm  
+
+mm4serv: ${LIBTARGET} ServerTeam.o mm4serv.o
+	$(CXX) -o mm4serv mm4serv.C ServerTeam.C \
+	$(NLIBS) -lm -L. -l${LIBNAME}
+
+teamdir: ${LIBTARGET} 
+	-mkdir team
+	-cp ${TEAMFILES} team
+	-cp make.game.team team/make.game
+	-mkdir team/src
+	-cp ${SRCTEAM} team/src

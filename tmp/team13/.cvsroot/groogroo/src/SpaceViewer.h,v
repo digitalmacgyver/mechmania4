@@ -1,0 +1,83 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.54;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@// Mechmania IV SpaceViewer Header
+// Tim Harahan 7-13-1998 10PM
+
+#ifndef SPACEVIEWER_H_BOOGELY
+#define SPACEVIEWER_H_BOOGELY
+
+#include <fstream.h>
+#include <iostream.h>
+#include "ObserverImage.h"
+#include "Observer.h"
+
+#ifndef numstars
+#define numstars  2048
+#endif // numstars
+
+class Observer;
+
+class SpaceViewer
+{
+
+protected:
+  struct XpmInfo
+  {
+    int depth, width, height;
+  };
+
+  struct SStarType {
+    UINT uX,uY;
+  } aStars[numstars];
+
+  ObserverImage **obImages;
+  Observer *sObserver;
+  UINT lasCol;
+  double imgRotInc;
+  UINT xpmColors[256];
+
+  int getImages(char*);
+
+public:
+  BOOL gotImages, bstarplot;
+
+  SpaceViewer(char*, Observer*);
+  ~SpaceViewer();
+
+  void Clear();
+  void plotLaser(double, double, double, double);
+  void plotThing(double, double, double, int, const char *thingname=NULL);
+  void plotVelVector(double, double, double, double, double);
+  int readXpmFromFile(char*, Pixmap*, Pixmap*, XpmInfo*);
+  void testImages(int);
+
+  void initStars(int maxx, int maxy);
+  void plotStars();
+};
+
+#endif
+@

@@ -1,0 +1,59 @@
+head	1.3;
+access;
+symbols
+	Penult:1.3
+	ThirdWorkingVersion:1.3
+	SecondWorkingVersion:1.3
+	InitialWorkingVersion:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	98.10.03.20.28.45;	author team13;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.10.03.15.13.58;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.14.51.50;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@*** empty log message ***
+@
+text
+@libmm4.a
+mm4team
+ChromeFunk
+@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@d3 1
+@
+
+
+1.1
+log
+@.cvsignore
+@
+text
+@d2 1
+@
+

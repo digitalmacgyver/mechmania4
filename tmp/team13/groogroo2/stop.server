@@ -1,0 +1,12 @@
+#!/usr/bin/perl
+
+$foo = `ps -efl`;
+
+@pslines = split(/\n/, $foo);
+
+foreach (@pslines) {
+   if (/mm4/ or /ChromeFunk/) {
+    $ps = (split(/\s+/))[4];
+    kill(15, $ps);
+   }
+} 

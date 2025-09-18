@@ -1,0 +1,172 @@
+head	1.7;
+access;
+symbols
+	Penult:1.7
+	ThirdWorkingVersion:1.7
+	SecondWorkingVersion:1.7
+	InitialWorkingVersion:1.7
+	funkfoo:1.1.1.1
+	groogroo:1.1.1;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	98.10.04.00.29.08;	author team13;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	98.10.03.21.30.17;	author team13;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	98.10.03.17.09.28;	author team13;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	98.10.03.16.44.04;	author team13;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	98.10.03.15.51.58;	author team13;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.10.03.15.12.40;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.14.47.13;	author team13;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	98.10.03.14.47.13;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@*** empty log message ***
+@
+text
+@########################################
+###
+###   MechMania IV: The Vinyl Frontier
+###   Primary Makefile
+###   10/2/98
+###
+########################################
+
+### Choose build architecture: 
+### HP-UX, IRIX, SOLARIS, LINUX, AIX
+ARCH = HP-UX
+
+### List the object files on which your
+### team's build will be dependent
+
+TEAM_OBJS = Groogroo.o GetVinyl.o DumbThing.o ReturnToBase.o MagicBag.o Entry.o
+
+### This is the name of your team executable
+TEAM_NAME = mm4team
+
+### Uncomment this if you want the 
+### Purify debug utility activated
+#PURIFY = purify
+
+##
+##########################################
+## Do not modify below this line
+
+include make.game
+
+@
+
+
+1.6
+log
+@*** empty log message ***
+@
+text
+@d16 1
+a16 1
+TEAM_OBJS = Groogroo.o GetVinyl.o DumbThing.o ReturnToBase.o MagicBag.o 
+@
+
+
+1.5
+log
+@*** empty log message ***
+@
+text
+@d16 1
+a16 1
+TEAM_OBJS = Groogroo.o GetVinyl.o DumbThing.o ReturnToBase.o
+@
+
+
+1.4
+log
+@*** empty log message ***
+@
+text
+@d16 1
+a16 1
+TEAM_OBJS = Groogroo.o GetVinyl.o
+@
+
+
+1.3
+log
+@*** empty log message ***
+@
+text
+@d23 1
+a23 1
+# PURIFY = purify
+@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@d16 1
+a16 1
+TEAM_OBJS = Groogroo.o
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d11 1
+a11 1
+ARCH = IRIX
+d16 1
+a16 1
+TEAM_OBJS = ChromeFunk.o
+@
+
+
+1.1.1.1
+log
+@initial
+@
+text
+@@

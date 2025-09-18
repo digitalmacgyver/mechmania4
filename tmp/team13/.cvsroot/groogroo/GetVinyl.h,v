@@ -1,0 +1,38 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.51.57;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@#include "Brain.h"
+
+class GetVinyl : public CBrain
+{
+ public:
+  GetVinyl();
+  ~GetVinyl();
+
+  void Decide();
+
+};
+@

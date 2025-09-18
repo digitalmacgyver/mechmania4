@@ -1,0 +1,111 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.53;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@/* Ship.h
+ * Prophecy of the Motherload.
+ * Header for CShip
+ * Inherited off of CThing
+ * For use with MechMania IV
+ * Misha Voloshin 5/28/98
+ */
+
+#ifndef _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
+#define _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
+
+#include "Thing.h"
+#include "Asteroid.h"
+
+class CTeam;
+class CBrain;
+
+const double dMaxStatTot=60.0;
+
+enum OrderKind
+{
+  O_SHIELD, O_LASER, O_THRUST, O_TURN, O_JETTISON, O_ALL_ORDERS
+};
+
+enum ShipStat
+{
+  S_CARGO, S_FUEL, S_SHIELD, S_ALL_STATS
+};
+
+class CShip : public CThing
+{
+ public:
+  CShip (CCoord StPos, CTeam *pteam=NULL, UINT ShNum=0);
+  virtual ~CShip();
+
+  UINT GetShipNumber() const;
+  BOOL IsDocked() const;
+
+  double GetAmount(ShipStat st) const;        // Returns current amount
+  double GetCapacity(ShipStat st) const;       // Returns max capacity
+  double SetAmount(ShipStat st, double val);             // Returns new amt
+  double SetCapacity(ShipStat st, double val);           // Returns new capacity
+
+  CBrain* GetBrain();             // Returns current CBrain object
+  CBrain* SetBrain(CBrain* pBr);  // Returns old CBrain object
+
+  virtual double GetMass() const;
+  
+  virtual void Drift(double dt=1.0);
+  BOOL AsteroidFits(const CAsteroid* pAst);
+
+  CThing* LaserTarget();    // Returns what laserbeam will hit if fired
+  double GetLaserBeamDistance();  // Returns distance laserbeam will traverse
+  double AngleToIntercept(const CThing& OthThing, double dtime);
+
+  ShipStat AstToStat(AsteroidKind AsMat) const;
+  AsteroidKind StatToAst(ShipStat ShStat) const;
+
+  void ResetOrders();
+  double GetOrder(OrderKind Ord) const;        // Returns value of order
+  double SetOrder(OrderKind Ord, double value);  // Returns fuel consumed for order
+  void SetJettison(AsteroidKind Mat, double amt);
+  double GetJettison(AsteroidKind Mat);
+
+  // Serialization routines
+  unsigned GetSerialSize() const;
+  unsigned SerialPack (char *buf, unsigned buflen) const;
+  unsigned SerialUnpack (char *buf, unsigned buflen);
+
+ protected:
+  UINT myNum;
+  BOOL bDockFlag;
+  double dDockDist, dLaserDist;
+  CBrain *pBrain;
+
+  double adOrders[(UINT)O_ALL_ORDERS];
+  double adStatCur[(UINT)S_ALL_STATS];
+  double adStatMax[(UINT)S_ALL_STATS];
+
+  virtual void HandleCollision (CThing* pOthThing, CWorld *pWorld=NULL);
+  virtual void HandleJettison();
+};
+
+#endif // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
+@

@@ -1,0 +1,79 @@
+head	1.2;
+access;
+symbols
+	Penult:1.2
+	ThirdWorkingVersion:1.2
+	SecondWorkingVersion:1.2
+	InitialWorkingVersion:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	98.10.03.20.34.06;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.17.07.14;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@#include "ReturnToBase.h"
+#include "Team.h"
+
+ReturnToBase::ReturnToBase()
+{ 
+}
+
+ReturnToBase::~ReturnToBase()
+{ }
+
+
+void ReturnToBase::Decide()
+{
+  static int flag=0;
+  double fuel;
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pmyTeam->GetWorld();
+  if(flag >= 4) {
+    fuel=pShip->SetOrder(O_THRUST,rand() / float(RAND_MAX) * 30.0);
+  } else {
+    fuel=pShip->SetOrder(O_TURN,rand() / float(RAND_MAX) * PI);
+    flag ++;
+  }
+  
+  sprintf(pmyTeam->MsgText, "Fuel Used: %g\n", fuel);
+}
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d1 1
+a1 1
+#include "GetVinyl.h"
+d4 1
+a4 1
+GetVinyl::GetVinyl()
+d8 1
+a8 1
+GetVinyl::~GetVinyl()
+d12 1
+a12 1
+void GetVinyl::Decide()
+@
+

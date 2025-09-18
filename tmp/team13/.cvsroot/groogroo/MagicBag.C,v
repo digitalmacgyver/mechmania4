@@ -1,0 +1,143 @@
+head	1.4;
+access;
+symbols
+	Penult:1.4
+	ThirdWorkingVersion:1.4
+	SecondWorkingVersion:1.4
+	InitialWorkingVersion:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	98.10.04.06.21.09;	author team13;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	98.10.04.04.59.23;	author team13;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.10.03.20.39.12;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.20.25.37;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@""
+@
+text
+@//MagicBag.C
+// "Wrong!  I'm perfectly sane, everyone else is insane and trying to take
+//  my magic bag!"
+
+#include "MagicBag.h"
+
+MagicBag::MagicBag(unsigned int drones, unsigned int len) {
+  num_drones = drones;
+  num_stuff = len;
+
+  length = new unsigned[drones];
+  table = new (Entry**) [drones];
+  for (unsigned int i = 0; i < drones; i++) {
+    table[i] = new (Entry*) [len];
+    length[i] = 0;
+  }
+}
+
+MagicBag::~MagicBag() {
+  for(unsigned int i = 0; i < num_drones; i++) {
+    for (unsigned int j = 0; j < length[i]; j++)
+      delete table[i][j];
+    delete table[i];
+  }
+  delete table;
+  delete length;
+}
+
+Entry *MagicBag::getEntry(unsigned int drone, unsigned int elem) {
+  if (drone >= num_drones || elem >= length[drone]) {
+    return (Entry *)NULL;
+  } else {
+    return table[drone][elem];
+  }
+}
+
+void MagicBag::addEntry(unsigned int drone, Entry *entry) {
+  if (drone >= num_drones) {
+    cerr << "DORK: Trying to add an entry to an undefined drone." << endl;
+  } else {
+    table[drone][ length[drone] ] = entry;
+    length[drone]++;
+  }
+}
+  
+@
+
+
+1.3
+log
+@""
+@
+text
+@d12 1
+a12 1
+  table = new Entry**[drones];
+d14 1
+a14 1
+    table[i] = new Entry*[len];
+d21 1
+a21 1
+    for (unsigned int j = 0; j < num_stuff; j++)
+@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@d9 1
+d21 1
+a21 1
+    for (unsigned int j = 0; j < length[i]; j++)
+@
+
+
+1.1
+log
+@that's my magic bag, baby!
+@
+text
+@d7 1
+a7 1
+MagicBag::MagicBag(unsigned int drones, unsigned int length) {
+d11 1
+a11 1
+  table = new Entry[drones];
+d13 1
+a13 1
+    table[i] = new Entry[length];
+d19 3
+a21 1
+  for(unsigned int i = 0; i < drones; i++) {
+d28 1
+a28 1
+Entry *getEntry(unsigned int drone, unsigned int elem) {
+d36 1
+a36 1
+void addEntry(unsigned int drone, Entry *entry) {
+@
+

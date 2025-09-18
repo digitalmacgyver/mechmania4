@@ -1,0 +1,56 @@
+head	1.2;
+access;
+symbols
+	Penult:1.2
+	ThirdWorkingVersion:1.2
+	SecondWorkingVersion:1.2
+	InitialWorkingVersion:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	98.10.03.16.31.38;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.16.04.37;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@#!/usr/dcs/software/supported/bin/perl
+
+$foo = `ps -efl`;
+
+@@pslines = split(/\n/, $foo);
+
+foreach (@@pslines) {
+   if (/mm4/ or /ChromeFunk/) {
+    $ps = (split(/\s+/))[4];
+    kill(15, $ps);
+   }
+} 
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d8 1
+a8 1
+   if (/mm4/) {
+@
+

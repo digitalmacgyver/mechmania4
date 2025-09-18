@@ -1,0 +1,51 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.53;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@/* ServerTeam.h
+ * Interface for CServerTeam
+ * Team object with empty Init and Turn methods
+ * For use on the server end
+ * MechMania IV 10/2/98
+ * by Misha Voloshin
+ */
+
+#ifndef _SERVERTEAM_H_EFSKJHEFEFJKWEHFJKLHEFK
+#define _SERVERTEAM_H_EFSKJHEFEFJKWEHFJKLHEFK
+
+#include "Team.h"
+
+class CServerTeam : public CTeam
+{
+ public:
+  CServerTeam();   // Empty constructor, default CTeam
+  ~CServerTeam();  // Empty destructor
+
+  void Init();     // Empty Init
+  void Turn();     // Empty Turn
+};
+
+#endif  // _SERVERTEAM_H_EFSKJHEFEFJKWEHFJKLHEFK
+@

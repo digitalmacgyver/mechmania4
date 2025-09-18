@@ -1,0 +1,60 @@
+head	1.2;
+access;
+symbols
+	Penult:1.2
+	ThirdWorkingVersion:1.2
+	SecondWorkingVersion:1.2
+	InitialWorkingVersion:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	98.10.03.21.30.16;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.21.19.01;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@
+#ifndef _COLLISION_H_
+#define _COLLISION_H_
+
+class Collision {
+ public:
+  // The first collision on the way
+  CThing *collision_thing;
+  double collision_when;
+  CCoord collision_where;
+};
+
+#endif
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d10 1
+a10 4
+  CCoord *collision_where;
+
+  Collision();
+  ~Collision();
+@
+

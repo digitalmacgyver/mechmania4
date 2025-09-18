@@ -1,0 +1,1018 @@
+head	1.17;
+access;
+symbols
+	Penult:1.17
+	ThirdWorkingVersion:1.16
+	SecondWorkingVersion:1.16
+	InitialWorkingVersion:1.16;
+locks; strict;
+comment	@ * @;
+
+
+1.17
+date	98.10.04.15.58.29;	author team13;	state Exp;
+branches;
+next	1.16;
+
+1.16
+date	98.10.04.07.03.10;	author team13;	state Exp;
+branches;
+next	1.15;
+
+1.15
+date	98.10.04.06.46.02;	author team13;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	98.10.04.06.21.08;	author team13;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	98.10.04.04.59.22;	author team13;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	98.10.04.02.27.27;	author team13;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	98.10.04.00.29.07;	author team13;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	98.10.03.23.52.26;	author team13;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	98.10.03.21.30.17;	author team13;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	98.10.03.21.05.33;	author team13;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	98.10.03.21.04.53;	author team13;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	98.10.03.20.28.46;	author team13;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	98.10.03.17.07.13;	author team13;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	98.10.03.16.44.03;	author team13;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	98.10.03.15.51.57;	author team13;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	98.10.03.15.04.01;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.14.48.21;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.17
+log
+@""
+@
+text
+@/* Groogroo Eat Groogroo
+ * "Groogroo don't eat Groogroo; Groogroo do."
+ * MechMania IV: The Vinyl Frontier
+ * Team 13: Zach, Arun, Matt 10/3/1998
+ * based on Sample file by Misha Voloshin 9/26/98
+ */
+
+#include "Groogroo.h"
+#include "GetVinyl.h"
+#include "Asteroid.h"
+
+// Tell the game to use our class
+CTeam* CTeam::CreateTeam()
+{
+  return new Groogroo;
+}
+
+//////////////////////////////////////////
+// GrooGroo class
+
+Groogroo::Groogroo()
+{ }
+
+Groogroo::~Groogroo()
+{ 
+  CShip *pSh;
+  CBrain *pBr;
+
+  for (UINT i=0; i<GetShipCount(); i++) {
+    pSh = GetShip(i);
+    if (pSh==NULL) continue;  // Ship is dead
+
+    pBr = pSh->GetBrain();
+    if (pBr!=NULL) delete pBr;  
+    // Clean up after ourselves
+  }
+}
+
+void Groogroo::Init()
+{
+  srand(time(NULL));
+  SetTeamNumber(13);
+  SetName("GrooGroo eat Groogroo!");
+  GetStation()->SetName("Tree!");
+
+  GetShip(0)->SetName("Larvae");
+  GetShip(1)->SetName("Tree");
+  GetShip(2)->SetName("Host");
+  GetShip(3)->SetName("Symbiant");
+
+  for (UINT i=0; i<GetShipCount(); i++) {
+    GetShip(i)->SetCapacity(S_FUEL,20.0);
+    GetShip(i)->SetCapacity(S_CARGO,40.0); // Redundant, but be safe
+    GetShip(i)->SetBrain(new GetVinyl);
+  }
+
+}
+
+void Groogroo::Turn()
+{
+  CShip *pSh;
+  PopulateMagicBag(); //new's Groogroo::mb
+
+  for (UINT i=0; i<GetShipCount(); i++) {
+    pSh=GetShip(i);
+    if (pSh==NULL) continue;
+    
+    CBrain *brain=pSh->GetBrain();
+    if(brain == NULL) continue;
+    brain->Decide();
+  }
+  delete mb; //clean it up!
+}
+
+void Groogroo::PopulateMagicBag() {
+  mb = new MagicBag (4,100);
+  CWorld * worldp = GetWorld();
+  // iterate over all the ships
+  for (UINT ship_i=0; ship_i<GetShipCount(); ship_i++) {
+    CShip *ship=GetShip(ship_i);
+    if(ship == NULL || !ship->IsAlive()) {
+      continue;
+    }
+
+    // iterate over all Things
+    for (UINT thing_i=worldp->UFirstIndex; thing_i <= worldp->ULastIndex; thing_i=worldp->GetNextIndex(thing_i)) {
+      CThing *athing=worldp->GetThing(thing_i);
+
+      if(athing == NULL || !(athing->IsAlive())) {
+	continue;
+      } 
+
+      if (athing->GetKind() == GENTHING) {
+	continue;
+      }
+
+      if(athing->GetKind() == ASTEROID) {
+	if(((CAsteroid*)athing)->GetMaterial() == VINYL) {
+	  vinyl_left+=athing->GetMass();
+	} else if (((CAsteroid*)athing)->GetMaterial() == URANIUM) {
+	  uranium_left+=athing->GetMass();
+	} else {
+	  printf("Thats impossible!\n");
+	}
+      }
+
+      //iterate from now until threshold time
+      for (UINT turn_i=1; turn_i<28; turn_i++) { 
+      	FuelTraj fueltraj=determine_orders(athing, 
+      					   turn_i, 
+					   ship); 
+      	double fuel_cost=determine_probable_fuel_cost(athing, 
+      						      turn_i, 
+						      ship); 
+      	Collision collision=detect_collisions_on_path(athing, 
+      						      turn_i, 
+      						      ship); 
+      	if(fueltraj.fuel_used >= 0.0) {
+	  Entry *entry=new Entry;
+	  entry->thing=athing;
+	  entry->turns_total=turn_i;
+	  entry->fueltraj=fueltraj;
+      	  entry->total_fuel=fuel_cost;
+      	  entry->collision = collision;
+	  entry->claimed_by_mech =0;
+	  mb->addEntry(ship_i, entry);
+	  break;
+      	} 
+      }
+    }
+  }
+}
+
+FuelTraj Groogroo::determine_orders(CThing *thing, double time, CShip *ship) {
+  FuelTraj fj;
+  
+  CCoord destination = thing->PredictPosition(time);
+
+  CCoord us_now = ship->GetPos();
+  CCoord us_later = ship->PredictPosition(1.0);
+
+  // Determine the direction and speed of thrust needed if we thrust now.
+  // If we are going in that direction then do it.
+  CTraj dist_vec_now = us_now.VectTo(destination);
+  CTraj final_vel_vec_now = dist_vec_now;
+  final_vel_vec_now.rho /= time;
+  CTraj vel_vec_now = ship->GetVelocity();
+  CTraj thrust_vec_now = final_vel_vec_now - vel_vec_now;
+  //  double t_ang = thrust_vec_now.theta;
+  //  t_ang = fabs(t_ang)/t_ang * fmod(t_ang, PI);
+  //  thrust_vec_now.theta = t_ang;
+  thrust_vec_now.theta = thrust_vec_now.theta - ship->GetOrient();
+
+  fj.traj=dist_vec_now;
+
+  if((fabs(thrust_vec_now.theta) < .1) && (thrust_vec_now.rho <= 30.0)) {
+    //thrust
+    fj.order_kind=O_THRUST;
+    fj.order_mag=thrust_vec_now.rho;
+    fj.fuel_used = ship->SetOrder(O_THRUST, thrust_vec_now.rho);
+  } else {
+    // Determine the direction and speed of thrust that will be needed
+    // later if we drift and thrust now.
+    CTraj dist_vec_later = us_later.VectTo(destination);
+    CTraj final_vel_vec_later = dist_vec_later;
+    final_vel_vec_later.rho /= time;
+    // vel_vec_now will be the same later if we only rotate now
+    CTraj thrust_vec_later = final_vel_vec_later - vel_vec_now;
+    thrust_vec_later.theta = thrust_vec_later.theta - ship->GetOrient();
+    if (thrust_vec_later.rho > 30.0) {
+      fj.fuel_used = -1;  // IMPOSSIBLE
+    } else {
+      //rotate
+      fj.order_kind=O_TURN;
+      fj.order_mag=thrust_vec_later.theta;
+      fj.fuel_used = ship->SetOrder(O_TURN, thrust_vec_later.theta);
+    } 
+  } 
+  ship->ResetOrders();
+  return fj;
+}
+
+double Groogroo::determine_probable_fuel_cost(CThing *thing, double time, CShip *ship) {
+  return (double)5.0;
+}
+
+Collision Groogroo::detect_collisions_on_path(CThing *thing, double time, CShip *ship) {
+  Collision collision;
+
+  collision.collision_thing = thing;
+  collision.collision_when = (double)0.0;
+  collision.collision_where = CCoord(0,0);
+
+  return collision;
+}
+  
+
+///////////////////////////////////////////////
+@
+
+
+1.16
+log
+@""
+@
+text
+@d10 1
+d63 1
+a93 1
+	printf("Saw a Genthing.\n");
+d97 10
+d108 1
+a108 1
+      for (UINT turn_i=1; turn_i<20; turn_i++) { 
+d121 1
+d125 1
+d156 1
+a156 1
+  if((fabs(thrust_vec_now.theta) < 1) && (thrust_vec_now.rho <= 30.0)) {
+@
+
+
+1.15
+log
+@""
+@
+text
+@d43 1
+a43 1
+  GetStation()->SetName("A South American Tree");
+d53 1
+a53 1
+    //    GetShip(i)->SetBrain(new GetVinyl);
+d55 1
+a55 1
+  GetShip(0)->SetBrain(new GetVinyl);
+d79 3
+d87 3
+a89 3
+      //      if(!(athing->IsAlive())) {
+      //	continue;
+      //      } 
+@
+
+
+1.14
+log
+@""
+@
+text
+@d84 3
+a86 3
+      if(!(athing->IsAlive())) {
+	continue;
+      } 
+d89 1
+d106 1
+@
+
+
+1.13
+log
+@""
+@
+text
+@a73 1
+  printf("starting magic bag population: %d\n", time(NULL));
+d77 1
+a77 2
+  for (UINT ship_i=1; ship_i<GetShipCount(); ship_i++) {
+    printf("Using ship %d\n", ship_i);
+a79 2
+    printf("Last index is %d\n", worldp->ULastIndex);
+
+a81 2
+      printf("Thingy %d\n", thing_i);
+      Entry *entry=new Entry;
+d83 2
+a84 2
+      printf("I'm type %d\n", athing->GetKind());
+      /*if (athing->GetKind() == GENTHING) {
+d86 3
+a88 3
+	}*/
+	
+      /*      if(!(athing->IsAlive())) {
+d90 6
+a95 8
+	} */
+      
+      
+
+      // iterate from now until threshold time
+      for (UINT turn_i=1; turn_i<3; turn_i++) { 
+	FuelTraj fueltraj=determine_orders(athing, 
+					   turn_i, 
+d97 2
+a98 5
+	double fuel_cost=determine_probable_fuel_cost(athing, 
+						      turn_i, 
+						      ship); 
+	Collision collision=detect_collisions_on_path(athing, 
+						      turn_i, 
+d100 5
+a104 1
+	if(fueltraj.fuel_used >= 0.0) {
+d106 3
+a108 3
+	  entry->total_fuel=fuel_cost;
+	  entry->collision = collision;
+	   mb->addEntry(ship_i, entry);
+d110 1
+a110 1
+	} 
+a113 1
+  printf("ending magic bag population: %d\n", time(NULL));
+d119 1
+a119 12
+  //printf("Hi! I'm a dork!\n");
+  //  printf("Time is %f\n", time);
+  // this code, like gah, is a dish best served cold
+  
+  printf("I'm type %d\n", thing->GetKind());
+
+  CCoord destination;
+  if (thing->GetKind() == STATION) {
+    printf("I'm at a station\n");
+    destination = thing->GetPos();
+  } else 
+    destination = thing->PredictPosition(time);
+a123 1
+
+a137 7
+  char *foo = new char[100];
+
+  sprintf(foo, "Thrust would be: %g\n", thrust_vec_now.rho);
+  strcat(MsgText, foo);
+  sprintf(foo, "Angle would be: %g\n", thrust_vec_now.theta);
+  strcat(MsgText, foo);
+
+a138 2
+    sprintf(foo, "Thrusting: %g\n", thrust_vec_now.rho);
+    strcat(MsgText, foo);
+a151 4
+    sprintf(foo, "Thrust will be: %g\n", thrust_vec_later.rho);
+    strcat(MsgText, foo);
+    sprintf(foo, "Angle will be: %g\n", thrust_vec_later.theta);
+    strcat(MsgText, foo);
+a155 2
+      sprintf(foo, "Turning: %g\n", thrust_vec_later.theta);
+      strcat(MsgText, foo);
+d161 1
+@
+
+
+1.12
+log
+@""
+@
+text
+@d74 1
+d78 5
+a82 1
+  for (UINT ship_i=0; ship_i<GetShipCount(); ship_i++) {
+d85 2
+a86 1
+    for (UINT thing_i=0; thing_i<UINT(-1); thing_i=worldp->GetNextIndex(thing_i)) {
+d89 10
+d101 1
+a101 2
+      for (UINT turn_i=1; turn_i<20; turn_i++) { 
+	CShip *ship=GetShip(ship_i);
+d103 1
+a103 1
+					   double(turn_i), 
+d106 1
+a106 1
+						      double(turn_i), 
+d109 1
+a109 1
+						      double(turn_i), 
+d115 1
+a115 1
+	  mb->addEntry(ship_i, entry);
+d121 1
+d126 13
+a139 2
+  // this code, like gah, is a dish best served cold
+  CCoord destination = thing->PredictPosition(time);
+d142 1
+@
+
+
+1.11
+log
+@*** empty log message ***
+@
+text
+@a81 1
+      mb->addEntry(ship_i, entry);
+d84 3
+a86 2
+      // iterate from now until the end of the game
+      for (UINT turn_i=0; turn_i<25; turn_i++) { 
+d89 1
+a89 1
+					   GetShip(ship_i)); 
+d92 1
+a92 1
+						      GetShip(ship_i)); 
+d95 8
+a102 7
+						      GetShip(ship_i)); 
+	// NO, in reality we should compare some weighting before
+	// setting the entry in the magic bag
+	entry->fueltraj=fueltraj;
+	entry->total_fuel=fuel_cost;
+	entry->collision = collision;
+
+a105 1
+
+d110 2
+a111 2
+  
+  // gah
+d123 5
+d130 10
+a139 2
+  if(fabs(thrust_vec_now.theta) < 0.1 && thrust_vec_now.rho <= 30.0) {
+    sprintf(MsgText, "Thrusting: %g\n", thrust_vec_now.rho);
+d141 2
+d152 6
+a157 1
+    if (final_vel_vec_later.rho > 30.0) {
+d161 4
+a164 1
+      sprintf(MsgText, "Turning: %g\n", thrust_vec_later.theta);
+@
+
+
+1.10
+log
+@""
+@
+text
+@d53 1
+a53 1
+    GetShip(i)->SetBrain(new GetVinyl);
+d55 1
+d80 1
+a80 1
+    for (UINT thing_i=0; thing_i<UINT(-1); worldp->GetNextIndex()) {
+d86 1
+a86 1
+      for (UINT turn_i=0; turn_i<(300-(worldp->GetGameTime())); turn_i++) { 
+d108 1
+a108 1
+FuelTraj Groogroo::determine_orders(CThing *thing, double time) {
+d110 35
+a144 3
+  fj.fuel_used = 1.0;
+  fj.traj = CTraj(1,10);
+
+d148 1
+a148 1
+double Groogroo::determine_probable_fuel_cost(CThing *thing, double time) {
+d152 1
+a152 1
+Collision detect_collisions_on_path(CThing *thing, double time) {
+@
+
+
+1.9
+log
+@*** empty log message ***
+@
+text
+@d41 8
+a48 8
+  SetTeamNumber(1+(rand()%16));
+  SetName("Chrome Funkadelic");
+  GetStation()->SetName("HeartLand");
+
+  GetShip(0)->SetName("SS Turntable");
+  GetShip(1)->SetName("Bell Bottoms");
+  GetShip(2)->SetName("DiscoInferno");
+  GetShip(3)->SetName("PurpleVelvet");
+d60 1
+a60 1
+  PopulateMagicBag();
+d67 1
+a67 1
+    pSh->GetBrain()->Decide();
+d69 1
+a69 1
+  delete mb;
+d74 31
+@
+
+
+1.8
+log
+@*** empty log message ***
+@
+text
+@d60 1
+a60 1
+  
+d72 1
+a72 1
+void Groogroo::PopulateMagicBag {
+d76 4
+a79 4
+FuelTraj* Groogroo::determine_orders(CThing thing, double time) {
+  FuelTraj *fj = new FuelTraj();
+  fj->fuel_used = 0.0;
+  fj->traj = new CTraj();
+d84 2
+a85 2
+double Groogroo::determine_probable_fuel_cost(CThing thing, double time) {
+  return (double)0.0;
+d88 2
+a89 2
+Collision *detect_collisions_on_path(CThing thing, double time) {
+  Collision *collision = new Collision();
+d91 3
+a93 3
+  collision->collision_thing = new CThing();
+  collision->collision_when = (double)0.0;
+  collision->collision_where = new CCoord();
+@
+
+
+1.7
+log
+@*** empty log message ***
+@
+text
+@d76 4
+d81 2
+d84 16
+@
+
+
+1.6
+log
+@*** empty log message ***
+@
+text
+@d69 1
+d72 5
+a76 1
+///////////////////////////////////////////////
+@
+
+
+1.5
+log
+@*** empty log message ***
+@
+text
+@d1 2
+a2 2
+/* Chrome Funkadelic 
+ * Sample team
+d4 2
+a5 1
+ * Misha Voloshin 9/26/98
+@
+
+
+1.4
+log
+@*** empty log message ***
+@
+text
+@d59 1
+a59 1
+
+@
+
+
+1.3
+log
+@*** empty log message ***
+@
+text
+@d63 3
+a65 1
+
+@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@d8 1
+d17 1
+a17 1
+// Chrome Funkadelic class
+d50 3
+a52 3
+    GetShip(i)->SetCapacity(S_FUEL,45.0);
+    GetShip(i)->SetCapacity(S_CARGO,15.0); // Redundant, but be safe
+    GetShip(i)->SetBrain(new Gatherer);     // Set a gatherer AI for each ship
+a69 273
+Voyager::Voyager(CBrain *pLB)
+{
+  pLastBrain=pLB;  // Store who we're replacing
+  if (pLB->pShip !=NULL)
+    pLB->pShip->SetBrain(this); // Replace it
+}
+
+Voyager::~Voyager()
+{
+  if (pShip!=NULL)
+    pShip->SetBrain(pLastBrain);  // Put everything back
+}
+
+void Voyager::Decide()
+{
+  if (pShip==NULL) return;
+  if (!pShip->IsDocked()) {
+    delete this;  // Don't need us anymore
+    return;  // Let's blow this pop stand
+  }
+
+  double tang = (double)(pShip->GetShipNumber()) * PI/2.0;
+  // Desired angle of station departure
+
+  tang -= pShip->GetOrient();
+  if (tang<-PI) tang+=PI2;
+  if (tang>PI) tang-=PI2;
+  pShip->SetOrder(O_TURN,tang);
+
+  if (fabs(tang)<0.2)
+    pShip->SetOrder(O_THRUST,maxspeed);
+}
+
+//------------------------------------------
+
+void Stalker::Decide()
+{
+  if (pTarget==NULL ||     // No valid target
+      pShip==NULL ||       // No valid ship assigned to this AI
+      *pShip==*pTarget) return;  // Can't home in on ourselves!
+  
+  // First of all, are we going to crash into them anyway?
+  double dt = pShip->DetectCollisionCourse(*pTarget);
+  if (dt!=NO_COLLIDE) {
+    pShip->SetOrder(O_THRUST,0.0);  // Yup. Cancel thrust orders, if any
+    return;          // Our work here is done
+  }
+
+  // First let's estimate how long interception will take
+  // Most of these calculations are completely arbitrary...
+  CTraj RelVel = pShip->RelativeVelocity(*pTarget);
+  double dist = pShip->GetPos().DistTo(pTarget->GetPos());
+  dt = sqrt(dist/RelVel.rho);
+  dt += 1000.0/dist;
+  // dt isn't a very good estimate, since it doesn't take
+  //  direction of velocity into account, but it's good  
+  //  enough for the Chrome Funkadelic.  It'll still
+  //  intercept even if the time estimate isn't dead on,
+  //  which it probably never will be.
+
+  double dang = pShip->AngleToIntercept(*pTarget,dt);
+  // This is how much we need to turn
+  // dang is an angle between -PI and PI
+
+  pShip->SetOrder(O_TURN,1.2*dang);
+  // Let's set the turn order for now. 
+  // Multiply by 1.2 so we'll make sharper turns
+  // If we end up deciding to thrust, thrusting
+  //  will over-ride the turn order anyway
+
+  double tol=1.0;  // Angle tolerance, dependent on distance
+  tol *= dist/1000.0;  // Directly proportional, with an arbitrary constant
+
+  if (fabs(dang)<tol) {  // We're facing our target's future posn
+    pShip->SetOrder(O_THRUST,10.0);   // Accelerate fairly quickly
+  }
+  else if (fabs(dang)>(PI-0.15)) { // We're oriented away from it
+    pShip->SetOrder(O_THRUST,-10.0);  // Cheaper to blast backwards
+  }
+}
+
+//------------------------------------
+
+void Shooter::Decide()
+{
+  if (pTarget==NULL ||     // No valid target
+      pShip==NULL ||       // No valid ship assigned to this AI
+      *pShip==*pTarget) return;  // Can't attack ourselves!
+
+  // Guage laser range
+  double drange=pShip->GetPos().DistTo(pTarget->GetPos());
+  
+  if (drange>350.0) {  // Too far away, will cost too much fuel
+    Stalker::Decide();  // Home in on our prey
+    return;          // That's all we'll do for now
+  } 
+
+  drange += 100.0;  // We want another 100 miles left on the beam
+  // when it hits our poor helpless target
+
+  CCoord MyPos,TargPos;
+  MyPos = pShip->PredictPosition(1.0);
+  TargPos = pTarget->PredictPosition(1.0);
+  // We're shooting 1 second from now, since the physics
+  //  model computes movement before lasers
+
+  CTraj TurnVec = MyPos.VectTo(TargPos);
+  TurnVec.theta -= pShip->GetOrient();
+  TurnVec.Normalize();
+  double dang = TurnVec.theta;
+
+  pShip->SetOrder(O_THRUST,0.0);  // Stabilize, get a decent shot
+
+  pShip->SetOrder(O_TURN,dang);  // Turn to face him
+  pShip->SetOrder(O_LASER,drange+100.0);  // Fry the sucker!
+  // Our lasers will fire 1 second from now.  Hence, by the time the
+  // turn order is complete, we'll be looking right at him.
+  // Unless, of course, he's thrusted or hit something.
+}
+
+//-------------------------------------
+
+Gatherer::Gatherer()
+{ 
+  pTarget=NULL;
+}
+
+Gatherer::~Gatherer()
+{ }
+
+
+UINT Gatherer::SelectTarget()
+{
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pShip->GetWorld();
+  char shipmsg[128]; // Ship message
+
+  if (pShip->GetAmount(S_CARGO)>0.0) {    // We have cargo, let's go home
+    if (pTarget!=pmyTeam->GetStation()) {
+      sprintf (shipmsg,"%s gets %.1f tons of vinyl and goes home\n",
+	       pShip->GetName(), pShip->GetAmount(S_CARGO));
+      strcat(pmyTeam->MsgText,shipmsg);
+    }
+    return pmyTeam->GetStation()->GetWorldIndex();
+  }
+
+  UINT index, indbest=BAD_INDEX;
+  CThing *pTh;
+  ThingKind ThKind;
+  AsteroidKind AsMat;
+  double dist,dbest=-1.0;  // initialize dbest with some useless value
+
+  for (index=pmyWorld->UFirstIndex;  // Let's iterate through the
+       index<=pmyWorld->ULastIndex;  // things in the world, seeking
+       index = pmyWorld->GetNextIndex(index))  // stuff to take
+    {
+    pTh = pmyWorld->GetThing(index);  // Get ptr to CThing object
+    ThKind = pTh->GetKind();   // What are you?
+
+    if (ThKind!=ASTEROID) continue;  // We're only looking for asteroids, so
+    // let's go on with the next cycle of the loop
+
+    AsMat = ((CAsteroid*)pTh)->GetMaterial();
+    if (pShip->GetAmount(S_FUEL)<20.0) {     // Are we low on fuel?
+	if (AsMat==VINYL) continue;     // If we are, only look for fuel asteroids
+    }
+
+    // If we've made it this far into the looping block,
+    // then this asteroid must be something we want
+    dist = pShip->GetPos().DistTo(pTh->GetPos());  // Distance to this Thing
+    
+    if (dbest<dist // If this is better than all previous potential targets
+	|| indbest==BAD_INDEX) {  // Or if this is our first potential target 
+      indbest = index;  // Rem7ember this is our best target candidate
+      dbest = dist;   // Remember the best calculated distance
+    }    
+  }
+
+  return indbest;  // Best target asteroid found
+}
+
+
+void Gatherer::AvoidCollide()
+{
+  UINT index;
+  CThing *pTh;
+  double dsec;
+  char shipmsg[128];  // Ship might print a message
+  CTraj RelMom;
+
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pShip->GetWorld();
+
+  for (index=pmyWorld->UFirstIndex;  // Let's iterate through the
+       index<=pmyWorld->ULastIndex;  // things in the world, seeking
+       index = pmyWorld->GetNextIndex(index))  // stuff to take
+    {
+    pTh = pmyWorld->GetThing(index);  // Get ptr to CThing object
+    if (pTarget==pTh) continue;  // Okay to collide with target
+    if (pTh==pShip) continue;  // Won't collide with yourself
+
+    dsec = pShip->DetectCollisionCourse(*pTh);
+    if (dsec==NO_COLLIDE) continue;  // No collision pending
+    if (dsec>15.0) continue;  // Collision won't happen for a while
+
+    // If we made it this far into this block of code,
+    // we need to take evasive action
+
+    // First, though, are we already accelerating anyway?
+    if (pShip->GetOrder(O_THRUST)!=0.0
+	|| pShip->GetJettison(VINYL)!=0.0
+	|| pShip->GetJettison(URANIUM)!=0.0) continue;
+    // We're ejecting something, so we'll probably move out
+    // of the way anyway
+
+    // Nope, we need to dodge an impact
+    // Do we have enough time to get away?
+    if (dsec>15.0) {
+      // This can be done much better than it's being done here,
+      //  but this is merely a sample client
+      pShip->SetOrder(O_THRUST,-15.0);  // Accelerate 
+      sprintf (shipmsg,"%s brakes for %s\n",
+	       pShip->GetName(),pTh->GetName());
+      strcat(pmyTeam->MsgText,shipmsg);
+      return;  // We already know we need to move.
+    }
+    else {   // No time to get out of the way
+      pTarget = pTh;
+      Shooter::Decide();  // Let's just shoot it
+      return;  // That's all we can handle for this turn
+    }
+  }
+
+  // Loop finishes without any impending impacts detected
+}
+
+
+void Gatherer::Decide()
+{
+  if (pShip->IsDocked()) {
+    new Voyager(this);  // Voyager will take command until we
+    return;   // have left the station
+  } 
+
+  CTeam *pmyTeam = pShip->GetTeam();
+  CWorld *pmyWorld = pmyTeam->GetWorld();
+
+  UINT TargIndex = SelectTarget();
+  if (TargIndex!=BAD_INDEX)
+    pTarget = pmyWorld->GetThing(TargIndex);
+  else return;
+
+  Stalker::Decide();  // Set sail for the target!
+
+  if (pTarget->GetKind()==ASTEROID   // If the target's an asteroid
+      && !(pShip->AsteroidFits((CAsteroid*)pTarget))) { 
+    // And we can't eat it...
+    // Let's blast it!
+    Shooter::Decide();  // Blast it if we can
+  }
+
+  if (pShip->GetAmount(S_FUEL)<5.0   // Fuel is dangerously low!!!
+      && pShip->GetAmount(S_CARGO)>5.0) {  // Cargo's weighing us down
+    pShip->SetJettison(VINYL,5.0);
+    // Eject cargo so we can maneuver more easily
+  }
+
+  // Last but not least, let's keep ourselves from dying
+  if (pShip->GetAmount(S_SHIELD)<30.0) 
+    pShip->SetOrder(O_SHIELD,3.0);
+  if (pTarget->GetKind()!=STATION)  // If we're not going home
+    AvoidCollide();  // Worry excessively about bumping into stuff
+}
+@
+
+
+1.1
+log
+@whee
+@
+text
+@d7 1
+a7 1
+#include "ChromeFunk.h"
+d12 1
+a12 1
+  return new ChromeFunk;
+d18 1
+a18 1
+ChromeFunk::ChromeFunk()
+d21 1
+a21 1
+ChromeFunk::~ChromeFunk()
+d36 1
+a36 1
+void ChromeFunk::Init()
+d43 1
+a43 1
+  GetShip(0)->SetName("SS TurnTable");
+d55 1
+a55 1
+void ChromeFunk::Turn()
+@
+

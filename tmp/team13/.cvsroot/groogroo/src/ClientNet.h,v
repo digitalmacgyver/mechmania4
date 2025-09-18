@@ -1,0 +1,47 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.45;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@//
+// CClientNet
+//
+// Networking for the client end
+//
+
+#ifndef __CClientNet__
+#define __CClientNet__
+
+#include "Network.h"
+
+class CClientNet : public CNetwork
+{
+private:
+public:
+    CClientNet( char * hostname, int port, int maxqueuelen=204800 );
+    ~CClientNet();
+};
+
+#endif
+@

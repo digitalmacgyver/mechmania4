@@ -1,0 +1,22 @@
+# # # Makefile by Misha Voloshin 9/1/98
+# # # Based on Makefile by Swetland 1/25/98
+# # # Haked by Erik Gilling
+
+include make.conf
+
+CXXFLAGS = $($(BUILD)_FLAGS) $($(ARCH)_FLAGS) -Isrc -g
+CXX = $($(ARCH)_CC)
+
+LIBNAME = mm4
+
+all: ${TEAM_NAME}  
+
+clean: clean_team 
+
+clean_team:
+	rm -f $(CLI_OBJS) $(TEAM_OBJS) mm4team.o ${TEAM_NAME} core
+
+${TEAM_NAME}: $(TEAM_OBJS) mm4team.o
+	$(PURIFY) $(CXX) -o ${TEAM_NAME} mm4team.o $(TEAM_OBJS) \
+	$(NLIBS) -lm -L. -l${LIBNAME}
+

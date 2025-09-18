@@ -1,0 +1,13 @@
+*0*ColorPalette:	Default.dp
+Dtwm*0*FrontPanel*geometry:	-122-0
+Dtwm*0*helpResources:	\n\
+  
+Dtwm*0*initialWorkspace:	ws0
+Dtwm*0*workspaceCount:	4
+Dtwm*focusAutoRaise:	False
+Dtwm*moveOpaque:	False
+Dtwm.keyboardFocusPolicy:	pointer
+dtsession*displayResolution:	3750
+dtsession*sessionLanguage:	C
+*background:	#C600B2D2A87E
+*foreground:	#000000000000

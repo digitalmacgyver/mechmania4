@@ -1,0 +1,60 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.52;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@// 
+// CServerNet
+//
+// Derived server networking flass
+//
+// connection numbers start at 1
+
+#ifndef __CServerNet__
+#define __CServerNet__
+
+#include <sys/types.h>
+#include <sys/socket.h>   
+#include <netinet/in.h>
+#include <netdb.h>
+
+#include "Network.h"
+
+
+class CServerNet : public CNetwork
+{
+private:
+    int port;
+    int main_socket;
+    struct sockaddr_in serv_addr; 
+
+public: 
+    CServerNet( int themaxconn, int port, int maxqueuelen = 2048 );
+
+    int WaitForConn( void );
+    
+};
+
+#endif
+@

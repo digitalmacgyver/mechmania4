@@ -1,0 +1,50 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.51;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@/* Parser.h
+   Hack up an expedient class
+   For use with MechMania IV
+   Misha Voloshin, 9/17/98
+*/
+
+#ifndef _PARSER_H_SDLFJHSDLFJHSDLFHDJK
+#define _PARSER_H_SDLFJHSDLFJHSDLFHDJK
+
+class CParser 
+{
+ public:
+  CParser(int argc, char **argv);
+  ~CParser();
+
+  char hostname[128],gfxreg[128];
+  int port,numteams,gfxflag, needhelp, retry;
+
+ protected:
+  void SetDefaults();
+};
+
+#endif // _PARSER_H_SDLFJHSDLFJHSDLFHDJK
+@

@@ -1,0 +1,125 @@
+<TOPIC charset C.ISO-8859-1>
+<TITLE><TYPE serif><WEIGHT bold><SIZE 14>
+Welcome to Help Manager
+</SIZE></WEIGHT></TYPE></TITLE>
+<ABBREV>Welcome to the Help Manager</ABBREV> 
+<PARAGRAPH>Each of the titles listed below represents a <ANGLE italic> 
+product family</> that has installed and registered its online help.  Each  
+title (and icon) is a hyperlink that lists the help within the family.</> 
+<PARAGRAPH after 0 first 1 left 3 label "<CHAR C.DT-SYMBOL-1><0xB7></>">To 
+display a list of the help available for a product family, choose its 
+title (underlined text) or icon.</PARAGRAPH>  
+<PARAGRAPH after 0 first 1 left 3 label "<CHAR C.DT-SYMBOL-1><0xB7></>">
+Within a product  
+family, find the help you want to view, then choose its title.</PARAGRAPH> 
+<PARAGRAPH first 1 left 3 label "<CHAR C.DT-SYMBOL-1><0xB7></>"> 
+If you need help while using help windows, press F1.</PARAGRAPH>
+<CHARACTERSET ISO-8859-1>
+<LINK 0 FAMILY0>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Common Desktop Environment
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /usr/dt/appconfig/help/C/cdelogo.pm glink FAMILY0 gtypelink 0>
+Overview and Basic Desktop Skills  * Using Help  * File Manager  * Front Panel  * Application Manager  * Print Manager  * Style Manager  * Mailer  * Text Editor  * Calendar Manager  * Icon Editor  * Terminal Emulator  * Calculator  * Create Action  * Login Manager and Environment Variables  * Application Administration
+</P></CHARACTERSET>
+<CHARACTERSET ISO-8859-1>
+<LINK 0 FAMILY1>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Overview and Basic Desktop Skills
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /usr/dt/appconfig/help/C/cdelogo.pm glink FAMILY1 gtypelink 0>
+Overview and Basic Desktop Skills for the                 Common Desktop Environment.
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY2>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP-UX 10.20 Operating System Help
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /etc/vhelp/families/C/../../../../../usr/lib/vhelp/hpux/C/HPUX.pm glink FAMILY2 gtypelink 0>
+HP-UX 10.20 Operating System Help Topics  <CHAR symbol><0xA8></> Common HP-UX Tasks  <CHAR symbol><0xA8></> HP-UX Release Notes  <CHAR symbol><0xA8></> Customer Comments 
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY3>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Using Your HP Workstation
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /etc/vhelp/families/C/../../../../../usr/lib/vhelp/vueux/C/vueux.pm glink FAMILY3 gtypelink 0>
+How to get started and do basic tasks with your HP workstation. 
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY4>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP DCE/9000, Version 1.5
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /opt/dce/lib/help/C/graphicsShared/dcedocs.pm glink FAMILY4 gtypelink 0>
+Welcome to HP DCE/9000 Online Help  <CHAR symbol><0xA8></> Guide to HP DCE/9000 Hardcopy Documentation  <CHAR symbol><0xA8></> HP DCE/9000 Man Pages <CHAR symbol><0xA8></> DCE Glossary 
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY5>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+Multimedia Tools
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+The General Toolbox has Media tools for image and sound. You can display, edit, and print bit-mapped images, capture screen images, and record, play, and edit sound.  
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY6>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+SharedPrint/UX
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1>
+SharedPrint/UX is Graphical User Interface to the HP-UX lp command.
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY7>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP C Online Reference 
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /opt/ansic/help/C/HPc.pm glink FAMILY7 gtypelink 0>
+HP C Help Topics  <CHAR symbol><0xA8></> Compiler Command Syntax  <CHAR symbol><0xA8></> Compile-Line Options  <CHAR symbol><0xA8></> Compiler Pragmas  <CHAR symbol><0xA8></> Data Types and Storage Classes  <CHAR symbol><0xA8></> Expressions and Operators  <CHAR symbol><0xA8></> Statements  <CHAR symbol><0xA8></> Preprocessing Directives  <CHAR symbol><0xA8></> Getting Help on Error Messages  <CHAR symbol><0xA8></> Concepts and Tutorials 
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY8>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP-PEX
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /opt/graphics/PEX5/help/vue/icons/PEXcube.l.pm glink FAMILY8 gtypelink 0>
+HP-PEX Tutorial and Reference
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY9>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP/PAK, Version 7.0
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /etc/vhelp/families/C/../../../../opt/langtools/hppak/lib/help/C/graphics/HPPAK.pm glink FAMILY9 gtypelink 0>
+Welcome to Puma Help  <CHAR symbol><0xA8></> Overview  <CHAR symbol><0xA8></> Invoking and Exiting Puma  <CHAR symbol><0xA8></> Collecting Performance Data  <CHAR symbol><0xA8></> Analyzing Performance Data  <CHAR symbol><0xA8></> Commenting on the Puma Online Help System
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY10>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP Help System, Version 3.0
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /etc/vhelp/families/C/../../../../usr/vhelp/help/C/HelpKit/HPHelpKit.pm glink FAMILY10 gtypelink 0>
+Online reference for authors and programmers using the HP Help System.
+</P></CHARACTERSET>
+<CHARACTERSET iso8859-1>
+<LINK 0 FAMILY11>
+<TYPE serif><WEIGHT bold><SIZE 12><ANGLE italic>
+HP C++ Online Programmer's Guide
+</ANGLE></SIZE></WEIGHT></TYPE>
+</LINK>
+<P before 1 first 1 left 1 graphic /opt/CC/help/C/HPCXX.pm glink FAMILY11 gtypelink 0>
+HP C++ Help Topics  <CHAR symbol><0xA8></> Getting Started with HP C++  <CHAR symbol><0xA8></> What's New in this Release of HP C++  <CHAR symbol><0xA8></> Concepts and Tutorials  <CHAR symbol><0xA8></> Compiler Command Syntax  <CHAR symbol><0xA8></> Compile-Line Options  <CHAR symbol><0xA8></> Compiler Pragmas  <CHAR symbol><0xA8></> Getting Help on Error Messages  <CHAR symbol><0xA8></> C++ Language Quick Reference  <CHAR symbol><0xA8></> Customer Comments  <CHAR symbol><0xA8></> Documentation Map
+</P></CHARACTERSET>
+</TOPIC>

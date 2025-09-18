@@ -1,0 +1,50 @@
+head	1.1;
+access;
+symbols
+	Penult:1.1
+	ThirdWorkingVersion:1.1
+	SecondWorkingVersion:1.1
+	InitialWorkingVersion:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	98.10.03.15.12.47;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@/* EmptyTeam.h
+ * Header for CEmptyTeam
+ * Example of how to write teams
+ * For use with MechMania IV
+ * 10/2/98 by Misha Voloshin
+ */
+
+#ifndef _EMPTY_TEAM_H_ESDJHSDLFJHSDKLFHSDLKH
+#define _EMPTY_TEAM_H_ESDJHSDLFJHSDKLFHSDLKH
+
+#include "Team.h"
+
+class CEmptyTeam : public CTeam
+{
+public:
+  CEmptyTeam();
+  ~CEmptyTeam();
+
+  void Init();
+  void Turn();
+};
+
+#endif  // _EMPTY_TEAM_H_ESDJHSDLFJHSDKLFHSDLKH
+@

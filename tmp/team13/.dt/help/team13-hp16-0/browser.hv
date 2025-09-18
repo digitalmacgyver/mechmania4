@@ -1,0 +1,109 @@
+!# Last modification time stamp per directory
+*./home/student7/team13/.dt/help/team13-hp16-0.timeStamp:   907424853
+*./home/student7/team13/.dt/help.timeStamp:   907424853
+*./etc/dt/appconfig/help/C.timeStamp:   834634211
+*./usr/dt/appconfig/help/C.timeStamp:   834632472
+*./etc/vhelp/families/C.timeStamp:   882826284
+*./etc/vhelp/families.timeStamp:   834634106
+*./usr/vhelp/families/C.timeStamp:   0
+*./usr/vhelp/families.timeStamp:   0
+*./home/student7/team13/.dt/help/team13-hp16-0.timeStamp:   907424853
+*./home/student7/team13/.dt/help.timeStamp:   907424853
+*./etc/dt/appconfig/help/C.timeStamp:   834634211
+*./usr/dt/appconfig/help/C.timeStamp:   834632472
+*./etc/vhelp/volumes/C.timeStamp:   882826284
+*./etc/vhelp/volumes.timeStamp:   834634106
+*./usr/vhelp/volumes/C.timeStamp:   0
+*./usr/vhelp/volumes.timeStamp:   0
+*.charSet:	C.ISO-8859-1
+
+!# Topic filenames and offsets
+*.FAMILY0.filepos: 0
+*.FAMILY0.filename: browser01.ht
+*.FAMILY1.filepos: 6384
+*.FAMILY1.filename: browser01.ht
+*.FAMILY2.filepos: 7024
+*.FAMILY2.filename: browser01.ht
+*.FAMILY3.filepos: 8691
+*.FAMILY3.filename: browser01.ht
+*.FAMILY4.filepos: 9846
+*.FAMILY4.filename: browser01.ht
+*.FAMILY5.filepos: 11765
+*.FAMILY5.filename: browser01.ht
+*.FAMILY6.filepos: 13487
+*.FAMILY6.filename: browser01.ht
+*.FAMILY7.filepos: 14489
+*.FAMILY7.filename: browser01.ht
+*.FAMILY8.filepos: 15460
+*.FAMILY8.filename: browser01.ht
+*.FAMILY9.filepos: 16016
+*.FAMILY9.filename: browser01.ht
+*.FAMILY10.filepos: 16831
+*.FAMILY10.filename: browser01.ht
+*.FAMILY11.filepos: 18027
+*.FAMILY11.filename: browser01.ht
+
+
+!# Top (or home) topic filename and offset
+*._HOMETOPIC.filepos:   0
+*._HOMETOPIC.filename:  browser00.ht
+
+
+!# Volume Title
+*.title:     Help - Top Level
+
+
+!# Topic Home Location
+*.topTopic:  _HOMETOPIC
+
+
+!# Topic Heirarchy
+*._HOMETOPIC.parent:  
+*.FAMILY0.parent: _HOMETOPIC
+*.FAMILY1.parent: _HOMETOPIC
+*.FAMILY2.parent: _HOMETOPIC
+*.FAMILY3.parent: _HOMETOPIC
+*.FAMILY4.parent: _HOMETOPIC
+*.FAMILY5.parent: _HOMETOPIC
+*.FAMILY6.parent: _HOMETOPIC
+*.FAMILY7.parent: _HOMETOPIC
+*.FAMILY8.parent: _HOMETOPIC
+*.FAMILY9.parent: _HOMETOPIC
+*.FAMILY10.parent: _HOMETOPIC
+*.FAMILY11.parent: _HOMETOPIC
+
+
+!# Topic List
+*.topicList: _HOMETOPIC \
+	FAMILY0 \
+	FAMILY1 \
+	FAMILY2 \
+	FAMILY3 \
+	FAMILY4 \
+	FAMILY5 \
+	FAMILY6 \
+	FAMILY7 \
+	FAMILY8 \
+	FAMILY9 \
+	FAMILY10 \
+	FAMILY11
+
+
+!# Paths Searched
+*.dirList:  \
+	/home/student7/team13/.dt/help/team13-hp16-0 \
+	/home/student7/team13/.dt/help \
+	/etc/dt/appconfig/help/C \
+	/usr/dt/appconfig/help/C \
+	/etc/vhelp/families/C \
+	/etc/vhelp/families \
+	/usr/vhelp/families/C \
+	/usr/vhelp/families \
+	/home/student7/team13/.dt/help/team13-hp16-0 \
+	/home/student7/team13/.dt/help \
+	/etc/dt/appconfig/help/C \
+	/usr/dt/appconfig/help/C \
+	/etc/vhelp/volumes/C \
+	/etc/vhelp/volumes \
+	/usr/vhelp/volumes/C \
+	/usr/vhelp/volumes

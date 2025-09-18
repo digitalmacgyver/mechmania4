@@ -1,0 +1,54 @@
+head	1.2;
+access;
+symbols
+	Penult:1.2
+	ThirdWorkingVersion:1.2
+	SecondWorkingVersion:1.2
+	InitialWorkingVersion:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	98.10.04.02.27.26;	author team13;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	98.10.03.21.58.31;	author team13;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@""
+@
+text
+@#ifndef _FUELTRAJ_H_
+#define _FUELTRAJ_H_
+class FuelTraj 
+{
+ public:
+  double fuel_used;
+  CTraj traj;
+  OrderKind order_kind;
+  double order_mag;
+};
+#endif
+
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d8 2
+@
+
