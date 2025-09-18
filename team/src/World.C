@@ -12,7 +12,7 @@
 #include "Team.h"
 
 #include <sys/time.h>
-#include <time.h>
+#include <ctime>
 
 //////////////////////////////////////////////////
 // Construction/Destruction
@@ -32,7 +32,7 @@ CWorld::CWorld(UINT nTm)
   }
 
   gametime=0.0;   // Start the clock
-  bGameOver=FALSE;
+  bGameOver=false;
 
   for (i=0; i<MAX_THINGS; i++) {
     apThings[i]=NULL;
@@ -289,7 +289,7 @@ UINT CWorld::CollisionEvaluation()
     apTTmTh[numtmth] = pTTm;
     numtmth++;
 
-    if (bGameOver==TRUE) continue;  // Ships invisible after game ends
+    if (bGameOver==true) continue;  // Ships invisible after game ends
 
     for (iship=0; iship<pTeam->GetShipCount(); iship++) {
       pTTm = pTeam->GetShip(iship);
@@ -301,7 +301,7 @@ UINT CWorld::CollisionEvaluation()
     
   for (i=UFirstIndex; i!=(UINT)-1; i=GetNextIndex(i)) {
     pTItr = GetThing(i);
-    if ((pTItr->IsAlive())==FALSE) continue;
+    if ((pTItr->IsAlive())==false) continue;
     if (pTItr==NULL) continue;
 
     for (j=0; j<numtmth; j++) {
@@ -309,7 +309,7 @@ UINT CWorld::CollisionEvaluation()
       if (pTTm==NULL) continue;
 
       pTItr->Collide(pTTm,this);   // Asteroid(?) shattered by ship
-      if (pTTm->Collide(pTItr,this)==TRUE)   // Ship deflected by asteroid(?)
+      if (pTTm->Collide(pTItr,this)==true)   // Ship deflected by asteroid(?)
 	URes++;
     }
   }
@@ -354,7 +354,7 @@ UINT CWorld::KillDeadThings()
   for (index=UFirstIndex; index!=(UINT)-1; index=GetNextIndex(index)) {
     pTTry=GetThing(index);
 
-    if ((pTTry->IsAlive())!=TRUE) {
+    if ((pTTry->IsAlive())!=true) {
       RemoveIndex(index);
       URes++;
 

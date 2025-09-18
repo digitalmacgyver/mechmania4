@@ -11,7 +11,7 @@
 //////////////////////////////////////
 // Construction/Destruction
 
-CClient::CClient (int port, char *hostname, BOOL bObserv)
+CClient::CClient (int port, char *hostname, bool bObserv)
 {
   bObflag = bObserv;
   umyIndex=(UINT)-1;
@@ -47,7 +47,7 @@ CClient::CClient (int port, char *hostname, BOOL bObserv)
     pmyNet->CatchPkt();
   }
   umyIndex = pmyNet->GetQueue()[0];
-  if (bObflag==FALSE) 
+  if (bObflag==false) 
     printf ("Recognized as team index %d\n",umyIndex);
   else if (umyIndex!='X') printf ("Observation request not acknowledged\n");
   else printf ("Recognized as observer\n");
@@ -119,7 +119,7 @@ void CClient::MeetWorld ()
 
   pmyWorld->PhysicsModel(0.0);  // All stuff added now
 
-  if (bObflag==TRUE) {
+  if (bObflag==true) {
     // We're the observer, send an ack
     SendAck();
     MeetTeams();   // Get team names and ship stats
@@ -141,7 +141,7 @@ void CClient::MeetWorld ()
 UINT CClient::ReceiveWorld()
 {
   if (IsOpen()==0) {
-    pmyWorld->bGameOver=TRUE;
+    pmyWorld->bGameOver=true;
     pmyWorld->PhysicsModel(0.1);  // Slow-mo
     return 0;
   }
@@ -175,7 +175,7 @@ UINT CClient::ReceiveWorld()
 
 void CClient::MeetTeams()
 {
-  if (bObflag!=TRUE) return;   // Only observer allowed
+  if (bObflag!=true) return;   // Only observer allowed
 
   UINT nTm,len;
   char *buf;

@@ -28,9 +28,9 @@ int main(int argc, char *argv[])
   printf ("Graphics initialized\n");
   myObs.setAttractor(0);
 
-  CClient *pmyClient = new CClient(PCmdLn.port,PCmdLn.hostname, TRUE);  
+  CClient *pmyClient = new CClient(PCmdLn.port,PCmdLn.hostname, true);  
   CClient *pSpareCl;
-  // TRUE for observer
+  // true for observer
 
   time_t tstamp=0, tnow=tstamp;
   while (1) {
@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 
       tstamp=tnow;
       myObs.setAttractor(1);
-      pSpareCl = new CClient(PCmdLn.port,PCmdLn.hostname, TRUE);
+      pSpareCl = new CClient(PCmdLn.port,PCmdLn.hostname, true);
       if (pSpareCl->IsOpen()) {
 	delete pmyClient;
 	pmyClient = pSpareCl;

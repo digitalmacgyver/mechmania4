@@ -21,7 +21,7 @@ CThing::CThing (double fx0, double fy0)
 
   sprintf (Name,"Generic Thing");
   ulIDCookie=rand();
-  DeadFlag=FALSE;
+  DeadFlag=false;
   bIsColliding=NO_DAMAGE;
   bIsGettingShot=NO_DAMAGE;
 
@@ -95,10 +95,10 @@ CTeam *CThing::GetTeam() const
   return pmyTeam;
 }
 
-BOOL CThing::IsAlive() const
+bool CThing::IsAlive() const
 {
-  if (DeadFlag==TRUE) return FALSE;
-  return TRUE;
+  if (DeadFlag==true) return false;
+  return true;
 }
 
 UINT CThing::GetImage() const
@@ -116,13 +116,13 @@ const char *CThing::GetName() const
 
 void CThing::SetName (const char *strsrc)
 {
-  BOOL bGotZero=FALSE;
+  bool bGotZero=false;
 
   for (UINT i=0; i<maxnamelen-1; i++) {
-    if (bGotZero==TRUE) Name[i]=0;
+    if (bGotZero==true) Name[i]=0;
     Name[i]=strsrc[i];
     if (Name[i]=='\n') Name[i]=' ';
-    if (Name[i]==0) bGotZero=TRUE;
+    if (Name[i]==0) bGotZero=true;
   }
 
   Name[maxnamelen-1]=0;
@@ -130,7 +130,7 @@ void CThing::SetName (const char *strsrc)
 
 void CThing::KillThing()
 {
-  DeadFlag=TRUE;
+  DeadFlag=true;
 }
 
 ////////////////////////////////////////////////
@@ -152,34 +152,34 @@ void CThing::Drift (double dt)
   }
 }
 
-BOOL CThing::Collide (CThing* pOthThing, CWorld *pWorld)
+bool CThing::Collide (CThing* pOthThing, CWorld *pWorld)
 {
   if (pOthThing==NULL) {
     printf ("Colliding with NULL!\n");
-    return FALSE;  // How did THAT happen!!??
+    return false;  // How did THAT happen!!??
   }
-  if (*pOthThing==*this) return FALSE;  // Can't collide with yourself!
+  if (*pOthThing==*this) return false;  // Can't collide with yourself!
 
-  if (Overlaps(*pOthThing)==FALSE) return FALSE;
+  if (Overlaps(*pOthThing)==false) return false;
 
   double dAng = GetPos().AngleTo(pOthThing->GetPos());
   if (pOthThing->GetKind()==GENTHING) bIsGettingShot=dAng;
   else bIsColliding=dAng;
 
   HandleCollision(pOthThing,pWorld);
-  return TRUE;
+  return true;
 }
 
-BOOL CThing::Overlaps (const CThing& OthThing) const
+bool CThing::Overlaps (const CThing& OthThing) const
 {
-  if (OthThing==*this) return FALSE;  // Overlap yourself? :P
+  if (OthThing==*this) return false;  // Overlap yourself? :P
 
   double dtmprad,ddist;
     dtmprad = size + OthThing.GetSize();
   ddist = Pos.DistTo(OthThing.GetPos());
 
-  if (ddist<dtmprad) return TRUE; 
-  return FALSE;
+  if (ddist<dtmprad) return true; 
+  return false;
 }
 
 ////////////////////////////////////////////////
@@ -205,12 +205,12 @@ CTraj CThing::RelativeMomentum (const CThing& OthThing) const
   return (RelativeVelocity(OthThing)*OthThing.GetMass());
 }
 
-BOOL CThing::IsFacing (const CThing& OthThing) const
+bool CThing::IsFacing (const CThing& OthThing) const
 {
-  if (*this==OthThing) return FALSE;  // Won't laser-fire yourself
+  if (*this==OthThing) return false;  // Won't laser-fire yourself
 
   CCoord cOrg(0.0,0.0), cOth(OthThing.GetPos()-GetPos());
-  if (cOrg==cOth) return TRUE;
+  if (cOrg==cOth) return true;
 
   double ddist = cOrg.DistTo(cOth);
 
@@ -221,8 +221,8 @@ BOOL CThing::IsFacing (const CThing& OthThing) const
   cGo += tGo.ConvertToCoord();
 
   double dhit = cGo.DistTo(cOth);
-  if (dhit <= OthThing.GetSize()) return TRUE;
-  return FALSE;
+  if (dhit <= OthThing.GetSize()) return true;
+  return false;
 }
 
 double CThing::DetectCollisionCourse(const CThing& OthThing) const
@@ -269,14 +269,14 @@ CThing& CThing::operator= (const CThing& OthThing)
   return *this;
 }
 
-BOOL CThing::operator== (const CThing& OthThing) const
+bool CThing::operator== (const CThing& OthThing) const
 {
-  if (ulIDCookie!=OthThing.ulIDCookie) return FALSE;
+  if (ulIDCookie!=OthThing.ulIDCookie) return false;
 
-  return TRUE;
+  return true;
 }
 
-BOOL CThing::operator!= (const CThing& OthThing) const
+bool CThing::operator!= (const CThing& OthThing) const
 {
   return (!(*this==OthThing));
 }

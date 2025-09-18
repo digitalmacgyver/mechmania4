@@ -27,12 +27,12 @@ Observer::Observer(char* regFileName, int gfxFlag)
 
   // Don't load images without a file
   if(gfxFlag == 1) {
-    useXpm = TRUE;
-    useVelVectors=FALSE;  // No tactical display
+    useXpm = true;
+    useVelVectors=false;  // No tactical display
   }
   else {
-    useXpm = FALSE;
-    useVelVectors=TRUE;  // Tactical display
+    useXpm = false;
+    useVelVectors=true;  // Tactical display
   }
 
   screenNum = DefaultScreen(display);
@@ -340,7 +340,7 @@ int Observer::plotWorld()
 	     }
         }
 
-        if (getUseXpm()==TRUE && myViewer->gotImages==TRUE) 
+        if (getUseXpm()==true && myViewer->gotImages==true) 
         {
 	  if (aThing->GetKind()==SHIP) {
 	    XSetForeground(display,gc, 
@@ -533,12 +533,12 @@ void Observer::clearStatusWins()
 
 UINT Observer::AlertStatus(double statamt, double statcap)
 {
-  static BOOL lookedup=FALSE;
+  static bool lookedup=false;
   static int okCol=white,warnCol=white,critCol=white;
   XColor col,dummy;
 
-  if (lookedup==FALSE) {
-    lookedup=TRUE;
+  if (lookedup==false) {
+    lookedup=true;
 
     XAllocNamedColor(display, cmap, "red", &col, &dummy);
     critCol = col.pixel;
@@ -865,23 +865,23 @@ void Observer::setAttractor( int val )
     attractor = val;
 }
 
-BOOL Observer::getUseXpm()
+bool Observer::getUseXpm()
 {
   return useXpm;
 }
 
-BOOL Observer::setUseXpm(BOOL newState)
+bool Observer::setUseXpm(bool newState)
 {
   useXpm = newState;
   return newState;
 }
 
-BOOL Observer::getUseVelVectors()
+bool Observer::getUseVelVectors()
 {
   return useVelVectors;
 }
 
-BOOL Observer::setUseVelVectors(BOOL newState)
+bool Observer::setUseVelVectors(bool newState)
 {
   useVelVectors = newState;
   return useVelVectors;

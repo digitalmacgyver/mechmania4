@@ -7,30 +7,31 @@
 #ifndef _STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG
 #define _STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <iostream.h>
+#include <cstdlib>
+#include <cstdio>
+#include <iostream>
 
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 
 #include <sys/types.h>
-#include <time.h>
+#include <ctime>
 
-#ifndef UINT
-#define UINT unsigned
-#endif // !UINT
+using namespace std;
 
-#ifndef BOOL
-#define BOOL unsigned char
-#endif // !BOOL
+// Modern C++ type definitions
+typedef unsigned int UINT;
 
-#ifndef TRUE
-#define TRUE 1
-#endif // !TRUE
+// bool, true, and false are built-in C++ keywords
+// No need to define them
 
-#ifndef FALSE
-#define FALSE 0
-#endif // !FALSE
+// Mathematical constants
+#ifndef PI
+#define PI 3.141592653589793238462643383279502884197
+#endif
+
+#ifndef PI2
+#define PI2 (2.0 * PI)
+#endif
 
 #endif // !_STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG

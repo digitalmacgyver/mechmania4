@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
-  CClient myClient(PCmdLn.port,PCmdLn.hostname, FALSE);
+  CClient myClient(PCmdLn.port,PCmdLn.hostname, false);
 
   while (1) {
     if (myClient.IsOpen()==0) {

@@ -4,10 +4,12 @@
 #ifndef SPACEVIEWER_H_BOOGELY
 #define SPACEVIEWER_H_BOOGELY
 
-#include <fstream.h>
-#include <iostream.h>
+#include <fstream>
+#include <iostream>
 #include "ObserverImage.h"
 #include "Observer.h"
+
+using namespace std;
 
 #ifndef numstars
 #define numstars  2048
@@ -37,7 +39,7 @@ protected:
   int getImages(char*);
 
 public:
-  BOOL gotImages, bstarplot;
+  bool gotImages, bstarplot;
 
   SpaceViewer(char*, Observer*);
   ~SpaceViewer();

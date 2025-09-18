@@ -22,7 +22,7 @@ const double minmass=3.0,
   NO_DAMAGE = -123.45;
 
 #ifndef maxnamelen
-#define maxnamelen 13
+#define maxnamelen 16  // Increased to accommodate longer names
 #endif
 
 class CWorld;
@@ -47,7 +47,7 @@ class CThing : public CSendable
   const CTraj& GetVelocity() const;
   CTraj GetMomentum() const;
   CTeam* GetTeam() const;
-  BOOL IsAlive() const;
+  bool IsAlive() const;
   UINT GetImage() const;
   void KillThing();
 
@@ -67,18 +67,18 @@ class CThing : public CSendable
   void SetWorld(CWorld* pWld) { pmyWorld=pWld; }
 
   virtual void Drift(double dt=1.0);
-  BOOL Collide(CThing *pOthThing, CWorld *pWorld=NULL);
-  BOOL Overlaps(const CThing& OthThing) const;
+  bool Collide(CThing *pOthThing, CWorld *pWorld=NULL);
+  bool Overlaps(const CThing& OthThing) const;
 
   double DetectCollisionCourse(const CThing& OthThing) const;
   CCoord PredictPosition(double dt=1.0) const;
   CTraj RelativeVelocity(const CThing& OthThing) const;
   CTraj RelativeMomentum(const CThing& OthThing) const;
-  BOOL IsFacing(const CThing& OthThing) const;
+  bool IsFacing(const CThing& OthThing) const;
 
   CThing& operator= (const CThing& OthThing);
-  BOOL operator== (const CThing& OthThing) const;
-  BOOL operator!= (const CThing& OthThing) const;
+  bool operator== (const CThing& OthThing) const;
+  bool operator!= (const CThing& OthThing) const;
 
   // Serialization routines
   virtual unsigned GetSerialSize() const;
@@ -93,7 +93,7 @@ class CThing : public CSendable
   CTraj Vel;            // Current velocity
   double orient,omega;   // Orientation in radians, rate of change of angle
   double mass,size;      // Mass and size
-  BOOL DeadFlag;         // TRUE means this guy's DEAD
+  bool DeadFlag;         // true means this guy's DEAD
   CTeam *pmyTeam;        // NULL for non-team objects (asteroids)
 
   char Name[maxnamelen];   // Name.  Duh :P

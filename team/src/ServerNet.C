@@ -5,11 +5,13 @@
 //
 // connection numbers start at 1
 
-#include <stdio.h>
-#include <string.h>
-#include <iostream.h>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
 
 #include "ServerNet.h"
+
+using namespace std;
 
 CServerNet::CServerNet( int themaxconn, int port, int maxqueuelen ) 
   : CNetwork( themaxconn , maxqueuelen)
@@ -54,7 +56,7 @@ int CServerNet::WaitForConn( void )
     struct timeval timeout = {600,0}; // default to 10 minute timeout
     int new_fd;
     struct sockaddr_in cli_addr;
-    int sin_len = sizeof( struct sockaddr_in ); 
+    socklen_t sin_len = sizeof( struct sockaddr_in ); 
 
     
     FD_ZERO( &main_fds );

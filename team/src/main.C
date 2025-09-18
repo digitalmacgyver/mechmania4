@@ -5,7 +5,7 @@
 #include "Observer.h" 
  
 #include <sys/types.h>
-#include <time.h>
+#include <ctime>
 
 main()
 {

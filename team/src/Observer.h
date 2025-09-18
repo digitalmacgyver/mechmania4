@@ -3,14 +3,14 @@
 #ifndef OBSERVER_H_DEEDLEQUEEP
 #define OBSERVER_H_DEEDLEQUEEP
 
-#include <fstream.h>
+#include <fstream>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
 #include <X11/Xatom.h>
-#include <stdio.h>
-#include <iostream.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <iostream>
+#include <cstdlib>
 #include <sys/types.h>
 #include "stdafx.h"
 #include "SpaceViewer.h"
@@ -18,6 +18,8 @@
 #include "Ship.h"
 #include "Team.h"
 #include "World.h"
+
+using namespace std;
 
 class Observer
 {
@@ -40,7 +42,7 @@ protected:
   XFontStruct *font_info, *smallfont;
   Colormap cmap;
   CWorld* myWorld;
-  BOOL useXpm, useVelVectors;
+  bool useXpm, useVelVectors;
   int drawnames;
 
   int attractor;
@@ -66,10 +68,10 @@ public:
   ~Observer();
   int getWorld(CWorld*);
   int plotWorld();
-  BOOL getUseXpm();
-  BOOL setUseXpm(BOOL);
-  BOOL getUseVelVectors();
-  BOOL setUseVelVectors(BOOL newState);
+  bool getUseXpm();
+  bool setUseXpm(bool);
+  bool getUseVelVectors();
+  bool setUseVelVectors(bool newState);
   void getKeystroke();
   void drawCredits();
 

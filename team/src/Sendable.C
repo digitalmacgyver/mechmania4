@@ -56,7 +56,7 @@ unsigned CSendable::BufWrite (char *dest, const char *src, unsigned buflen) cons
   return buflen;
 }
 
-unsigned CSendable::BufWrite (char *dest, BOOL src) const
+unsigned CSendable::BufWrite (char *dest, bool src) const
 {
   UINT buflen=sizeof(UINT);
   UINT val = htonl((UINT)src);
@@ -98,14 +98,14 @@ unsigned CSendable::BufRead (char *src, char *dest, unsigned buflen) const
   return buflen;
 }
 
-unsigned CSendable::BufRead (char *src, BOOL &dest) const
+unsigned CSendable::BufRead (char *src, bool &dest) const
 {
   UINT buflen=sizeof(UINT);
   UINT val;
 
   memcpy (&val,src, buflen);
 
-  dest=(BOOL)ntohl(val);
+  dest=(bool)ntohl(val);
   return buflen;
 }
 

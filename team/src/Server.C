@@ -23,9 +23,9 @@ CServer::CServer(int numTms, int port)
   pmyNet = new CServerNet(nTms+1, port);
   pmyWorld = new CWorld(nTms);
   
-  abOpen = new BOOL[nTms+1];
+  abOpen = new bool[nTms+1];
   for (i=0; i<nTms+1; i++)
-    abOpen[i]=FALSE;  // No connections there yet
+    abOpen[i]=false;  // No connections there yet
 
   auTCons = new UINT[nTms];
   aTms = new CTeam*[nTms];
@@ -93,7 +93,7 @@ UINT CServer::ConnectClients()
 
   for (UINT i=0; i<GetNumTeams()+1; i++) {  // Teams and observer
     conn = pmyNet->WaitForConn();
-    abOpen[conn-1]=TRUE;
+    abOpen[conn-1]=true;
     printf ("Establishing connection #%d\n",conn);
 
     // Tell them they've connected
@@ -146,9 +146,9 @@ void CServer::IntroduceWorld(int conn)
 
 UINT CServer::SendWorld(int conn)
 {
-  if (abOpen[conn-1]!=TRUE) return 0;
+  if (abOpen[conn-1]!=true) return 0;
   if (pmyNet->IsOpen(conn)==0) {
-    abOpen[conn-1]=FALSE;
+    abOpen[conn-1]=false;
     printf ("Lost connection %d\n",conn);
     return 0;
   }
@@ -174,7 +174,7 @@ void CServer::BroadcastWorld()
 {
   for (UINT conn=1; conn<=GetNumTeams()+1; conn++) {
     if (conn==ObsConn) continue;  // Observer gets world elsewhere
-    if (abOpen[conn-1]!=TRUE) continue;  // This connection closed, next!
+    if (abOpen[conn-1]!=true) continue;  // This connection closed, next!
 
     if (pmyNet->IsOpen(conn)==0) continue;  // Don't send to closed socket
 
@@ -190,19 +190,19 @@ void CServer::BroadcastWorld()
 void CServer::WaitForObserver()
 {
   // Don't wait for a disconnected server
-  if (abOpen[ObsConn-1]==FALSE) return;
+  if (abOpen[ObsConn-1]==false) return;
 
   UINT len;
   char *pq = pmyNet->GetQueue(ObsConn);
 
-  while (TRUE) {
+  while (true) {
     while ((len=pmyNet->GetQueueLength(ObsConn))
 	   < strlen(n_oback)) {
       pmyNet->CatchPkt();
 
       // Check if connection closed
       if (pmyNet->IsOpen(ObsConn)==0) {
-	abOpen[ObsConn-1]=FALSE;
+	abOpen[ObsConn-1]=false;
 	printf ("Observer disconnected\n");
 	return;
       }
@@ -222,20 +222,20 @@ void CServer::MeetTeams()
   int conn;
   UINT len, tn, totresp=0;
   char *buf;
-  BOOL *abGotFlag = new BOOL[GetNumTeams()];
+  bool *abGotFlag = new bool[GetNumTeams()];
 
   for (tn=0; tn<GetNumTeams(); tn++)
-    abGotFlag[tn]=FALSE;
+    abGotFlag[tn]=false;
 
   while (totresp<GetNumTeams()) {
     for (tn=0; tn<GetNumTeams(); tn++) {
-      if (abGotFlag[tn]==TRUE) continue;
+      if (abGotFlag[tn]==true) continue;
 
       conn = auTCons[tn];
       len = pmyNet->GetQueueLength(conn);
       if (len>=aTms[tn]->GetSerInitSize()) {
 	totresp++;
-	abGotFlag[tn]=TRUE;
+	abGotFlag[tn]=true;
       }
     }
 
@@ -264,13 +264,13 @@ void CServer::ReceiveTeamOrders()
   int conn, len;
   UINT tn, totresp=0;
   char *buf;
-  BOOL *abGotFlag = new BOOL[GetNumTeams()];
+  bool *abGotFlag = new bool[GetNumTeams()];
   double tstart, tnow, tobs;
   double timediff, tthink;
 
   for (tn=0; tn<GetNumTeams(); tn++) {
     aTms[tn]->Reset();
-    abGotFlag[tn]=FALSE;
+    abGotFlag[tn]=false;
   }
 
   tstart = pmyWorld->GetTimeStamp();  // Teams can't take >60sec/turn to respond
@@ -285,17 +285,17 @@ void CServer::ReceiveTeamOrders()
     }
 
     for (tn=0; tn<GetNumTeams(); tn++) {
-      if (abGotFlag[tn]==TRUE) continue;  // Already counted
+      if (abGotFlag[tn]==true) continue;  // Already counted
 
       conn = auTCons[tn];
-      if (abOpen[conn-1]!=TRUE) {
+      if (abOpen[conn-1]!=true) {
 	totresp++;    // Skip over this one, count as gotten
-	abGotFlag[tn]=TRUE;  // Pretend we got it
+	abGotFlag[tn]=true;  // Pretend we got it
 	continue;   // But don't actually compute stuff
       }
 
       if (pmyNet->IsOpen(conn)==0) {
-	abOpen[conn-1]=FALSE;
+	abOpen[conn-1]=false;
 	printf ("Team %d disconnected\n",tn);
 	continue;
       }
@@ -315,14 +315,14 @@ void CServer::ReceiveTeamOrders()
       if (tthink>60.0) {
 	printf ("Team %d taking too long, orders ignored\n",tn);
 	totresp++;   // Pretend it's responded
-	abGotFlag[tn]=TRUE;  // Pretend it's responded 
+	abGotFlag[tn]=true;  // Pretend it's responded 
 	continue;    // And keep chugging
       }
 
       len = pmyNet->GetQueueLength(conn);
       if ((UINT)len>=aTms[tn]->GetSerialSize()) {
 	totresp++;
-	abGotFlag[tn]=TRUE;
+	abGotFlag[tn]=true;
 
 	buf = pmyNet->GetQueue(conn);
 	aTms[tn]->SerialUnpack(buf,len);  // Ships get orders

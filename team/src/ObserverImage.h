@@ -7,7 +7,9 @@
 #define OBSERVERIMAGE_H_DARIA
 
 #include <X11/Xlib.h>
-#include <iostream.h>
+#include <iostream>
+
+using namespace std;
 
 class ObserverImage
 {

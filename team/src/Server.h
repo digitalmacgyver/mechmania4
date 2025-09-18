@@ -40,7 +40,7 @@ class CServer
   UINT *auTCons;  // Array of team connection #'s
 
   UINT ObsConn;  // Observer connection
-  BOOL *abOpen;  // Flag to tell if connection's open
+  bool *abOpen;  // Flag to tell if connection's open
 
   UINT wldbuflen;
   char *wldbuf;  // World buffer

@@ -34,7 +34,7 @@ class CShip : public CThing
   virtual ~CShip();
 
   UINT GetShipNumber() const;
-  BOOL IsDocked() const;
+  bool IsDocked() const;
 
   double GetAmount(ShipStat st) const;        // Returns current amount
   double GetCapacity(ShipStat st) const;       // Returns max capacity
@@ -47,7 +47,7 @@ class CShip : public CThing
   virtual double GetMass() const;
   
   virtual void Drift(double dt=1.0);
-  BOOL AsteroidFits(const CAsteroid* pAst);
+  bool AsteroidFits(const CAsteroid* pAst);
 
   CThing* LaserTarget();    // Returns what laserbeam will hit if fired
   double GetLaserBeamDistance();  // Returns distance laserbeam will traverse
@@ -69,7 +69,7 @@ class CShip : public CThing
 
  protected:
   UINT myNum;
-  BOOL bDockFlag;
+  bool bDockFlag;
   double dDockDist, dLaserDist;
   CBrain *pBrain;
 

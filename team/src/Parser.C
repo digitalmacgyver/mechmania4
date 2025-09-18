@@ -5,9 +5,9 @@
 */
 
 #include "Parser.h"
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
 
 ////////////////////////
 // Construction/Destruction

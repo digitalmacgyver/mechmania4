@@ -39,8 +39,8 @@ class CTraj : public CSendable
   CTraj& operator-= (const CTraj& OthTraj);
   CTraj& operator- ();
 
-  BOOL operator== (const CTraj& OthTraj) const;
-  BOOL operator!= (const CTraj& OthTraj) const;
+  bool operator== (const CTraj& OthTraj) const;
+  bool operator!= (const CTraj& OthTraj) const;
 
   // Friends
   friend CTraj operator+ (const CTraj& T1, const CTraj& T2);

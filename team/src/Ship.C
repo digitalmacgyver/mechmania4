@@ -27,7 +27,7 @@ CShip::CShip (CCoord StPos, CTeam* pteam, UINT ShNum)
   uImgSet=0;
   pBrain=NULL;
 
-  bDockFlag=TRUE;
+  bDockFlag=true;
   dDockDist=30.0;
   dLaserDist=0.0;
   omega=0.0;
@@ -55,7 +55,7 @@ UINT CShip::GetShipNumber() const
   return myNum;
 }
 
-BOOL CShip::IsDocked() const
+bool CShip::IsDocked() const
 {
   return bDockFlag;
 }
@@ -158,7 +158,7 @@ double CShip::SetOrder(OrderKind ord, double value)
   AsteroidKind AsMat;
 
   maxfuel=GetAmount(S_FUEL);
-  if (IsDocked()==TRUE) maxfuel=GetCapacity(S_FUEL);
+  if (IsDocked()==true) maxfuel=GetCapacity(S_FUEL);
 
   switch(ord) {
     case O_SHIELD:      // "value" is amt by which to boost shields
@@ -208,13 +208,13 @@ double CShip::SetOrder(OrderKind ord, double value)
 
       // 1 ton of fuel accelerates a naked ship from zero to 6.0*maxspeed
       fuelcon = fabs(value) * GetMass() / (6.0*maxspeed*mass);
-      if (fuelcon>maxfuel && IsDocked()==FALSE) {
+      if (fuelcon>maxfuel && IsDocked()==false) {
 	fuelcon = maxfuel;
 	valtmp = fuelcon*6.0*maxspeed*mass/GetMass();
 	if (value<=0.0) value=-valtmp;
 	else value=valtmp;
       }
-      if (IsDocked()==TRUE) fuelcon=0.0;
+      if (IsDocked()==true) fuelcon=0.0;
       
       adOrders[(UINT)O_THRUST] = value;
       return fuelcon;
@@ -226,7 +226,7 @@ double CShip::SetOrder(OrderKind ord, double value)
       
       // 1 ton of fuel rotates naked ship full-circle six times
       fuelcon = fabs(value) * GetMass() / (6.0*PI2 * mass);
-      if (IsDocked()==TRUE) fuelcon=0.0;
+      if (IsDocked()==true) fuelcon=0.0;
       if (fuelcon>maxfuel) {
 	fuelcon=maxfuel;
 	valtmp = (mass * 6.0 * PI2 * fuelcon) / GetMass();
@@ -288,7 +288,7 @@ double CShip::GetJettison(AsteroidKind Mat)
 
 void CShip::Drift(double dt)
 {
-  if (GetTeam()->GetWorld()->bGameOver==TRUE) {
+  if (GetTeam()->GetWorld()->bGameOver==true) {
     CThing::Drift(0.0);  // Ships don't move when game is over
     return;
   }
@@ -336,12 +336,12 @@ void CShip::Drift(double dt)
     Vel += (Accel * dt);
     if (Vel.rho>maxspeed) Vel.rho = maxspeed;
     
-    if (IsDocked()==TRUE) {
+    if (IsDocked()==true) {
       CTraj VOff(dDockDist+5.0,GetOrient());
       if (GetOrder(O_THRUST)>0.0) Pos += VOff.ConvertToCoord();
       else Pos -= VOff.ConvertToCoord();
       Vel = Accel;  // Leave station at full speed
-      bDockFlag=FALSE;
+      bDockFlag=false;
     }
 
     if (thrustamt<0.0) uImgSet=2;
@@ -361,17 +361,17 @@ void CShip::Drift(double dt)
   dLaserDist=0.0;  // Don't want lasers left on
 }
 
-BOOL CShip::AsteroidFits(const CAsteroid* pAst)
+bool CShip::AsteroidFits(const CAsteroid* pAst)
 { 
   double othmass = pAst->GetMass();
   switch (pAst->GetMaterial()) {
     case VINYL:
-      if ((othmass+GetAmount(S_CARGO))>GetCapacity(S_CARGO)) return FALSE;
-      return TRUE;
+      if ((othmass+GetAmount(S_CARGO))>GetCapacity(S_CARGO)) return false;
+      return true;
     case URANIUM:
-      if ((othmass+GetAmount(S_FUEL))>GetCapacity(S_FUEL)) return FALSE;
-      return TRUE;
-    default: return FALSE;
+      if ((othmass+GetAmount(S_FUEL))>GetCapacity(S_FUEL)) return false;
+      return true;
+    default: return false;
   }
 }
 
@@ -397,7 +397,7 @@ CThing* CShip::LaserTarget()
 
   for (i=pWorld->UFirstIndex; i!=(UINT)-1; i=pWorld->GetNextIndex(i)) {
     pTCur = pWorld->GetThing(i);
-    if (IsFacing(*pTCur)==FALSE) continue;  // Nevermind, we're not facing it
+    if (IsFacing(*pTCur)==false) continue;  // Nevermind, we're not facing it
 
     dist = GetPos().DistTo(pTCur->GetPos());
     if (dist<mindist || mindist==-1.0) {
@@ -457,7 +457,7 @@ AsteroidKind CShip::StatToAst(ShipStat ShStat) const
 void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
 {
   if (*pOthThing==*this ||  // Can't collide with yourself!
-      IsDocked()==TRUE) {    // Nothing can hurt you at a station
+      IsDocked()==true) {    // Nothing can hurt you at a station
     bIsColliding=NO_DAMAGE;
     return;
   }
@@ -476,7 +476,7 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     ((CStation*)pOthThing)->AddVinyl(GetAmount(S_CARGO));
     adStatCur[(UINT)S_CARGO]=0.0;
 
-    bDockFlag=TRUE;
+    bDockFlag=true;
     return;
   }
 

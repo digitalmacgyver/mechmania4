@@ -2,7 +2,7 @@
 #include "Parser.h" 
 
 #include <sys/types.h>
-#include <time.h>
+#include <ctime>
 
 int main(int argc, char *argv[])
 {

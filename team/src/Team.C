@@ -19,7 +19,7 @@ CTeam::CTeam(UINT TNum, CWorld *pworld)
   uImgSet=0;
 }
 
-BOOL CTeam::Create (UINT numSh, UINT uCrd)
+bool CTeam::Create (UINT numSh, UINT uCrd)
 {
   numShips = numSh;
   char namebuf[maxnamelen];
@@ -45,7 +45,7 @@ BOOL CTeam::Create (UINT numSh, UINT uCrd)
   sprintf(Name,"Team#%d",GetTeamNumber());
   pStation->SetName(Name);
 
-  return TRUE;
+  return true;
 }
 
 CTeam::~CTeam()
@@ -152,16 +152,16 @@ UINT CTeam::SetTeamNumber(UINT newTN)
   return oldTN;
 }
 
-char *CTeam::SetName(char *strname)
+char *CTeam::SetName(const char *strname)
 {
-  BOOL bGotZero=FALSE;
+  bool bGotZero=false;
 
   for (UINT i=0; i<maxTeamNameLen; i++) {
-    if (bGotZero==TRUE) Name[i]=0;
+    if (bGotZero==true) Name[i]=0;
 
     Name[i]=strname[i];
     if (Name[i]=='\n') Name[i]=' ';
-    if (Name[i]==0) bGotZero=TRUE;
+    if (Name[i]==0) bGotZero=true;
   }
 
   Name[maxTeamNameLen-1]=0;

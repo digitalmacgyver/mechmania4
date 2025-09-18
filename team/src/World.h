@@ -56,7 +56,7 @@ class CWorld : public CSendable
   double *atstamp;
   double *auClock;
 
-  BOOL bGameOver;
+  bool bGameOver;
 
  protected:
   CThing* apThings[MAX_THINGS];

@@ -29,7 +29,7 @@ class CTeam : public CSendable
 {
  public:
   CTeam(UINT TNum=0, CWorld *pWrld=NULL);
-  BOOL Create(UINT numSh, UINT uCrd);
+  bool Create(UINT numSh, UINT uCrd);
   ~CTeam();
 
   UINT GetShipCount() const;
@@ -46,7 +46,7 @@ class CTeam : public CSendable
   CWorld* SetWorld(CWorld *pworld);
   UINT SetWorldIndex(UINT newInd);   // Returns old index
   UINT SetTeamNumber(UINT newTN);       // Returns old
-  char *SetName(char *strname);      // Returns ptr to Name
+  char *SetName(const char *strname);      // Returns ptr to Name
   void Reset();                // Resets orders and text
   
   CBrain* GetBrain();             // Returns current CBrain object

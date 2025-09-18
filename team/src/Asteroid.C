@@ -101,7 +101,7 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld *pWorld)
   // Handle laser-blast; needs 1kWh to smash asteroid
   if (OthKind==GENTHING && pOthThing->GetMass()<1000.0) return;
   
-  DeadFlag=TRUE;
+  DeadFlag=true;
   if (OthKind==SHIP) {
     pThEat = pOthThing;
     if (((CShip*)pOthThing)->AsteroidFits(this))

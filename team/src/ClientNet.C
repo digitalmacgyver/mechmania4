@@ -14,8 +14,8 @@
 #include <sys/uio.h>
 #include <netdb.h>
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 CClientNet::CClientNet( char * hostname, int port, int maxqueuelen )
     : CNetwork( 1, maxqueuelen)

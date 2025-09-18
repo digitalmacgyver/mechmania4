@@ -15,7 +15,7 @@ class CClientNet;
 class CClient
 {
  public:
-  CClient(int port, char *hostname, BOOL bObserv=FALSE);
+  CClient(int port, char *hostname, bool bObserv=false);
   ~CClient();
 
   CWorld *GetWorld();
@@ -29,7 +29,7 @@ class CClient
   int IsOpen();   // Returns pmyNet->IsOpen(1);
 
  protected:
-  BOOL bObflag;
+  bool bObflag;
 
   UINT numTeams;
   UINT umyIndex;  // For client teams; doesn't do much for observer

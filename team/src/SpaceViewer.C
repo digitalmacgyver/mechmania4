@@ -23,7 +23,7 @@ SpaceViewer::SpaceViewer(char* filename, Observer *myObserver)
 
   // cout << "Entered SpaceViewer constructor" << endl;
 
-  gotImages=FALSE;
+  gotImages=false;
   obImages = new ObserverImage*[numImg];
   for (i=0; i<numImg; i++) obImages[i]=NULL; 
 
@@ -35,11 +35,11 @@ SpaceViewer::SpaceViewer(char* filename, Observer *myObserver)
     {
       if(getImages(filename) != 0)
 	{
-	  sObserver->setUseXpm(FALSE);
-	  gotImages = FALSE;
+	  sObserver->setUseXpm(false);
+	  gotImages = false;
 	}
       else
-	gotImages = TRUE;
+	gotImages = true;
     }
 
   // Get the laser color
@@ -161,13 +161,13 @@ int SpaceViewer::readXpmFromFile
     int charsPerPixel, ycntr=0;;
   UINT colval;
   char inChar1, inChar2, *colString, *dataRow;
-  BOOL infoRead, colorsRead, colorsStarted;
+  bool infoRead, colorsRead, colorsStarted;
   XColor col1, col2;
   char intString[4];
 
-  infoRead = FALSE;
-  colorsRead = FALSE;
-  colorsStarted = FALSE;
+  infoRead = false;
+  colorsRead = false;
+  colorsStarted = false;
 
   printf ("Reading file %s\n",fileName);
   ifstream inFile(fileName, ios::in);
@@ -176,7 +176,7 @@ int SpaceViewer::readXpmFromFile
   while(inFile >> inChar1)
     {      
      if(infoRead && colorsStarted && !colorsRead && inChar1 == '/')
-      	colorsRead = TRUE;
+      	colorsRead = true;
 
       if(inChar1 == '"')
 	{
@@ -240,7 +240,7 @@ int SpaceViewer::readXpmFromFile
 		  // cout << "charsPerPixel is " << charsPerPixel << endl;
 
 		  dataRow = new char[(imgInfo->width + 1)];
-		  infoRead = TRUE;
+		  infoRead = true;
 		  
 		  // Get rid of the closing '"'
 		  while(inChar1 != ',')
@@ -253,7 +253,7 @@ int SpaceViewer::readXpmFromFile
 	      else // parse the color info
 		{
 		  if(!colorsStarted)
-		    colorsStarted = TRUE;
+		    colorsStarted = true;
 
 		  // inChar1 is the mapping index
 		  inFile >> inChar1;
@@ -526,13 +526,13 @@ void SpaceViewer::initStars(int maxx, int maxy)
     aStars[i].uY = rand()%maxy;
   }
 
-  bstarplot=TRUE;
+  bstarplot=true;
 }
 
 
 void SpaceViewer::plotStars()
 {
-  if (bstarplot==FALSE) return;  // Stars turned off
+  if (bstarplot==false) return;  // Stars turned off
 
   XSetForeground (sObserver->display, sObserver->gc, sObserver->white);
   for (UINT i=0; i<numstars; i++) {

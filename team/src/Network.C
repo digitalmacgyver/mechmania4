@@ -5,12 +5,14 @@
 //
 // connection numbers start at 1
 
-#include <string.h>
-#include <iostream.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstring>
+#include <iostream>
+#include <cstdlib>
+#include <cstdio>
 
 #include "Network.h"
+
+using namespace std;
 
 int CNetwork::fd2conn( int fd )
 {

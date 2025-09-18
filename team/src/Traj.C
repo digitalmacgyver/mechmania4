@@ -128,17 +128,17 @@ CTraj& CTraj::operator- ()
   return *this;
 }
 
-BOOL CTraj::operator== (const CTraj& OthTraj) const
+bool CTraj::operator== (const CTraj& OthTraj) const
 {
-  if (rho!=OthTraj.rho) return FALSE;
-  if (theta!=OthTraj.theta) return FALSE;
-  return TRUE;
+  if (rho!=OthTraj.rho) return false;
+  if (theta!=OthTraj.theta) return false;
+  return true;
 }
 
-BOOL CTraj::operator!= (const CTraj& OthTraj) const
+bool CTraj::operator!= (const CTraj& OthTraj) const
 {
-  if (OthTraj==*this) return FALSE;
-  return TRUE;
+  if (OthTraj==*this) return false;
+  return true;
 }
 
 ///////////////////////////////////////////////

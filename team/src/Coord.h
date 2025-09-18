@@ -39,8 +39,8 @@ class CCoord : public CSendable
   CCoord& operator*= (const double scale);
   CCoord& operator/= (const double scale);
 
-  BOOL operator==(const CCoord& OthCrd) const;
-  BOOL operator!=(const CCoord& OthCrd) const;
+  bool operator==(const CCoord& OthCrd) const;
+  bool operator!=(const CCoord& OthCrd) const;
 
   // Friends
   friend CCoord operator+ (const CCoord& C1, const CCoord& C2);

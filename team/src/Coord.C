@@ -133,17 +133,17 @@ CCoord& CCoord::operator/= (const double scale)
   return *this;
 }
 
-BOOL CCoord::operator== (const CCoord& OthCrd) const
+bool CCoord::operator== (const CCoord& OthCrd) const
 {
-  if (fX!=OthCrd.fX) return FALSE;
-  if (fY!=OthCrd.fY) return FALSE;
-  return TRUE;
+  if (fX!=OthCrd.fX) return false;
+  if (fY!=OthCrd.fY) return false;
+  return true;
 }
 
-BOOL CCoord::operator!= (const CCoord& OthCrd) const
+bool CCoord::operator!= (const CCoord& OthCrd) const
 {
-  if (OthCrd==*this) return FALSE;
-  return TRUE;
+  if (OthCrd==*this) return false;
+  return true;
 }
 
 ///////////////////////////////////////////////////////
