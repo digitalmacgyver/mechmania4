@@ -39,6 +39,12 @@ int main(int argc, char *argv[])
 
     myObs.SetAttractor(0);
 
+    // Initialize the observer graphics
+    if (!myObs.Initialize()) {
+        printf("Failed to initialize observer graphics\n");
+        exit(1);
+    }
+
     printf("Connecting to server at %s:%d...\n", PCmdLn.hostname, PCmdLn.port);
 
     // Connect to server

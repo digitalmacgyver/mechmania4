@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
 
 SDL2Graphics::SDL2Graphics()
     : window(nullptr), renderer(nullptr), font(nullptr), smallFont(nullptr),
@@ -34,6 +35,16 @@ SDL2Graphics::~SDL2Graphics() {
 }
 
 bool SDL2Graphics::Init(int width, int height, bool fullscreen) {
+    // Check if we have a display available
+    const char* display = std::getenv("DISPLAY");
+    const char* sdl_driver = std::getenv("SDL_VIDEODRIVER");
+
+    if (!display && !sdl_driver) {
+        std::cerr << "No display available. Set SDL_VIDEODRIVER=dummy for headless mode" << std::endl;
+        // Try to continue anyway with software/dummy driver
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+    }
+
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
@@ -94,11 +105,16 @@ bool SDL2Graphics::Init(int width, int height, bool fullscreen) {
         return false;
     }
 
-    // Create renderer
+    // Create renderer - try accelerated first, then software
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) {
-        std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        return false;
+        // Try software renderer as fallback
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+        if (!renderer) {
+            std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+            return false;
+        }
+        std::cerr << "Warning: Using software renderer" << std::endl;
     }
 
     // Enable blending
