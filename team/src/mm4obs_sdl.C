@@ -7,6 +7,7 @@
 
 #ifdef USE_SDL2
     #include "ObserverSDL.h"
+    #include <SDL2/SDL.h>  // for SDL_Delay
 #else
     #include "Observer.h"
 #endif
@@ -94,19 +95,27 @@ int main(int argc, char *argv[])
         }
 
         // Receive world state from server
-        myClient->ReceiveWorld();
-        CWorld* world = myClient->GetWorld();
+        UINT received = myClient->ReceiveWorld();
 
-        if (world) {
-            myObs.SetWorld(world);
+        if (received > 0) {
+            // Send acknowledgment to server (critical for observer!)
+            myClient->SendAck();
+
+            CWorld* world = myClient->GetWorld();
+            if (world) {
+                myObs.SetWorld(world);
+            }
+
+            // Update and draw after receiving new world state
+            myObs.Update();
+            myObs.Draw();
         }
 
-        // Update and draw
-        myObs.Update();
-        myObs.Draw();
-
-        // Handle events
+        // Handle events (non-blocking)
         running = myObs.HandleEvents();
+
+        // Small delay to prevent CPU spinning
+        SDL_Delay(10);
     }
 
     delete myClient;
