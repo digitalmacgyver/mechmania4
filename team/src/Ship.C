@@ -311,17 +311,33 @@ void CShip::Drift(double dt)
   // First handle shields
   if (shieldamt>0.0) {
     fuelcons = SetOrder(O_SHIELD,shieldamt);
-    SetAmount(S_FUEL, GetAmount(S_FUEL)-fuelcons);
+    double oldFuel = GetAmount(S_FUEL);
+    double newFuel = oldFuel - fuelcons;
+    SetAmount(S_FUEL, newFuel);
     SetAmount(S_SHIELD, GetAmount(S_SHIELD)+shieldamt);
     SetOrder(O_SHIELD,0.0);  // Shield set, ignore it now
+
+    // Check if out of fuel
+    if (oldFuel > 0.01 && newFuel <= 0.01) {
+      printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
+             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+    }
   }
 
   // Now handle turning
   omega=0.0;
   if (turnamt!=0.0) {
     fuelcons = SetOrder(O_TURN,turnamt);
-    SetAmount(S_FUEL, GetAmount(S_FUEL)-fuelcons*dt);
+    double oldFuel = GetAmount(S_FUEL);
+    double newFuel = oldFuel - fuelcons*dt;
+    SetAmount(S_FUEL, newFuel);
     omega = turnamt;
+
+    // Check if out of fuel
+    if (oldFuel > 0.01 && newFuel <= 0.01) {
+      printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
+             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+    }
 
     if (turnamt<0.0) uImgSet=3;
     else uImgSet=4;
@@ -330,7 +346,15 @@ void CShip::Drift(double dt)
   // Thrusting time
   if (thrustamt!=0.0) {
     fuelcons = SetOrder(O_THRUST,thrustamt);
-    SetAmount(S_FUEL,GetAmount(S_FUEL)-fuelcons);
+    double oldFuel = GetAmount(S_FUEL);
+    double newFuel = oldFuel - fuelcons;
+    SetAmount(S_FUEL, newFuel);
+
+    // Check if out of fuel
+    if (oldFuel > 0.01 && newFuel <= 0.01) {
+      printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
+             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+    }
     
     CTraj Accel(thrustamt,GetOrient());
     Vel += (Accel * dt);
@@ -473,7 +497,19 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     Vel = CTraj(0.0,0.0);
     SetOrder(O_THRUST,0.0);
 
-    ((CStation*)pOthThing)->AddVinyl(GetAmount(S_CARGO));
+    // Log vinyl delivery
+    double vinylDelivered = GetAmount(S_CARGO);
+    if (vinylDelivered > 0.01) {
+      CStation* pStation = (CStation*)pOthThing;
+      if (pStation->GetTeam() == this->GetTeam()) {
+        printf("[DELIVERY] Ship %s delivered %.2f vinyl to HOME base (Team %d)\n",
+               GetName(), vinylDelivered, GetTeam()->GetTeamNumber());
+      } else {
+        printf("[ENEMY DELIVERY] Ship %s delivered %.2f vinyl to ENEMY base (Team %d to Team %d)\n",
+               GetName(), vinylDelivered, GetTeam()->GetTeamNumber(), pStation->GetTeam()->GetTeamNumber());
+      }
+    }
+    ((CStation*)pOthThing)->AddVinyl(vinylDelivered);
     adStatCur[(UINT)S_CARGO]=0.0;
 
     bDockFlag=true;
@@ -486,13 +522,24 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     dshield -= (msh/1000.0);
     
     SetAmount(S_SHIELD, dshield);
-    if (dshield<0.0) KillThing();
+    if (dshield<0.0) {
+      printf("[DESTROYED] Ship %s (Team %d) destroyed by laser\n",
+             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+      KillThing();
+    }
     return;
   }
 
   dshield -= ((RelativeMomentum(*pOthThing).rho)/1000.0);
   SetAmount(S_SHIELD,dshield);
-  if (dshield<0.0) KillThing();
+  if (dshield<0.0) {
+    const char* causeType = "unknown";
+    if (pOthThing->GetKind() == SHIP) causeType = "ship collision";
+    else if (pOthThing->GetKind() == ASTEROID) causeType = "asteroid collision";
+    printf("[DESTROYED] Ship %s (Team %d) destroyed by %s\n",
+           GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1, causeType);
+    KillThing();
+  }
   
   if (OthKind==ASTEROID) {
     CThing *pEat = ((CAsteroid*)pOthThing)->EatenBy();

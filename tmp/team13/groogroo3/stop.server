@@ -1,4 +1,0 @@
-#!/usr/bin/csh
-killall mm4obs;
-killall mm4team;
-killall mm4serv;

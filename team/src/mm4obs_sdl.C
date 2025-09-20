@@ -48,76 +48,99 @@ int main(int argc, char *argv[])
 
     printf("Connecting to server at %s:%d...\n", PCmdLn.hostname, PCmdLn.port);
 
-    // Connect to server
-    bool connected = false;
+    // Connect to server (non-blocking approach)
     CClient* myClient = nullptr;
+    bool connected = false;
+    Uint32 lastConnectAttempt = 0;
+    const Uint32 reconnectDelay = 3000; // 3 seconds in milliseconds
 
-    do {
-        try {
-            myClient = new CClient(PCmdLn.port, PCmdLn.hostname, true);
-            connected = true;
-            printf("Connected to server successfully\n");
+    // Initial connection attempt
+    try {
+        myClient = new CClient(PCmdLn.port, PCmdLn.hostname, true);
+        connected = true;
+        printf("Connected to server successfully\n");
+    }
+    catch (...) {
+        printf("Failed to connect to server. ");
+        if (PCmdLn.reconnect) {
+            printf("Will retry in 3 seconds...\n");
+            lastConnectAttempt = SDL_GetTicks();
+        } else {
+            printf("Running in standalone mode.\n");
         }
-        catch (...) {
-            printf("Failed to connect to server. ");
-            if (PCmdLn.reconnect) {
-                printf("Retrying in 3 seconds...\n");
-                sleep(3);
-            } else {
-                printf("Exiting.\n");
-                exit(1);
-            }
-        }
-    } while (!connected && PCmdLn.reconnect);
+    }
 
-    // Main loop
+    // Main loop - always responsive
     bool running = true;
+    Uint32 lastReconnectAttempt = 0;
+
     while (running) {
-        if (myClient->IsOpen() == 0) {
-            printf("Disconnected from MechMania IV server\n");
-            if (PCmdLn.reconnect) {
+        Uint32 currentTime = SDL_GetTicks();
+
+        // Handle server connection/reconnection
+        if (!connected && PCmdLn.reconnect) {
+            // Try to reconnect periodically (non-blocking)
+            if (currentTime - lastReconnectAttempt >= reconnectDelay) {
                 printf("Attempting to reconnect...\n");
-                delete myClient;
-                sleep(3);
+                lastReconnectAttempt = currentTime;
+
+                if (myClient) {
+                    delete myClient;
+                    myClient = nullptr;
+                }
 
                 try {
                     myClient = new CClient(PCmdLn.port, PCmdLn.hostname, true);
+                    connected = true;
                     printf("Reconnected successfully\n");
                 }
                 catch (...) {
-                    printf("Reconnection failed\n");
-                    continue;
+                    printf("Reconnection failed, will retry...\n");
                 }
+            }
+        }
+
+        // Check if connected client is still alive
+        if (connected && myClient && myClient->IsOpen() == 0) {
+            printf("Disconnected from MechMania IV server\n");
+            connected = false;
+
+            if (PCmdLn.reconnect) {
+                printf("Will attempt reconnection...\n");
+                lastReconnectAttempt = currentTime;
             } else {
-                printf("Terminating application\n");
-                break;
+                printf("No reconnect flag, continuing in standalone mode\n");
             }
         }
 
-        // Receive world state from server
-        UINT received = myClient->ReceiveWorld();
+        // Receive world state from server if connected
+        if (connected && myClient) {
+            UINT received = myClient->ReceiveWorld();
 
-        if (received > 0) {
-            // Send acknowledgment to server (critical for observer!)
-            myClient->SendAck();
+            if (received > 0) {
+                // Send acknowledgment to server (critical for observer!)
+                myClient->SendAck();
 
-            CWorld* world = myClient->GetWorld();
-            if (world) {
-                myObs.SetWorld(world);
+                CWorld* world = myClient->GetWorld();
+                if (world) {
+                    myObs.SetWorld(world);
+                }
             }
-
-            // Update and draw after receiving new world state
-            myObs.Update();
-            myObs.Draw();
         }
 
-        // Handle events (non-blocking)
+        // ALWAYS update and draw, even when disconnected
+        myObs.Update();
+        myObs.Draw();
+
+        // ALWAYS handle events (non-blocking)
         running = myObs.HandleEvents();
 
-        // Small delay to prevent CPU spinning
-        SDL_Delay(10);
+        // Small delay to prevent CPU spinning (16ms = ~60 FPS)
+        SDL_Delay(16);
     }
 
-    delete myClient;
+    if (myClient) {
+        delete myClient;
+    }
     return 0;
 }

@@ -1,5 +1,8 @@
 #include "Server.h"
-#include "Parser.h" 
+#include "Parser.h"
+#include "World.h"
+#include "Team.h"
+#include "Station.h"
 
 #include <sys/types.h>
 #include <ctime>
@@ -26,7 +29,25 @@ int main(int argc, char *argv[])
 
     myServ.BroadcastWorld();
     myServ.ReceiveTeamOrders();
-  }  
+  }
+
+  // Log final scores
+  printf("\n========================================\n");
+  printf("           FINAL SCORES\n");
+  printf("========================================\n");
+  CWorld* pWorld = myServ.GetWorld();
+  if (pWorld) {
+    for (UINT i = 0; i < pWorld->GetNumTeams(); i++) {
+      CTeam* pTeam = pWorld->GetTeam(i);
+      if (pTeam && pTeam->GetStation()) {
+        printf("Team %d (%s): %.2f vinyl\n",
+               pTeam->GetTeamNumber(),
+               pTeam->GetName(),
+               pTeam->GetStation()->GetVinylStore());
+      }
+    }
+  }
+  printf("========================================\n\n");
 
   return 0;
 }

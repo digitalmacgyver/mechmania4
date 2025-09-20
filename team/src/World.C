@@ -180,12 +180,45 @@ void CWorld::LaserModel ()
 	TarVel.rho += 1.0;
 	LasThing.SetVel(TarVel);
 
+	// Log laser hit
+	const char* targetType = "unknown";
+	const char* targetName = pTarget->GetName();
+	if (pTarget->GetKind() == SHIP) {
+	  targetType = "Ship";
+	} else if (pTarget->GetKind() == STATION) {
+	  targetType = "Station";
+	} else if (pTarget->GetKind() == ASTEROID) {
+	  targetType = "Asteroid";
+	}
+
+	printf("[LASER HIT] %s %s (Team %d) shot %s %s",
+	       pShip->GetTeam()->GetName(),
+	       pShip->GetName(),
+	       pShip->GetTeam()->GetTeamNumber(),
+	       targetType,
+	       targetName ? targetName : "");
+
+	// Add team info for ships/stations
+	if (pTarget->GetKind() == SHIP && pTarget->GetTeam()) {
+	  printf(" (Team %d)", pTarget->GetTeam()->GetTeamNumber());
+	} else if (pTarget->GetKind() == STATION && pTarget->GetTeam()) {
+	  printf(" (Team %d)", pTarget->GetTeam()->GetTeamNumber());
+	}
+	printf("\n");
+
 	pTarget->Collide(&LasThing, this);
       }
 
-      dfuel = pShip->GetAmount(S_FUEL);
+      double oldFuel = pShip->GetAmount(S_FUEL);
+      dfuel = oldFuel;
       dfuel -= pShip->SetOrder(O_LASER,dLasPwr);
       pShip->SetAmount(S_FUEL,dfuel);
+
+      // Check if out of fuel
+      if (oldFuel > 0.01 && dfuel <= 0.01) {
+        printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
+               pShip->GetName(), pShip->GetTeam() ? pShip->GetTeam()->GetTeamNumber() : -1);
+      }
     }
   }
 

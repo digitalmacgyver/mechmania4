@@ -74,8 +74,15 @@ void CStation::HandleCollision (CThing* pOthThing, CWorld *pWorld)
 
   double dDmg = pOthThing->GetMass();   // Laser object, whuppage is mass
   dDmg /= 1000.0;   // Takes a kilowhup
+  double oldCargo = dCargo;
   dCargo -= dDmg;
   if (dCargo<0.0) dCargo=0.0;
+
+  // Log station damage
+  if (dDmg > 0.01) {
+    printf("[STATION DAMAGE] Station %s (Team %d) lost %.2f vinyl from laser (%.2f -> %.2f)\n",
+           GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1, dDmg, oldCargo, dCargo);
+  }
 }
 
 ///////////////////////////////////////////////////

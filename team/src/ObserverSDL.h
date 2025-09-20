@@ -7,6 +7,7 @@
 #define _OBSERVERSDL_H_
 
 #include "SDL2Graphics.h"
+#include "SpriteManager.h"
 #include "World.h"
 #include "Team.h"
 #include "Thing.h"
@@ -17,10 +18,13 @@
 class ObserverSDL {
 private:
     SDL2Graphics* graphics;
+    SpriteManager* spriteManager;
     CWorld* myWorld;
+    SDL_Texture* logoTexture;
 
     // Display settings
     bool useXpm;
+    bool useSpriteMode;
     bool useVelVectors;
     int drawnames;
     int attractor;
@@ -43,13 +47,19 @@ private:
     // Drawing helpers
     void DrawSpace();
     void DrawShip(CShip* ship, int teamNum);
+    void DrawShipSprite(CShip* ship, int teamNum);
+    void DrawLaserBeam(CShip* ship, int teamNum);
     void DrawStation(CStation* station, int teamNum);
+    void DrawStationSprite(CStation* station, int teamNum);
     void DrawAsteroid(CAsteroid* asteroid);
+    void DrawAsteroidSprite(CAsteroid* asteroid);
     void DrawThing(CThing* thing);
     void DrawTeamInfo(CTeam* team, int x, int y);
     void DrawMessages();
     void DrawTimeDisplay();
     void DrawStarfield();
+    void DrawHelpFooter();
+    void DrawLogo();
 
     // Coordinate transformation
     int WorldToScreenX(double wx);
@@ -79,6 +89,7 @@ public:
     void SetAttractor(int val) { attractor = val; }
     void SetDrawNames(int val) { drawnames = val; }
     void ToggleVelVectors() { useVelVectors = !useVelVectors; }
+    void ToggleSpriteMode() { useSpriteMode = !useSpriteMode; }
 
     // Message system
     void AddMessage(const std::string& msg);

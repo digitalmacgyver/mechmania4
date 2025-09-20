@@ -1,7 +1,0 @@
-#!/bin/csh -f
-
-../team/src/mm4serv &
-../team/src/mm4obs &
-./mm4team &
-#../groogroo2/mm4team & 
-../team/src/mm4team &

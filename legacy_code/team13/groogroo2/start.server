@@ -1,0 +1,8 @@
+#!/bin/csh -f
+
+~/team/src/mm4serv &
+~/team/src/mm4obs &
+#./mm4team &
+./ChromeFunk &
+./mm4team 
+

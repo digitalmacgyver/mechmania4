@@ -66,14 +66,10 @@ bool SDL2Graphics::Init(int width, int height, bool fullscreen) {
 
     // Get display dimensions if not specified
     if (width == 0 || height == 0) {
-        SDL_DisplayMode dm;
-        if (SDL_GetCurrentDisplayMode(0, &dm) != 0) {
-            width = 1024;
-            height = 768;
-        } else {
-            width = dm.w;
-            height = dm.h;
-        }
+        // Use a reasonable default window size
+        // that should fit on most monitors
+        width = 1280;
+        height = 960;
     }
 
     displayWidth = width;

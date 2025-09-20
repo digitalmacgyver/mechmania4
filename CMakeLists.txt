@@ -65,6 +65,8 @@ if(BUILD_WITH_GRAPHICS)
         set(GRAPHICS_SOURCES
             ${SRC_DIR}/SDL2Graphics.C
             ${SRC_DIR}/ObserverSDL.C
+            ${SRC_DIR}/XPMLoader.C
+            ${SRC_DIR}/SpriteManager.C
         )
 
         add_compile_definitions(BUILD_WITH_GRAPHICS USE_SDL2)
@@ -110,6 +112,33 @@ add_executable(mm4team
     ${TEAM_SOURCES}
 )
 target_link_libraries(mm4team mm4_common pthread)
+
+# Groogroo team executable
+add_executable(mm4team_groogroo
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/groogroo/Groogroo.C
+    teams/groogroo/GetVinyl.C
+    teams/groogroo/MagicBag.C
+    teams/groogroo/DumbThing.C
+    teams/groogroo/ReturnToBase.C
+    teams/groogroo/Entry.C
+)
+target_link_libraries(mm4team_groogroo mm4_common pthread)
+target_include_directories(mm4team_groogroo PRIVATE teams/groogroo)
+
+# Vortex team executable
+add_executable(mm4team_vortex
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/vortex/VortexTeam.C
+)
+target_link_libraries(mm4team_vortex mm4_common pthread)
+target_include_directories(mm4team_vortex PRIVATE teams/vortex)
 
 # Observer executable (only if graphics enabled)
 if(BUILD_WITH_GRAPHICS)
