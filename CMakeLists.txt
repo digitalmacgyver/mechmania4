@@ -202,6 +202,18 @@ add_custom_target(clean-all
     COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/mm4obs
 )
 
+# Create symbolic links for graphics resources in build directory
+add_custom_command(
+    TARGET mm4obs POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${CMAKE_SOURCE_DIR}/team/src/gfx
+            ${CMAKE_BINARY_DIR}/gfx
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/team/src/graphics.reg
+            ${CMAKE_BINARY_DIR}/graphics.reg
+    COMMENT "Setting up graphics resources for observer"
+)
+
 # Print build configuration
 message(STATUS "MechMania IV Build Configuration:")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
