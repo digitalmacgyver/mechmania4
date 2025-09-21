@@ -38,76 +38,74 @@ RUN cp -r /build/build/* . && \
 
 # Create supervisor configuration
 RUN mkdir -p /etc/supervisor/conf.d
-COPY - /etc/supervisor/conf.d/supervisord.conf <<'EOF'
-[supervisord]
-nodaemon=true
-user=root
-
-[program:xvfb]
-command=/usr/bin/Xvfb :99 -screen 0 1280x960x24 -ac
-autorestart=true
-stdout_logfile=/var/log/xvfb.log
-stderr_logfile=/var/log/xvfb.err
-
-[program:fluxbox]
-command=/usr/bin/fluxbox
-environment=DISPLAY=":99"
-autorestart=true
-stdout_logfile=/var/log/fluxbox.log
-stderr_logfile=/var/log/fluxbox.err
-
-[program:x11vnc]
-command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -forever -shared
-autorestart=true
-stdout_logfile=/var/log/x11vnc.log
-stderr_logfile=/var/log/x11vnc.err
-
-[program:novnc]
-command=/usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080
-autorestart=true
-stdout_logfile=/var/log/novnc.log
-stderr_logfile=/var/log/novnc.err
-EOF
+RUN echo '[supervisord]\n\
+nodaemon=true\n\
+user=root\n\
+\n\
+[program:xvfb]\n\
+command=/usr/bin/Xvfb :99 -screen 0 1280x960x24 -ac\n\
+autorestart=true\n\
+stdout_logfile=/var/log/xvfb.log\n\
+stderr_logfile=/var/log/xvfb.err\n\
+\n\
+[program:fluxbox]\n\
+command=/usr/bin/fluxbox\n\
+environment=DISPLAY=":99"\n\
+autorestart=true\n\
+stdout_logfile=/var/log/fluxbox.log\n\
+stderr_logfile=/var/log/fluxbox.err\n\
+\n\
+[program:x11vnc]\n\
+command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -forever -shared\n\
+autorestart=true\n\
+stdout_logfile=/var/log/x11vnc.log\n\
+stderr_logfile=/var/log/x11vnc.err\n\
+\n\
+[program:novnc]\n\
+command=/usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080\n\
+autorestart=true\n\
+stdout_logfile=/var/log/novnc.log\n\
+stderr_logfile=/var/log/novnc.err\n' \
+> /etc/supervisor/conf.d/supervisord.conf
 
 # Create startup script
-COPY - /app/start.sh <<'EOF'
-#!/bin/bash
-echo "Starting MechMania IV Web Interface..."
-echo "=================================="
-echo "Open your browser to:"
-echo "  http://localhost:6080/vnc.html"
-echo "=================================="
-
-# Start supervisor to manage all services
-/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf &
-
-# Wait for X server to be ready
-sleep 5
-
-# Set display
-export DISPLAY=:99
-
-# Start the game based on MODE environment variable
-case "${MODE}" in
-    observer)
-        echo "Starting Observer in reconnect mode..."
-        cd /app && ./mm4obs -R -G -p${PORT:-2323} -h${HOST:-localhost}
-        ;;
-    server)
-        echo "Starting Server..."
-        cd /app && ./mm4serv -p${PORT:-2323} -h${HOST:-0.0.0.0}
-        ;;
-    game)
-        echo "Starting complete game..."
-        cd /app && ./run_game.sh
-        ;;
-    *)
-        echo "Starting default game with observer..."
-        cd /app && xterm -e ./run_game.sh &
-        cd /app && ./mm4obs -R -G -p2323 -hlocalhost
-        ;;
-esac
-EOF
+RUN echo '#!/bin/bash\n\
+echo "Starting MechMania IV Web Interface..."\n\
+echo "=================================="\n\
+echo "Open your browser to:"\n\
+echo "  http://localhost:6080/vnc.html"\n\
+echo "=================================="\n\
+\n\
+# Start supervisor to manage all services\n\
+/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf &\n\
+\n\
+# Wait for X server to be ready\n\
+sleep 5\n\
+\n\
+# Set display\n\
+export DISPLAY=:99\n\
+\n\
+# Start the game based on MODE environment variable\n\
+case "${MODE}" in\n\
+    observer)\n\
+        echo "Starting Observer in reconnect mode..."\n\
+        cd /app && ./mm4obs -R -G -p${PORT:-2323} -h${HOST:-localhost}\n\
+        ;;\n\
+    server)\n\
+        echo "Starting Server..."\n\
+        cd /app && ./mm4serv -p${PORT:-2323} -h${HOST:-0.0.0.0}\n\
+        ;;\n\
+    game)\n\
+        echo "Starting complete game..."\n\
+        cd /app && ./run_game.sh\n\
+        ;;\n\
+    *)\n\
+        echo "Starting default game with observer..."\n\
+        cd /app && xterm -e ./run_game.sh &\n\
+        cd /app && ./mm4obs -R -G -p2323 -hlocalhost\n\
+        ;;\n\
+esac\n' \
+> /app/start.sh
 
 RUN chmod +x /app/start.sh
 
