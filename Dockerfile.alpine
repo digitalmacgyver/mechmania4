@@ -45,19 +45,22 @@ COPY --from=builder /build/build/mm4team* .
 COPY --from=builder /build/team/src/gfx ./gfx
 COPY --from=builder /build/team/src/graphics.reg .
 
-# Create shell scripts
-RUN echo '#!/bin/sh\n\
-echo "Running quick headless test..."\n\
-./mm4serv -p2323 -h127.0.0.1 &\n\
-SERVER_PID=$!\n\
-sleep 1\n\
-./mm4team -p2323 -h127.0.0.1 -n"Team 1" &\n\
-TEAM1_PID=$!\n\
-./mm4team -p2323 -h127.0.0.1 -n"Team 2" &\n\
-TEAM2_PID=$!\n\
-sleep 5\n\
-kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null\n\
-echo "Test completed!"' > quick_test.sh && chmod +x quick_test.sh
+# Create shell scripts using heredoc
+RUN cat > quick_test.sh << 'EOF'
+#!/bin/sh
+echo "Running quick headless test..."
+./mm4serv -p2323 -h127.0.0.1 &
+SERVER_PID=$!
+sleep 1
+./mm4team -p2323 -h127.0.0.1 &
+TEAM1_PID=$!
+./mm4team -p2323 -h127.0.0.1 &
+TEAM2_PID=$!
+sleep 5
+kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null
+echo "Test completed!"
+EOF
+RUN chmod +x quick_test.sh
 
 # Set ownership
 RUN chown -R mechmania:mechmania /home/mechmania/game

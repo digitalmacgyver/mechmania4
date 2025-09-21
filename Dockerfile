@@ -49,46 +49,52 @@ COPY --from=builder /build/build/mm4team* .
 COPY --from=builder /build/team/src/gfx ./gfx
 COPY --from=builder /build/team/src/graphics.reg .
 
-# Create shell scripts
-RUN echo '#!/bin/bash\n\
-echo "Starting MechMania IV game..."\n\
-echo "Starting server..."\n\
-./mm4serv -p2323 -h127.0.0.1 &\n\
-SERVER_PID=$!\n\
-sleep 2\n\
-echo "Starting observer..."\n\
-./mm4obs -h127.0.0.1 -p2323 -G -R &\n\
-OBS_PID=$!\n\
-sleep 1\n\
-echo "Starting Team 1 (Chrome Funkadelic)..."\n\
-./mm4team -p2323 -h127.0.0.1 -n"Chrome Funkadelic" &\n\
-TEAM1_PID=$!\n\
-sleep 1\n\
-echo "Starting Team 2 (${1:-Chrome Funkadelic})..."\n\
-if [ "$1" = "groogroo" ]; then\n\
-    ./mm4team_groogroo -p2323 -h127.0.0.1 -n"Groogroo" &\n\
-elif [ "$1" = "vortex" ]; then\n\
-    ./mm4team_vortex -p2323 -h127.0.0.1 -n"Team Vortex" &\n\
-else\n\
-    ./mm4team -p2323 -h127.0.0.1 -n"Chrome Funkadelic 2" &\n\
-fi\n\
-TEAM2_PID=$!\n\
-echo "Game started! Press Ctrl+C to stop."\n\
-trap "kill $SERVER_PID $OBS_PID $TEAM1_PID $TEAM2_PID 2>/dev/null; exit" INT\n\
-wait' > run_game.sh && chmod +x run_game.sh
+# Create shell scripts using heredoc for better formatting
+RUN cat > run_game.sh << 'EOF'
+#!/bin/bash
+echo "Starting MechMania IV game..."
+echo "Starting server..."
+./mm4serv -p2323 -h127.0.0.1 &
+SERVER_PID=$!
+sleep 2
+echo "Starting observer..."
+./mm4obs -h127.0.0.1 -p2323 -G -R &
+OBS_PID=$!
+sleep 1
+echo "Starting Team 1 (Chrome Funkadelic)..."
+./mm4team -p2323 -h127.0.0.1 &
+TEAM1_PID=$!
+sleep 1
+echo "Starting Team 2..."
+if [ "$1" = "groogroo" ]; then
+    ./mm4team_groogroo -p2323 -h127.0.0.1 &
+elif [ "$1" = "vortex" ]; then
+    ./mm4team_vortex -p2323 -h127.0.0.1 &
+else
+    ./mm4team -p2323 -h127.0.0.1 &
+fi
+TEAM2_PID=$!
+echo "Game started! Press Ctrl+C to stop."
+trap "kill $SERVER_PID $OBS_PID $TEAM1_PID $TEAM2_PID 2>/dev/null; exit" INT
+wait
+EOF
+RUN chmod +x run_game.sh
 
-RUN echo '#!/bin/bash\n\
-echo "Running quick headless test..."\n\
-./mm4serv -p2323 -h127.0.0.1 &\n\
-SERVER_PID=$!\n\
-sleep 1\n\
-./mm4team -p2323 -h127.0.0.1 -n"Team 1" &\n\
-TEAM1_PID=$!\n\
-./mm4team -p2323 -h127.0.0.1 -n"Team 2" &\n\
-TEAM2_PID=$!\n\
-sleep 5\n\
-kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null\n\
-echo "Test completed!"' > quick_test.sh && chmod +x quick_test.sh
+RUN cat > quick_test.sh << 'EOF'
+#!/bin/bash
+echo "Running quick headless test..."
+./mm4serv -p2323 -h127.0.0.1 &
+SERVER_PID=$!
+sleep 1
+./mm4team -p2323 -h127.0.0.1 &
+TEAM1_PID=$!
+./mm4team -p2323 -h127.0.0.1 &
+TEAM2_PID=$!
+sleep 5
+kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null
+echo "Test completed!"
+EOF
+RUN chmod +x quick_test.sh
 
 # Set ownership
 RUN chown -R mechmania:mechmania /home/mechmania/game
