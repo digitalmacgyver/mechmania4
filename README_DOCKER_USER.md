@@ -39,7 +39,8 @@ Open a terminal/command prompt in the mechmania4 directory:
 ```bash
 docker build -f Dockerfile.web -t mechmania4-web .
 ```
-*This will take 5-10 minutes the first time*
+**⚠️ IMPORTANT: This build step is required! It will take 5-10 minutes the first time.**
+**The images must be built locally - they are not available from Docker Hub.**
 
 ### Step 2: Run the Game
 ```bash

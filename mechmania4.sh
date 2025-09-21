@@ -31,12 +31,47 @@ check_docker() {
     fi
 }
 
+check_images() {
+    # Check if images exist
+    if ! docker images | grep -q "^${IMAGE_NAME} "; then
+        echo -e "${YELLOW}Docker image '${IMAGE_NAME}' not found!${NC}"
+        echo -e "${YELLOW}Building images first (this will take 5-10 minutes)...${NC}"
+        build_images
+    fi
+}
+
+check_web_image() {
+    if ! docker images | grep -q "^${WEB_IMAGE_NAME} "; then
+        echo -e "${YELLOW}Docker image '${WEB_IMAGE_NAME}' not found!${NC}"
+        echo -e "${YELLOW}Building web image (this will take 5-10 minutes)...${NC}"
+        docker build -t $WEB_IMAGE_NAME -f Dockerfile.web .
+        echo -e "${GREEN}Web image build complete!${NC}"
+    fi
+}
+
+check_alpine_image() {
+    if ! docker images | grep -q "^${ALPINE_IMAGE_NAME} "; then
+        echo -e "${YELLOW}Docker image '${ALPINE_IMAGE_NAME}' not found!${NC}"
+        echo -e "${YELLOW}Building Alpine image (this will take a few minutes)...${NC}"
+        docker build -t $ALPINE_IMAGE_NAME -f Dockerfile.alpine .
+        echo -e "${GREEN}Alpine image build complete!${NC}"
+    fi
+}
+
 build_images() {
     echo -e "${YELLOW}Building Docker images...${NC}"
+    echo -e "${YELLOW}This will take 5-10 minutes the first time.${NC}"
+
+    echo -e "\n${YELLOW}[1/3] Building standard image...${NC}"
     docker build -t $IMAGE_NAME -f Dockerfile .
+
+    echo -e "\n${YELLOW}[2/3] Building web image...${NC}"
     docker build -t $WEB_IMAGE_NAME -f Dockerfile.web .
+
+    echo -e "\n${YELLOW}[3/3] Building Alpine image...${NC}"
     docker build -t $ALPINE_IMAGE_NAME -f Dockerfile.alpine .
-    echo -e "${GREEN}Build complete!${NC}"
+
+    echo -e "${GREEN}All images built successfully!${NC}"
 }
 
 show_menu() {
@@ -47,7 +82,7 @@ show_menu() {
     echo "  3) Tournament Mode (multiple matches)"
     echo "  4) Headless Test (no graphics)"
     echo "  5) Development Mode (with file watching)"
-    echo "  6) Build Docker Images"
+    echo "  6) Build/Rebuild Docker Images"
     echo "  7) Download Dependencies (for offline builds)"
     echo "  8) Exit"
     echo ""
@@ -55,6 +90,7 @@ show_menu() {
 }
 
 run_x11_game() {
+    check_images
     echo -e "${GREEN}Starting game with X11 graphics...${NC}"
 
     # Check for X11 on macOS
@@ -67,6 +103,8 @@ run_x11_game() {
         fi
         DISPLAY_ARG="-e DISPLAY=host.docker.internal:0"
     else
+        # Allow X11 connections on Linux
+        xhost +local:docker 2>/dev/null || true
         DISPLAY_ARG="-e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw"
     fi
 
@@ -78,8 +116,13 @@ run_x11_game() {
 }
 
 run_web_game() {
+    check_web_image
     echo -e "${GREEN}Starting web-based game...${NC}"
     echo -e "${YELLOW}Open your browser to: http://localhost:6080/vnc.html${NC}"
+
+    # Stop any existing container
+    docker stop mechmania4-web 2>/dev/null || true
+    docker rm mechmania4-web 2>/dev/null || true
 
     docker run -d --rm \
         --name mechmania4-web \
@@ -107,17 +150,37 @@ run_web_game() {
 }
 
 run_tournament() {
+    check_images
     echo -e "${GREEN}Starting tournament mode...${NC}"
+
+    # Check if docker-compose exists
+    if ! command -v docker-compose &> /dev/null; then
+        echo -e "${RED}docker-compose not found!${NC}"
+        echo "Install with: sudo apt-get install docker-compose (Linux)"
+        echo "Or: brew install docker-compose (macOS)"
+        exit 1
+    fi
+
     docker-compose --profile tournament up
 }
 
 run_headless() {
+    check_alpine_image
     echo -e "${GREEN}Running headless test...${NC}"
     docker run -it --rm $ALPINE_IMAGE_NAME ./quick_test.sh
 }
 
 run_dev_mode() {
+    check_images
     echo -e "${GREEN}Starting development mode...${NC}"
+
+    # Check if docker-compose exists
+    if ! command -v docker-compose &> /dev/null; then
+        echo -e "${RED}docker-compose not found!${NC}"
+        echo "Install with: sudo apt-get install docker-compose"
+        exit 1
+    fi
+
     docker-compose --profile dev up
 }
 
