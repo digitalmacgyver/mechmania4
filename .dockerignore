@@ -36,8 +36,7 @@ README*.md
 CONTEST_RULES.md
 TEAM_API.md
 
-# Exclude scripts that are copied separately
-*.sh
+# Don't exclude scripts - they're needed in the container!
 
 # Exclude vendor downloads
 vendor/downloads/

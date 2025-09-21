@@ -32,13 +32,30 @@ RUN mkdir -p build && cd build && \
 
 # Setup the runtime environment
 WORKDIR /app
-# Copy executables and scripts, but handle symlinks properly
+# Copy executables, but handle symlinks properly
 RUN cp /build/build/mm4* . || true && \
-    cp /build/build/*.sh . || true && \
     # Remove any symlinks first, then copy the actual files
     rm -f gfx graphics.reg && \
     cp -r /build/team/src/gfx . && \
     cp /build/team/src/graphics.reg .
+
+# Create run_game.sh script
+RUN echo '#!/bin/bash\n\
+echo "Starting MechMania IV game..."\n\
+echo "Starting server..."\n\
+./mm4serv -p2323 -h127.0.0.1 &\n\
+SERVER_PID=$!\n\
+sleep 2\n\
+echo "Starting Team 1 (Chrome Funkadelic)..."\n\
+./mm4team -p2323 -h127.0.0.1 -n"Chrome Funkadelic" &\n\
+TEAM1_PID=$!\n\
+sleep 1\n\
+echo "Starting Team 2 (Chrome Funkadelic 2)..."\n\
+./mm4team -p2323 -h127.0.0.1 -n"Chrome Funkadelic 2" &\n\
+TEAM2_PID=$!\n\
+echo "Game started!"\n\
+trap "kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null; exit" INT\n\
+wait' > run_game.sh && chmod +x run_game.sh
 
 # Create supervisor configuration
 RUN mkdir -p /etc/supervisor/conf.d
