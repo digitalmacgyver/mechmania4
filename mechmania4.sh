@@ -16,6 +16,9 @@ IMAGE_NAME="mechmania4"
 WEB_IMAGE_NAME="mechmania4-web"
 ALPINE_IMAGE_NAME="mechmania4-alpine"
 
+# Version marker - increment this when Docker images need rebuilding
+DOCKER_BUILD_VERSION="2024.01.02"
+
 # Functions
 print_header() {
     echo -e "${BLUE}========================================${NC}"
@@ -61,6 +64,12 @@ check_alpine_image() {
 build_images() {
     echo -e "${YELLOW}Building Docker images...${NC}"
     echo -e "${YELLOW}This will take 5-10 minutes the first time.${NC}"
+    echo ""
+    echo -e "${BLUE}Note: Rebuild images when:${NC}"
+    echo "  - You've pulled new code from git"
+    echo "  - You see 'no such file or directory' errors"
+    echo "  - The game fails to start properly"
+    echo ""
 
     echo -e "\n${YELLOW}[1/3] Building standard image...${NC}"
     docker build -t $IMAGE_NAME -f Dockerfile .
@@ -72,6 +81,7 @@ build_images() {
     docker build -t $ALPINE_IMAGE_NAME -f Dockerfile.alpine .
 
     echo -e "${GREEN}All images built successfully!${NC}"
+    echo -e "${GREEN}Build version: ${DOCKER_BUILD_VERSION}${NC}"
 }
 
 show_menu() {
@@ -108,11 +118,35 @@ run_x11_game() {
         DISPLAY_ARG="-e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:rw"
     fi
 
+    # Run the container and capture the exit code
     docker run -it --rm \
         $DISPLAY_ARG \
         --network host \
         $IMAGE_NAME \
         ./run_game.sh
+
+    # Check if the container failed with a common error
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}Container failed to start!${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}This often happens when Docker images are outdated.${NC}"
+        echo -e "${YELLOW}Your local images may have been built from an older version.${NC}"
+        echo ""
+        echo -e "${GREEN}To fix this problem:${NC}"
+        echo -e "${GREEN}1. Run this script again: ./mechmania4.sh${NC}"
+        echo -e "${GREEN}2. Choose option 6 to rebuild Docker images${NC}"
+        echo -e "${GREEN}3. Try your command again${NC}"
+        echo ""
+        echo -e "${BLUE}Alternatively, rebuild manually:${NC}"
+        echo -e "  docker build -t mechmania4 ."
+        echo -e "  docker build -f Dockerfile.alpine -t mechmania4-alpine ."
+        echo -e "  docker build -f Dockerfile.web -t mechmania4-web ."
+        echo ""
+        return 1
+    fi
 }
 
 run_web_game() {
@@ -168,6 +202,21 @@ run_headless() {
     check_alpine_image
     echo -e "${GREEN}Running headless test...${NC}"
     docker run -it --rm $ALPINE_IMAGE_NAME ./quick_test.sh
+
+    # Check if the container failed
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}Headless test failed!${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}If you see 'no such file or directory' errors,${NC}"
+        echo -e "${YELLOW}your Docker images are likely outdated.${NC}"
+        echo ""
+        echo -e "${GREEN}To fix: Choose option 6 to rebuild Docker images${NC}"
+        echo ""
+        return 1
+    fi
 }
 
 run_dev_mode() {
