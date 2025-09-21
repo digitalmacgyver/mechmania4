@@ -454,4 +454,140 @@ docker system prune
 
 ---
 
+## Docker Compose Usage
+
+### Quick Game with Docker Compose
+```bash
+docker-compose --profile quick up
+```
+Runs a complete match with graphics.
+
+### Tournament Mode
+```bash
+docker-compose --profile tournament up
+```
+- Runs server, observer, and teams in separate containers
+- Web interface available at http://localhost:6080/vnc.html
+- Automatically manages team connections
+
+### Development Mode
+```bash
+docker-compose --profile dev up
+```
+- Mounts current directory for live code changes
+- Separate containers for each component
+- Ideal for testing custom teams
+
+### Headless Testing
+```bash
+docker-compose --profile test up
+```
+Runs automated tests without graphics.
+
+## Custom Team Matches
+
+### Running Your Own Team
+1. Create your team file (e.g., `myteam.C`)
+2. Build and run with Docker:
+```bash
+docker run -v $(pwd):/workspace -w /workspace mechmania4 \
+  bash -c "g++ -o myteam myteam.C -lmm4 && ./myteam -p2323 -hlocalhost"
+```
+
+### Testing Against Different AI Teams
+```bash
+# ChromeFunk vs Groogroo
+docker run mechmania4 bash -c "./run_game.sh groogroo"
+
+# ChromeFunk vs Vortex
+docker run mechmania4 bash -c "./run_game.sh vortex"
+```
+
+## Saving Game Logs
+
+### Capture Console Output
+```bash
+docker run mechmania4 ./run_game.sh 2>&1 | tee game.log
+```
+
+### Save to Directory
+```bash
+mkdir logs
+docker run -v $(pwd)/logs:/logs mechmania4 \
+  bash -c "./run_game.sh 2>&1 | tee /logs/game-$(date +%Y%m%d-%H%M%S).log"
+```
+
+## Using Pre-built Images
+
+If pre-built images become available from GitHub Container Registry:
+```bash
+# Pull pre-built images
+docker pull ghcr.io/digitalmacgyver/mechmania4:latest
+docker pull ghcr.io/digitalmacgyver/mechmania4:web
+docker pull ghcr.io/digitalmacgyver/mechmania4:alpine
+
+# Run with pre-built image
+docker run -p 6080:6080 ghcr.io/digitalmacgyver/mechmania4:web
+```
+
+## Environment Variables
+
+The web Docker image supports these environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| MODE | game | Options: game, observer, server |
+| PORT | 2323 | Server port |
+| HOST | localhost | Server hostname |
+| DISPLAY | :99 | X11 display number |
+
+Example:
+```bash
+docker run -p 6080:6080 \
+  -e MODE=observer \
+  -e HOST=192.168.1.100 \
+  mechmania4-web
+```
+
+## Docker Resource Limits
+
+For fair tournament play or testing:
+```bash
+# Limit memory to 512MB and 1 CPU
+docker run --memory="512m" --cpus="1.0" mechmania4 ./run_game.sh
+```
+
+## FAQ
+
+**Q: Which Docker image should I use?**
+- **First time users**: Use `mechmania4-web` for browser interface
+- **Linux users**: Use standard `mechmania4` with X11
+- **Minimal resources**: Use `mechmania4-alpine` for headless
+
+**Q: How do I connect teams from different computers?**
+1. Run server with public binding:
+   ```bash
+   docker run -p 2323:2323 mechmania4 ./mm4serv -h0.0.0.0
+   ```
+2. Teams connect using server's IP:
+   ```bash
+   docker run mechmania4 ./mm4team -h192.168.1.100
+   ```
+
+**Q: Can I run without Docker?**
+Yes! See README_MODERNIZED.md for native build instructions. Docker just makes it easier and more consistent.
+
+**Q: Why are there three different Docker images?**
+- **mechmania4**: Full Ubuntu environment for development
+- **mechmania4-alpine**: Tiny image for production/testing
+- **mechmania4-web**: Browser interface for easy access
+
+**Q: How do I update to the latest version?**
+```bash
+git pull
+docker build -f Dockerfile.web -t mechmania4-web .
+```
+
+---
+
 *Enjoy playing MechMania IV: The Vinyl Frontier!*

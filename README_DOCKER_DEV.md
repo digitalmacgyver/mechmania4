@@ -49,6 +49,207 @@ Our approach follows the "belt and suspenders" principle - multiple redundant me
   - `test`: Automated testing
 - **Why Profiles**: Different use cases without multiple files
 
+## Docker Image Details
+
+### Image Comparison
+| Image | Size | Base OS | Use Case | Startup Time |
+|-------|------|---------|----------|--------------|
+| mechmania4 | ~350MB | Ubuntu 22.04 | Development, debugging | 2-3s |
+| mechmania4-alpine | ~50MB | Alpine 3.18 | Production, CI/CD | <1s |
+| mechmania4-web | ~450MB | Ubuntu + VNC | Browser access, demos | 5-10s |
+
+### Multi-stage Build Strategy
+All Dockerfiles use multi-stage builds to minimize final image size:
+- **Stage 1 (builder)**: Includes compilers, dev tools, builds the game
+- **Stage 2 (runtime)**: Only includes runtime libraries and binaries
+
+This reduces image sizes by 60-70% compared to single-stage builds.
+
+## Advanced Docker Configurations
+
+### Network Architectures
+
+#### Host Networking (Linux only)
+```bash
+docker run --network host mechmania4 ./mm4serv
+```
+- Direct access to host network stack
+- Best performance, no NAT overhead
+- Security: Container has full network access
+
+#### Bridge Networking (Default)
+```bash
+# Server listens on all interfaces
+docker run -p 2323:2323 mechmania4 ./mm4serv -h0.0.0.0
+
+# Teams connect via host.docker.internal
+docker run mechmania4 ./mm4team -h host.docker.internal
+```
+- Isolated network namespace
+- Port mapping required
+- Works across all platforms
+
+#### Custom Network
+```bash
+# Create isolated network
+docker network create --driver bridge mechmania
+
+# Run containers on custom network
+docker run --network mechmania --name server mechmania4 ./mm4serv
+docker run --network mechmania mechmania4 ./mm4team -hserver
+```
+- Container DNS resolution by name
+- Network isolation between projects
+- Suitable for tournament setups
+
+### Resource Management
+
+#### Memory Limits
+```bash
+docker run --memory="512m" --memory-swap="512m" mechmania4
+```
+- Prevents memory leaks from affecting host
+- Ensures fair resource allocation in tournaments
+
+#### CPU Limits
+```bash
+docker run --cpus="1.0" mechmania4
+```
+- Limits container to 1 CPU core
+- Useful for performance testing
+
+#### Read-only Filesystem
+```bash
+docker run --read-only --tmpfs /tmp mechmania4-alpine
+```
+- Security hardening
+- Prevents persistent modifications
+- Requires tmpfs for runtime files
+
+### Persistence Strategies
+
+#### Game Logs
+```bash
+docker run -v $(pwd)/logs:/logs mechmania4 \
+  bash -c "./run_game.sh 2>&1 | tee /logs/game.log"
+```
+
+#### Custom Team Development
+```bash
+docker run -v $(pwd)/myteam:/workspace \
+  -w /workspace \
+  mechmania4 \
+  bash -c "g++ -o myteam myteam.C -lmm4 && ./myteam"
+```
+
+### Security Considerations
+
+#### Non-root User
+All images use a non-privileged user:
+```dockerfile
+RUN useradd -m -s /bin/bash mechmania
+USER mechmania
+```
+
+#### Minimal Attack Surface
+Alpine image includes only essential libraries:
+- No shell utilities beyond basics
+- No package manager in runtime
+- Static linking where possible
+
+#### Container Scanning
+```bash
+# Scan for vulnerabilities
+docker scan mechmania4-alpine
+```
+
+## CI/CD Integration
+
+### GitHub Actions Workflow
+```yaml
+name: Docker Build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build images
+        run: |
+          docker build -t mechmania4 .
+          docker build -f Dockerfile.alpine -t mechmania4-alpine .
+          docker build -f Dockerfile.web -t mechmania4-web .
+      - name: Test images
+        run: |
+          docker run --rm mechmania4-alpine ./quick_test.sh
+```
+
+### Multi-architecture Builds
+```bash
+# Setup buildx
+docker buildx create --use
+
+# Build for multiple platforms
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t mechmania4:multi \
+  --push .
+```
+
+## Troubleshooting Guide
+
+### Common Issues
+
+#### Container Won't Start
+```bash
+# Check logs
+docker logs <container_id>
+
+# Interactive debugging
+docker run -it --entrypoint /bin/bash mechmania4
+```
+
+#### X11 Graphics Issues
+```bash
+# Test X11 forwarding
+docker run -it --rm \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  ubuntu \
+  bash -c "apt-get update && apt-get install -y x11-apps && xclock"
+```
+
+#### Network Connectivity
+```bash
+# Test server accessibility
+docker run --rm mechmania4 nc -zv host.docker.internal 2323
+
+# List networks
+docker network ls
+
+# Inspect bridge network
+docker network inspect bridge
+```
+
+### Performance Optimization
+
+#### Build Cache
+```bash
+# Use BuildKit for better caching
+DOCKER_BUILDKIT=1 docker build -t mechmania4 .
+```
+
+#### Layer Caching
+- Order Dockerfile commands from least to most frequently changing
+- Separate dependency installation from code copying
+- Use .dockerignore to exclude unnecessary files
+
+#### Image Size Reduction
+- Multi-stage builds (implemented)
+- Alpine base where possible (implemented)
+- Minimize layer count
+- Clean package manager caches
+
 ### Launcher Scripts
 
 #### `mechmania4.sh` (Linux/macOS)
