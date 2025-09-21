@@ -319,8 +319,8 @@ void CShip::Drift(double dt)
 
     // Check if out of fuel
     if (oldFuel > 0.01 && newFuel <= 0.01) {
-      printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
-             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+      printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n",
+             GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown");
     }
   }
 
@@ -335,8 +335,8 @@ void CShip::Drift(double dt)
 
     // Check if out of fuel
     if (oldFuel > 0.01 && newFuel <= 0.01) {
-      printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
-             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+      printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n",
+             GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown");
     }
 
     if (turnamt<0.0) uImgSet=3;
@@ -352,8 +352,8 @@ void CShip::Drift(double dt)
 
     // Check if out of fuel
     if (oldFuel > 0.01 && newFuel <= 0.01) {
-      printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
-             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+      printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n",
+             GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown");
     }
     
     CTraj Accel(thrustamt,GetOrient());
@@ -502,11 +502,11 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     if (vinylDelivered > 0.01) {
       CStation* pStation = (CStation*)pOthThing;
       if (pStation->GetTeam() == this->GetTeam()) {
-        printf("[DELIVERY] Ship %s delivered %.2f vinyl to HOME base (Team %d)\n",
-               GetName(), vinylDelivered, GetTeam()->GetTeamNumber());
+        printf("[DELIVERY] Ship %s delivered %.2f vinyl to HOME base (%s)\n",
+               GetName(), vinylDelivered, GetTeam()->GetName());
       } else {
-        printf("[ENEMY DELIVERY] Ship %s delivered %.2f vinyl to ENEMY base (Team %d to Team %d)\n",
-               GetName(), vinylDelivered, GetTeam()->GetTeamNumber(), pStation->GetTeam()->GetTeamNumber());
+        printf("[ENEMY DELIVERY] Ship %s delivered %.2f vinyl to ENEMY base (%s to %s)\n",
+               GetName(), vinylDelivered, GetTeam()->GetName(), pStation->GetTeam()->GetName());
       }
     }
     ((CStation*)pOthThing)->AddVinyl(vinylDelivered);
@@ -523,8 +523,8 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     
     SetAmount(S_SHIELD, dshield);
     if (dshield<0.0) {
-      printf("[DESTROYED] Ship %s (Team %d) destroyed by laser\n",
-             GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1);
+      printf("[DESTROYED] Ship %s (%s) destroyed by laser\n",
+             GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown");
       KillThing();
     }
     return;
@@ -536,8 +536,8 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     const char* causeType = "unknown";
     if (pOthThing->GetKind() == SHIP) causeType = "ship collision";
     else if (pOthThing->GetKind() == ASTEROID) causeType = "asteroid collision";
-    printf("[DESTROYED] Ship %s (Team %d) destroyed by %s\n",
-           GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1, causeType);
+    printf("[DESTROYED] Ship %s (%s) destroyed by %s\n",
+           GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown", causeType);
     KillThing();
   }
   

@@ -296,7 +296,7 @@ void CServer::ReceiveTeamOrders()
 
       if (pmyNet->IsOpen(conn)==0) {
 	abOpen[conn-1]=false;
-	printf ("Team %d disconnected\n",tn);
+	printf ("%s disconnected\n", aTms[tn] ? aTms[tn]->GetName() : "Unknown Team");
 	continue;
       }
 
@@ -306,14 +306,14 @@ void CServer::ReceiveTeamOrders()
       pmyWorld->auClock[tn]+=timediff;
       pmyWorld->atstamp[tn] = tnow;
       if (aTms[tn]->GetWallClock() >300.0) {
-	printf ("Team %d timed out, severing connection\n",tn);
+	printf ("%s timed out, severing connection\n", aTms[tn] ? aTms[tn]->GetName() : "Unknown Team");
 	pmyNet->CloseConn(conn);  // Close connection, will skip over
 	continue;   // Check other teams
       }
 
       tthink = tnow-tstart;
       if (tthink>60.0) {
-	printf ("Team %d taking too long, orders ignored\n",tn);
+	printf ("%s taking too long, orders ignored\n", aTms[tn] ? aTms[tn]->GetName() : "Unknown Team");
 	totresp++;   // Pretend it's responded
 	abGotFlag[tn]=true;  // Pretend it's responded 
 	continue;    // And keep chugging

@@ -191,18 +191,18 @@ void CWorld::LaserModel ()
 	  targetType = "Asteroid";
 	}
 
-	printf("[LASER HIT] %s %s (Team %d) shot %s %s",
+	printf("[LASER HIT] %s %s (%s) shot %s %s",
 	       pShip->GetTeam()->GetName(),
 	       pShip->GetName(),
-	       pShip->GetTeam()->GetTeamNumber(),
+	       pShip->GetTeam()->GetName(),
 	       targetType,
 	       targetName ? targetName : "");
 
 	// Add team info for ships/stations
 	if (pTarget->GetKind() == SHIP && pTarget->GetTeam()) {
-	  printf(" (Team %d)", pTarget->GetTeam()->GetTeamNumber());
+	  printf(" (%s)", pTarget->GetTeam()->GetName());
 	} else if (pTarget->GetKind() == STATION && pTarget->GetTeam()) {
-	  printf(" (Team %d)", pTarget->GetTeam()->GetTeamNumber());
+	  printf(" (%s)", pTarget->GetTeam()->GetName());
 	}
 	printf("\n");
 
@@ -216,8 +216,8 @@ void CWorld::LaserModel ()
 
       // Check if out of fuel
       if (oldFuel > 0.01 && dfuel <= 0.01) {
-        printf("[OUT OF FUEL] Ship %s (Team %d) ran out of fuel\n",
-               pShip->GetName(), pShip->GetTeam() ? pShip->GetTeam()->GetTeamNumber() : -1);
+        printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n",
+               pShip->GetName(), pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
       }
     }
   }

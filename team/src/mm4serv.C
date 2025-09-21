@@ -40,8 +40,7 @@ int main(int argc, char *argv[])
     for (UINT i = 0; i < pWorld->GetNumTeams(); i++) {
       CTeam* pTeam = pWorld->GetTeam(i);
       if (pTeam && pTeam->GetStation()) {
-        printf("Team %d (%s): %.2f vinyl\n",
-               pTeam->GetTeamNumber(),
+        printf("%s: %.2f vinyl\n",
                pTeam->GetName(),
                pTeam->GetStation()->GetVinylStore());
       }

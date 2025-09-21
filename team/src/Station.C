@@ -80,8 +80,8 @@ void CStation::HandleCollision (CThing* pOthThing, CWorld *pWorld)
 
   // Log station damage
   if (dDmg > 0.01) {
-    printf("[STATION DAMAGE] Station %s (Team %d) lost %.2f vinyl from laser (%.2f -> %.2f)\n",
-           GetName(), GetTeam() ? GetTeam()->GetTeamNumber() : -1, dDmg, oldCargo, dCargo);
+    printf("[STATION DAMAGE] Station %s (%s) lost %.2f vinyl from laser (%.2f -> %.2f)\n",
+           GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown", dDmg, oldCargo, dCargo);
   }
 }
 
