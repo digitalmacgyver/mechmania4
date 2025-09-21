@@ -32,7 +32,11 @@ RUN mkdir -p build && cd build && \
 
 # Setup the runtime environment
 WORKDIR /app
-RUN cp -r /build/build/* . && \
+# Copy executables and scripts, but handle symlinks properly
+RUN cp /build/build/mm4* . || true && \
+    cp /build/build/*.sh . || true && \
+    # Remove any symlinks first, then copy the actual files
+    rm -f gfx graphics.reg && \
     cp -r /build/team/src/gfx . && \
     cp /build/team/src/graphics.reg .
 

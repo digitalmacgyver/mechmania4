@@ -45,7 +45,9 @@ WORKDIR /home/mechmania/game
 COPY --from=builder /build/build/mm4serv .
 COPY --from=builder /build/build/mm4obs .
 COPY --from=builder /build/build/mm4team* .
-COPY --from=builder /build/build/*.sh .
+# Copy shell scripts if they exist
+COPY --from=builder /build/build/*.sh ./
+# Copy graphics resources directly from source (not symlinks)
 COPY --from=builder /build/team/src/gfx ./gfx
 COPY --from=builder /build/team/src/graphics.reg .
 
