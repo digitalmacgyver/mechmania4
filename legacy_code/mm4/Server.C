@@ -1,0 +1,363 @@
+/* Server.C
+ * Implementation of CServer class
+ * 9/3/1998 Misha Voloshin
+ * MechMania IV
+ */
+
+#include "Server.h"
+#include "World.h"
+#include "Team.h"
+#include "Ship.h"
+#include "ServerNet.h"
+
+///////////////////////////////////////////
+// Construction/Destruction
+
+CServer::CServer(int numTms, int port)
+{
+  UINT i;
+
+  nTms=numTms;
+  ObsConn=(UINT)-1;
+
+  pmyNet = new CServerNet(nTms+1, port);
+  pmyWorld = new CWorld(nTms);
+  
+  abOpen = new BOOL[nTms+1];
+  for (i=0; i<nTms+1; i++)
+    abOpen[i]=FALSE;  // No connections there yet
+
+  auTCons = new UINT[nTms];
+  aTms = new CTeam*[nTms];
+  for (i=0; i<nTms; i++) {
+    aTms[i] = CTeam::CreateTeam();
+    auTCons[i]=(UINT)-1;
+    aTms[i]->SetTeamNumber(i);
+    aTms[i]->Create(4,i);
+    pmyWorld->SetTeam(i,aTms[i]);
+  }
+
+  pmyWorld->CreateAsteroids(VINYL, 5, 40.0);
+  pmyWorld->CreateAsteroids(URANIUM, 5, 40.0);
+  pmyWorld->PhysicsModel(0.0);  // Add new stuff
+
+  wldbuflen=MAX_THINGS*256;
+  wldbuf = new char[wldbuflen];
+  memset(wldbuf,0,wldbuflen);
+
+  printf ("World created, %d teams initialized\n",nTms);
+  printf ("Ready for connections on port %d\n",port);
+}
+
+CServer::~CServer()
+{
+  delete [] wldbuf;
+
+  delete [] abOpen;
+  delete [] auTCons;
+
+  delete pmyWorld;
+  for (UINT i=0; i<nTms; i++) {
+    delete aTms[i];
+  }
+  delete [] aTms;
+
+  delete pmyNet;
+}
+
+////////////////////////////////////////
+// Data access
+
+UINT CServer::GetNumTeams() const
+{
+  return nTms;
+}
+
+double CServer::GetTime()
+{
+  return pmyWorld->GetGameTime();
+}
+
+CWorld *CServer::GetWorld()
+{
+  return pmyWorld;
+}
+
+////////////////////////////////////////
+// Methods
+
+UINT CServer::ConnectClients()
+{
+  int conn;
+  char outbuf[2048];
+
+  for (UINT i=0; i<GetNumTeams()+1; i++) {  // Teams and observer
+    conn = pmyNet->WaitForConn();
+    abOpen[conn-1]=TRUE;
+    printf ("Establishing connection #%d\n",conn);
+
+    // Tell them they've connected
+    sprintf (outbuf,n_servconack);
+    pmyNet->SendPkt(conn,outbuf,strlen(outbuf));
+  }
+
+  // They've all linked up, now who the hell are they?
+  int totcl=0, tmindex=0;
+  int slen = strlen(n_obcon);   // n_obcon and n_teamcon same length
+
+  while ((UINT)totcl < GetNumTeams()+1) {
+    conn = pmyNet->CatchPkt();
+    if (pmyNet->GetQueueLength(conn) < slen) {
+      continue;
+    }
+
+    totcl++;   // It responded, whoever the hell it is    
+    if (memcmp(pmyNet->GetQueue(conn),n_obcon,slen)==0) {
+      ObsConn=conn;   // That's our observer
+      sprintf (outbuf,"X");  // Dummy character, eases clientside parsing
+      pmyNet->SendPkt(conn, outbuf,1);
+    }
+
+    if (memcmp(pmyNet->GetQueue(conn),n_teamcon,slen)==0) {
+      if ((UINT)tmindex>=GetNumTeams()) continue;  // Who are all these people!?
+      auTCons[tmindex]=conn;
+      sprintf (outbuf,"%c",tmindex);
+      pmyNet->SendPkt(conn, outbuf,1);
+      tmindex++;
+    }
+
+    pmyNet->FlushQueue(conn);
+    IntroduceWorld(conn);             // Tell it about its world
+  }
+
+  return GetNumTeams()+1;
+}
+
+void CServer::IntroduceWorld(int conn)
+{
+  char buf[4];   // Larger than probably needed
+
+  buf[0] = GetNumTeams();
+  buf[1] = aTms[0]->GetShipCount();
+  
+  pmyNet->SendPkt(conn,buf,2);
+  return;
+}
+
+UINT CServer::SendWorld(int conn)
+{
+  if (abOpen[conn-1]!=TRUE) return 0;
+  if (pmyNet->IsOpen(conn)==0) {
+    abOpen[conn-1]=FALSE;
+    printf ("Lost connection %d\n",conn);
+    return 0;
+  }
+
+  UINT lenpred, lenact, netsize;
+
+  lenpred = pmyWorld->GetSerialSize();
+  if (lenpred>wldbuflen || lenpred<=0) return 0;
+  lenact = pmyWorld->SerialPack(wldbuf,wldbuflen);
+
+  if (lenact!=lenpred) {  // Didn't predict right, something's wrong
+    printf ("Serialization error\n");
+    return 0;
+  }
+
+  netsize = htonl(lenact);
+  pmyNet->SendPkt(conn,(char*)(&netsize),sizeof(UINT));
+  pmyNet->SendPkt(conn,wldbuf,lenact);
+  return lenact;
+}
+
+void CServer::BroadcastWorld()
+{
+  for (UINT conn=1; conn<=GetNumTeams()+1; conn++) {
+    if (conn==ObsConn) continue;  // Observer gets world elsewhere
+    if (abOpen[conn-1]!=TRUE) continue;  // This connection closed, next!
+
+    if (pmyNet->IsOpen(conn)==0) continue;  // Don't send to closed socket
+
+    SendWorld(conn);
+  }
+
+  for (UINT tm=0; tm<GetNumTeams(); tm++) {
+    pmyWorld->atstamp[tm]=pmyWorld->GetTimeStamp();
+    // They got the world, start counting!
+  }
+}
+
+void CServer::WaitForObserver()
+{
+  // Don't wait for a disconnected server
+  if (abOpen[ObsConn-1]==FALSE) return;
+
+  UINT len;
+  char *pq = pmyNet->GetQueue(ObsConn);
+
+  while (TRUE) {
+    while ((len=pmyNet->GetQueueLength(ObsConn))
+	   < strlen(n_oback)) {
+      pmyNet->CatchPkt();
+
+      // Check if connection closed
+      if (pmyNet->IsOpen(ObsConn)==0) {
+	abOpen[ObsConn-1]=FALSE;
+	printf ("Observer disconnected\n");
+	return;
+      }
+    }
+
+    if (memcmp(pq,n_oback,strlen(n_oback))==0)
+      break;   // Yay!  It's the ack!
+
+    pmyNet->FlushQueue(ObsConn);  // Whatever it was, it was wrong
+  }
+
+  pmyNet->FlushQueue(ObsConn);
+}
+
+void CServer::MeetTeams()
+{
+  int conn;
+  UINT len, tn, totresp=0;
+  char *buf;
+  BOOL *abGotFlag = new BOOL[GetNumTeams()];
+
+  for (tn=0; tn<GetNumTeams(); tn++)
+    abGotFlag[tn]=FALSE;
+
+  while (totresp<GetNumTeams()) {
+    for (tn=0; tn<GetNumTeams(); tn++) {
+      if (abGotFlag[tn]==TRUE) continue;
+
+      conn = auTCons[tn];
+      len = pmyNet->GetQueueLength(conn);
+      if (len>=aTms[tn]->GetSerInitSize()) {
+	totresp++;
+	abGotFlag[tn]=TRUE;
+      }
+    }
+
+    if (totresp>=GetNumTeams()) break;
+    pmyNet->CatchPkt();
+  }
+
+  for (tn=0; tn<GetNumTeams(); tn++) {
+    conn = auTCons[tn];
+    len = pmyNet->GetQueueLength(conn);
+    buf = pmyNet->GetQueue(conn);
+
+    aTms[tn]->SerUnpackInitData(buf,len);
+    len = aTms[tn]->GetSerInitSize();   // Make *sure* length is right
+    WaitForObserver();
+    pmyNet->SendPkt(ObsConn,buf,len);  // And send to observer
+
+    pmyNet->FlushQueue(conn);
+  }
+
+  delete [] abGotFlag;
+}
+
+void CServer::ReceiveTeamOrders()
+{
+  int conn, len;
+  UINT tn, totresp=0;
+  char *buf;
+  BOOL *abGotFlag = new BOOL[GetNumTeams()];
+  double tstart, tnow, tobs;
+  double timediff, tthink;
+
+  for (tn=0; tn<GetNumTeams(); tn++) {
+    aTms[tn]->Reset();
+    abGotFlag[tn]=FALSE;
+  }
+
+  tstart = pmyWorld->GetTimeStamp();  // Teams can't take >60sec/turn to respond
+  tobs = tstart;     // The observer should receive updates just in case
+  while (totresp<GetNumTeams()) {
+    tnow = pmyWorld->GetTimeStamp();
+    timediff = tnow-tobs;
+    if (timediff>=5.0) {  // Server updates every 5 seconds
+      WaitForObserver();
+      SendWorld(ObsConn);
+      tobs=tnow;
+    }
+
+    for (tn=0; tn<GetNumTeams(); tn++) {
+      if (abGotFlag[tn]==TRUE) continue;  // Already counted
+
+      conn = auTCons[tn];
+      if (abOpen[conn-1]!=TRUE) {
+	totresp++;    // Skip over this one, count as gotten
+	abGotFlag[tn]=TRUE;  // Pretend we got it
+	continue;   // But don't actually compute stuff
+      }
+
+      if (pmyNet->IsOpen(conn)==0) {
+	abOpen[conn-1]=FALSE;
+	printf ("Team %d disconnected\n",tn);
+	continue;
+      }
+
+      // Team's still thinking, handle time counting here
+      timediff = tnow - pmyWorld->atstamp[tn];
+      if (aTms[tn]->GetWallClock()==0.0) timediff=0.01;   // Just began game, something small
+      pmyWorld->auClock[tn]+=timediff;
+      pmyWorld->atstamp[tn] = tnow;
+      if (aTms[tn]->GetWallClock() >300.0) {
+	printf ("Team %d timed out, severing connection\n",tn);
+	pmyNet->CloseConn(conn);  // Close connection, will skip over
+	continue;   // Check other teams
+      }
+
+      tthink = tnow-tstart;
+      if (tthink>60.0) {
+	printf ("Team %d taking too long, orders ignored\n",tn);
+	totresp++;   // Pretend it's responded
+	abGotFlag[tn]=TRUE;  // Pretend it's responded 
+	continue;    // And keep chugging
+      }
+
+      len = pmyNet->GetQueueLength(conn);
+      if ((UINT)len>=aTms[tn]->GetSerialSize()) {
+	totresp++;
+	abGotFlag[tn]=TRUE;
+
+	buf = pmyNet->GetQueue(conn);
+	aTms[tn]->SerialUnpack(buf,len);  // Ships get orders
+	pmyNet->FlushQueue(conn);
+      }
+    }
+
+    if (totresp>=GetNumTeams()) break;
+    pmyNet->CatchPkt();
+  }
+
+  pmyWorld->PhysicsModel(0.0);
+  delete [] abGotFlag;
+}
+
+double CServer::Simulation()
+{
+  double t, maxt=1.0, tstep=0.2;
+  UINT tm;
+  for (t=0.0; t<maxt; t+=tstep) {
+    pmyWorld->PhysicsModel (tstep);
+    if (t>=maxt-tstep) {
+      pmyWorld->LaserModel();
+    }
+
+    WaitForObserver();
+    SendWorld(ObsConn);
+
+    for (tm=0; tm<nTms; tm++) {
+      aTms[tm]->MsgText[0]=0;
+    }
+  }
+
+  return GetTime();
+}
+
+///////////////////////////////////
+// Protected methods
