@@ -1,0 +1,195 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-standard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-alpine:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Alpine image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.alpine
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:alpine
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.web
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:web
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test:
+    needs: [build-standard, build-alpine]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run headless test
+        run: |
+          docker build -f Dockerfile.alpine -t test-image .
+          docker run --rm test-image ./quick_test.sh
+
+  create-release:
+    needs: [build-standard, build-alpine, build-web]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create preservation archive
+        run: |
+          mkdir -p release-artifacts
+
+          # Build binaries
+          docker build -f Dockerfile.alpine -t build-image .
+          docker create --name extract build-image
+          docker cp extract:/home/mechmania/game/mm4serv release-artifacts/
+          docker cp extract:/home/mechmania/game/mm4obs release-artifacts/
+          docker cp extract:/home/mechmania/game/mm4team release-artifacts/
+          docker cp extract:/home/mechmania/game/mm4team_groogroo release-artifacts/
+          docker cp extract:/home/mechmania/game/mm4team_vortex release-artifacts/
+          docker rm extract
+
+          # Create archive
+          tar -czf mechmania4-${{ github.ref_name }}-linux-x64.tar.gz -C release-artifacts .
+
+          # Save Docker images
+          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | gzip > mechmania4-docker-${{ github.ref_name }}.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            mechmania4-${{ github.ref_name }}-linux-x64.tar.gz
+            mechmania4-docker-${{ github.ref_name }}.tar.gz
+          body: |
+            ## MechMania IV: The Vinyl Frontier
+
+            ### Docker Images
+            ```bash
+            # Pull from GitHub Container Registry
+            docker pull ghcr.io/${{ github.repository }}:latest
+            docker pull ghcr.io/${{ github.repository }}:web
+            docker pull ghcr.io/${{ github.repository }}:alpine
+
+            # Or load from archive
+            docker load < mechmania4-docker-${{ github.ref_name }}.tar.gz
+            ```
+
+            ### Running
+            ```bash
+            # Web interface (recommended)
+            docker run -p 6080:6080 ghcr.io/${{ github.repository }}:web
+            # Open http://localhost:6080/vnc.html
+
+            # Quick test
+            docker run ghcr.io/${{ github.repository }}:alpine ./quick_test.sh
+            ```

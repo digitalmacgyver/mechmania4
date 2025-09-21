@@ -1,0 +1,137 @@
+version: '3.8'
+
+# MechMania IV Docker Compose Configuration
+# Usage:
+#   Quick game:     docker-compose --profile quick up
+#   Tournament:     docker-compose --profile tournament up
+#   Web observer:   docker-compose --profile web up
+#   Development:    docker-compose --profile dev up
+
+services:
+  # Quick game - all in one container
+  quick-game:
+    profiles: ["quick"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mechmania4:latest
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    network_mode: host
+    command: ./run_game.sh
+
+  # Web-based observer - accessible via browser
+  web-observer:
+    profiles: ["web"]
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: mechmania4-web:latest
+    ports:
+      - "6080:6080"  # noVNC web interface
+      - "5900:5900"  # VNC port (optional)
+      - "2323:2323"  # Game server port
+    environment:
+      - MODE=game
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Tournament setup - separate containers
+  tournament-server:
+    profiles: ["tournament"]
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    image: mechmania4-alpine:latest
+    ports:
+      - "2323:2323"
+    command: ./mm4serv -p2323 -h0.0.0.0 -n4 -c60
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2323"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  tournament-observer:
+    profiles: ["tournament"]
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: mechmania4-web:latest
+    ports:
+      - "6080:6080"
+    environment:
+      - MODE=observer
+      - HOST=tournament-server
+      - PORT=2323
+    depends_on:
+      - tournament-server
+
+  tournament-team1:
+    profiles: ["tournament"]
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    image: mechmania4-alpine:latest
+    command: ./mm4team_groogroo -p2323 -htournament-server -n"Groogroo"
+    depends_on:
+      tournament-server:
+        condition: service_healthy
+
+  tournament-team2:
+    profiles: ["tournament"]
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    image: mechmania4-alpine:latest
+    command: ./mm4team_vortex -p2323 -htournament-server -n"Team Vortex"
+    depends_on:
+      tournament-server:
+        condition: service_healthy
+
+  # Development environment with volume mounts
+  dev-server:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mechmania4:latest
+    volumes:
+      - ./build:/home/mechmania/game:ro
+    ports:
+      - "2323:2323"
+    command: ./mm4serv -p2323 -h0.0.0.0
+
+  dev-observer:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mechmania4:latest
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./build:/home/mechmania/game:ro
+    network_mode: host
+    command: ./mm4obs -R -G -p2323 -hlocalhost
+
+  # Headless testing
+  test-runner:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    image: mechmania4-alpine:latest
+    command: ./quick_test.sh
+    volumes:
+      - ./test-results:/results
+
+networks:
+  default:
+    name: mechmania-network

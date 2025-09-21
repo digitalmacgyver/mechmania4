@@ -1,0 +1,55 @@
+# MechMania IV: Minimal Alpine Build
+# Smallest possible Docker image using Alpine Linux
+
+FROM alpine:3.18 AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    sdl2-dev \
+    sdl2_image-dev \
+    sdl2_ttf-dev \
+    pkgconfig
+
+# Copy source code
+WORKDIR /build
+COPY . .
+
+# Build the project
+RUN mkdir -p build && cd build && \
+    cmake .. && \
+    make -j$(nproc)
+
+# Runtime stage - minimal Alpine image
+FROM alpine:3.18
+
+# Install only runtime libraries
+RUN apk add --no-cache \
+    sdl2 \
+    sdl2_image \
+    sdl2_ttf \
+    libstdc++ \
+    mesa-gl \
+    ttf-dejavu
+
+# Create non-root user
+RUN adduser -D -h /home/mechmania mechmania
+
+# Copy built binaries and resources
+WORKDIR /home/mechmania/game
+COPY --from=builder /build/build/mm4serv .
+COPY --from=builder /build/build/mm4obs .
+COPY --from=builder /build/build/mm4team* .
+COPY --from=builder /build/build/*.sh .
+COPY --from=builder /build/team/src/gfx ./gfx
+COPY --from=builder /build/team/src/graphics.reg .
+
+# Set ownership
+RUN chown -R mechmania:mechmania /home/mechmania/game
+
+USER mechmania
+WORKDIR /home/mechmania/game
+
+# Default to running quick test
+CMD ["./quick_test.sh"]

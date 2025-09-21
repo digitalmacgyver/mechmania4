@@ -1,0 +1,123 @@
+# MechMania IV: Web-Based Observer with VNC
+# Access the game through a web browser on any OS
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies including X11, VNC, and web server
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libsdl2-dev \
+    libsdl2-image-dev \
+    libsdl2-ttf-dev \
+    pkg-config \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    supervisor \
+    fluxbox \
+    xterm \
+    net-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and build MechMania
+WORKDIR /build
+COPY . .
+RUN mkdir -p build && cd build && \
+    cmake .. && \
+    make -j$(nproc)
+
+# Setup the runtime environment
+WORKDIR /app
+RUN cp -r /build/build/* . && \
+    cp -r /build/team/src/gfx . && \
+    cp /build/team/src/graphics.reg .
+
+# Create supervisor configuration
+RUN mkdir -p /etc/supervisor/conf.d
+COPY - /etc/supervisor/conf.d/supervisord.conf <<'EOF'
+[supervisord]
+nodaemon=true
+user=root
+
+[program:xvfb]
+command=/usr/bin/Xvfb :99 -screen 0 1280x960x24 -ac
+autorestart=true
+stdout_logfile=/var/log/xvfb.log
+stderr_logfile=/var/log/xvfb.err
+
+[program:fluxbox]
+command=/usr/bin/fluxbox
+environment=DISPLAY=":99"
+autorestart=true
+stdout_logfile=/var/log/fluxbox.log
+stderr_logfile=/var/log/fluxbox.err
+
+[program:x11vnc]
+command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -forever -shared
+autorestart=true
+stdout_logfile=/var/log/x11vnc.log
+stderr_logfile=/var/log/x11vnc.err
+
+[program:novnc]
+command=/usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080
+autorestart=true
+stdout_logfile=/var/log/novnc.log
+stderr_logfile=/var/log/novnc.err
+EOF
+
+# Create startup script
+COPY - /app/start.sh <<'EOF'
+#!/bin/bash
+echo "Starting MechMania IV Web Interface..."
+echo "=================================="
+echo "Open your browser to:"
+echo "  http://localhost:6080/vnc.html"
+echo "=================================="
+
+# Start supervisor to manage all services
+/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf &
+
+# Wait for X server to be ready
+sleep 5
+
+# Set display
+export DISPLAY=:99
+
+# Start the game based on MODE environment variable
+case "${MODE}" in
+    observer)
+        echo "Starting Observer in reconnect mode..."
+        cd /app && ./mm4obs -R -G -p${PORT:-2323} -h${HOST:-localhost}
+        ;;
+    server)
+        echo "Starting Server..."
+        cd /app && ./mm4serv -p${PORT:-2323} -h${HOST:-0.0.0.0}
+        ;;
+    game)
+        echo "Starting complete game..."
+        cd /app && ./run_game.sh
+        ;;
+    *)
+        echo "Starting default game with observer..."
+        cd /app && xterm -e ./run_game.sh &
+        cd /app && ./mm4obs -R -G -p2323 -hlocalhost
+        ;;
+esac
+EOF
+
+RUN chmod +x /app/start.sh
+
+# Expose ports
+EXPOSE 5900 6080 2323
+
+# Environment variables for configuration
+ENV MODE=game
+ENV PORT=2323
+ENV HOST=localhost
+ENV DISPLAY=:99
+
+CMD ["/app/start.sh"]
