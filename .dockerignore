@@ -1,0 +1,45 @@
+# Exclude build directories
+build/
+*/build/
+
+# Exclude CMake cache files
+CMakeCache.txt
+*/CMakeCache.txt
+CMakeFiles/
+*/CMakeFiles/
+
+# Exclude compiled binaries
+mm4serv
+mm4obs
+mm4obs_sdl
+mm4team
+mm4team_groogroo
+mm4team_vortex
+*.o
+*.a
+
+# Exclude log files
+*.log
+*.err
+
+# Exclude version control
+.git/
+.gitignore
+
+# Exclude Docker files from context
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# Exclude documentation that's not needed for build
+README*.md
+CONTEST_RULES.md
+TEAM_API.md
+
+# Exclude scripts that are copied separately
+*.sh
+
+# Exclude vendor downloads
+vendor/downloads/
+vendor/*.tar.gz
+vendor/*.zip
