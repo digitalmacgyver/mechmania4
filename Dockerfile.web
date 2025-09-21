@@ -51,8 +51,8 @@ echo "Starting Team 1 (Chrome Funkadelic)..."
 ./mm4team -p2323 -h127.0.0.1 &
 TEAM1_PID=$!
 sleep 1
-echo "Starting Team 2 (Chrome Funkadelic 2)..."
-./mm4team -p2323 -h127.0.0.1 &
+echo "Starting Team 2 (Groogroo)..."
+./mm4team_groogroo -p2323 -h127.0.0.1 &
 TEAM2_PID=$!
 echo "Game started!"
 trap "kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null; exit" INT

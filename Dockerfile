@@ -65,13 +65,17 @@ echo "Starting Team 1 (Chrome Funkadelic)..."
 ./mm4team -p2323 -h127.0.0.1 &
 TEAM1_PID=$!
 sleep 1
-echo "Starting Team 2..."
-if [ "$1" = "groogroo" ]; then
-    ./mm4team_groogroo -p2323 -h127.0.0.1 &
-elif [ "$1" = "vortex" ]; then
+echo "Starting Team 2 (Groogroo)..."
+# Default to Groogroo vs Chrome Funkadelic
+if [ "$1" = "vortex" ]; then
+    echo "  Using Team Vortex instead of Groogroo"
     ./mm4team_vortex -p2323 -h127.0.0.1 &
-else
+elif [ "$1" = "chrome" ]; then
+    echo "  Using Chrome Funkadelic 2 instead of Groogroo"
     ./mm4team -p2323 -h127.0.0.1 &
+else
+    # Default: Groogroo
+    ./mm4team_groogroo -p2323 -h127.0.0.1 &
 fi
 TEAM2_PID=$!
 echo "Game started! Press Ctrl+C to stop."
