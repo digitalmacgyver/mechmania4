@@ -189,6 +189,8 @@ install(TARGETS mm4serv mm4team DESTINATION bin)
 if(BUILD_WITH_GRAPHICS)
     install(TARGETS mm4obs DESTINATION bin)
     install(DIRECTORY ${SRC_DIR}/gfx DESTINATION share/mm4)
+    # Install fonts so runtime can load them relative to install prefix
+    install(DIRECTORY ${SRC_DIR}/fonts DESTINATION share/mm4)
 endif()
 
 # Add a custom target for cleaning generated files
@@ -219,3 +221,9 @@ message(STATUS "MechMania IV Build Configuration:")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Graphics Support: ${BUILD_WITH_GRAPHICS}")
+
+# Provide a compiled-in data directory for robust resource lookups after install
+if(BUILD_WITH_GRAPHICS)
+    # Default install tree is <prefix>/share/mm4
+    target_compile_definitions(mm4obs PRIVATE MM4_SHARE_DIR="${CMAKE_INSTALL_PREFIX}/share/mm4")
+endif()

@@ -7,6 +7,8 @@
 #include <cmath>
 #include <algorithm>
 #include <cstdlib>
+#include <vector>
+#include <cstring>
 
 SDL2Graphics::SDL2Graphics()
     : window(nullptr), renderer(nullptr), font(nullptr), smallFont(nullptr),
@@ -52,6 +54,9 @@ bool SDL2Graphics::Init(int width, int height, bool fullscreen) {
         return false;
     }
 
+    // Set render scale quality to nearest for pixel-perfect rendering
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+
     // Initialize SDL_image
     int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
     if (!(IMG_Init(imgFlags) & imgFlags)) {
@@ -70,7 +75,7 @@ bool SDL2Graphics::Init(int width, int height, bool fullscreen) {
         // Use a reasonable default window size
         // that should fit on most monitors
         width = 1280;
-        height = 960;
+        height = 1024;  // Standard X11 MechMania resolution
     }
 
     displayWidth = width;
@@ -121,8 +126,9 @@ bool SDL2Graphics::Init(int width, int height, bool fullscreen) {
     canvas = CreateTexture(displayWidth, displayHeight);
     spaceCanvas = CreateTexture(spaceWidth, spaceHeight);
 
-    // Load default font
-    LoadFont("", 12);  // Will use default system font
+    // Load the original X11 misc-fixed font
+    // Using 12pt size as specified for 13-pixel height at 75 DPI
+    LoadFont("", 12);
 
     return true;
 }
@@ -332,38 +338,323 @@ void SDL2Graphics::DrawPolygon(const int* xPoints, const int* yPoints, int nPoin
 bool SDL2Graphics::LoadFont(const std::string& fontPath, int size) {
     // Try to load specified font, fall back to default
     std::string path = fontPath;
+    std::string boldPath;
+    std::string smallPath;
+    std::string smallBoldPath;
+
+    // Helper lambdas for robust, portable font discovery
+    auto fileExists = [](const std::string& p) -> bool
+    {
+        SDL_RWops* rw = SDL_RWFromFile(p.c_str(), "rb");
+        if (rw)
+        {
+            SDL_RWclose(rw);
+            return true;
+        }
+        return false;
+    };
+
+    auto joinPath = [](const std::string& a, const std::string& b) -> std::string
+    {
+        if (a.empty()) return b;
+        if (b.empty()) return a;
+        char sep = '/';
+        if (a.back() == sep) return a + b;
+        return a + sep + b;
+    };
+
+    auto getBaseDirs = [&]() -> std::vector<std::string>
+    {
+        std::vector<std::string> dirs;
+
+        // 1) Executable directory and nearby locations
+        char* base = SDL_GetBasePath();
+        if (base)
+        {
+            std::string baseDir(base);
+            SDL_free(base);
+            dirs.push_back(baseDir);                         // alongside binary
+            dirs.push_back(joinPath(baseDir, "fonts"));     // alongside in fonts/
+            dirs.push_back(joinPath(baseDir, "../"));       // parent
+            dirs.push_back(joinPath(baseDir, "../team/src/fonts")); // typical build tree
+        }
+
+        // 2) Compiled-in share directory from CMake install prefix
+        #ifdef MM4_SHARE_DIR
+        {
+            std::string shareDir = MM4_SHARE_DIR;
+            dirs.push_back(shareDir);
+            dirs.push_back(joinPath(shareDir, "fonts"));
+        }
+        #endif
+
+        // 3) Current working directory (legacy behavior)
+        dirs.push_back(".");
+        dirs.push_back("./fonts");
+        dirs.push_back("team/src/fonts");
+
+        return dirs;
+    };
+
+    auto findInDirs = [&](const std::vector<std::string>& names) -> std::string
+    {
+        std::vector<std::string> dirs = getBaseDirs();
+        for (const auto& dir : dirs)
+        {
+            for (const auto& name : names)
+            {
+                // Absolute paths are tried as-is
+                if (!name.empty() && name[0] == '/')
+                {
+                    if (fileExists(name)) return name;
+                    continue;
+                }
+
+                std::string candidate = joinPath(dir, name);
+                if (fileExists(candidate)) return candidate;
+            }
+        }
+        return std::string();
+    };
+
+    // Environment overrides (absolute or relative paths)
+    const char* envReg = std::getenv("MM4_FONT_REGULAR_PATH");
+    const char* envBold = std::getenv("MM4_FONT_BOLD_PATH");
+    if (envReg && path.empty()) {
+        path = envReg;
+    }
+    if (envBold) {
+        boldPath = envBold;
+    }
+
     if (path.empty()) {
-        // Try common font paths on Linux
-        const char* fontPaths[] = {
+        // First try to load our converted X11 misc-fixed fonts.
+        // Build candidate filenames (no directories), then search in robust dirs.
+        std::vector<std::string> regularNames = {
+            "7x13.otb",
+            "7x13-ISO8859-1.pcf",
+            "7x13.pcf",
+            "7x13.bdf",
+            "7x13.ttf",
+            // Safe monospaced fallbacks (absolute system paths)
             "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-            "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
-            nullptr
+            // Avoid Terminus by default due to slashed zero; last resort
+            "/usr/share/fonts/truetype/terminus/terminus.ttf"
         };
 
-        for (int i = 0; fontPaths[i] != nullptr; i++) {
-            if (SDL_RWFromFile(fontPaths[i], "r")) {
-                path = fontPaths[i];
-                break;
+        std::vector<std::string> boldNames = {
+            "7x13B.otb",
+            "7x13B-ISO8859-1.pcf",
+            "7x13B.pcf",
+            "7x13B.bdf",
+            "7x13B.ttf"
+        };
+
+        // Small font (10pt, 6x10 cell) preferred names
+        std::vector<std::string> smallNames = {
+            "6x10B.otb",
+            "6x10B.pcf",
+            "6x10B.bdf",
+            // Medium (non-bold) if explicit bold not available
+            "6x10-ISO8859-1.pcf"
+        };
+
+        std::vector<std::string> smallBoldNames = {
+            "6x10B.otb",
+            "6x10B.pcf",
+            "6x10B.bdf"
+        };
+
+        // Directories we search within, in robust order
+        // We will try each dir + "/fonts/" + name and dir + "/" + name
+        auto searchDirs = getBaseDirs();
+        auto tryNamesInDirs = [&](const std::vector<std::string>& names) -> std::string
+        {
+            for (const auto& dir : searchDirs)
+            {
+                // Try dir/fonts/name first
+                for (const auto& n : names)
+                {
+                    if (!n.empty() && n[0] == '/')
+                    {
+                        if (fileExists(n)) return n;
+                        continue;
+                    }
+                    std::string p1 = joinPath(joinPath(dir, "fonts"), n);
+                    if (fileExists(p1)) return p1;
+                    std::string p2 = joinPath(dir, n);
+                    if (fileExists(p2)) return p2;
+                }
             }
+            return std::string();
+        };
+
+        path = tryNamesInDirs(regularNames);
+        boldPath = tryNamesInDirs(boldNames);
+        smallPath = tryNamesInDirs(smallNames);
+        smallBoldPath = tryNamesInDirs(smallBoldNames);
+    }
+
+    bool usedSyntheticBold = false;
+    if (!path.empty()) {
+        // Load regular fonts at 75 DPI for X11 parity
+        font = TTF_OpenFontDPI(path.c_str(), size, 75, 75);
+        // Use dedicated small font if found; else fall back to regular
+        const std::string& smallLoadPath = smallPath.empty() ? path : smallPath;
+        smallFont = TTF_OpenFontDPI(smallLoadPath.c_str(), size, 75, 75);
+
+        // CRITICAL: Disable hinting for pixel-perfect bitmap rendering
+        // This ensures we use the raw bitmap data without modifications
+        if (font) {
+            TTF_SetFontHinting(font, TTF_HINTING_NONE);
+            TTF_SetFontKerning(font, 0);
+        }
+        if (smallFont) {
+            TTF_SetFontHinting(smallFont, TTF_HINTING_NONE);
+            TTF_SetFontKerning(smallFont, 0);
+        }
+
+        // Load bold variants (use dedicated bold font if available)
+        if (!boldPath.empty()) {
+            boldFont = TTF_OpenFontDPI(boldPath.c_str(), size, 75, 75);
+            // Prefer explicit small bold, then bold regular, then small regular
+            if (!smallBoldPath.empty()) {
+                boldSmallFont = TTF_OpenFontDPI(smallBoldPath.c_str(), size, 75, 75);
+            }
+            if (!boldSmallFont) {
+                boldSmallFont = TTF_OpenFontDPI(boldPath.c_str(), size, 75, 75);
+            }
+            if (!boldSmallFont) {
+                const std::string& smallLoadPath2 = smallPath.empty() ? path : smallPath;
+                boldSmallFont = TTF_OpenFontDPI(smallLoadPath2.c_str(), size, 75, 75);
+                if (boldSmallFont) {
+                    TTF_SetFontStyle(boldSmallFont, TTF_STYLE_BOLD);
+                }
+            }
+        } else {
+            // Fall back to synthetic bold
+            boldFont = TTF_OpenFontDPI(path.c_str(), size, 75, 75);
+            const std::string& smallLoadPath2 = smallPath.empty() ? path : smallPath;
+            boldSmallFont = TTF_OpenFontDPI(smallLoadPath2.c_str(), size, 75, 75);
+            if (boldFont) {
+                TTF_SetFontStyle(boldFont, TTF_STYLE_BOLD);
+            }
+            if (boldSmallFont) {
+                TTF_SetFontStyle(boldSmallFont, TTF_STYLE_BOLD);
+            }
+            usedSyntheticBold = true;
+        }
+
+        // Disable hinting for bold fonts too
+        if (boldFont) {
+            TTF_SetFontHinting(boldFont, TTF_HINTING_NONE);
+            TTF_SetFontKerning(boldFont, 0);
+        }
+        if (boldSmallFont) {
+            TTF_SetFontHinting(boldSmallFont, TTF_HINTING_NONE);
+            TTF_SetFontKerning(boldSmallFont, 0);
         }
     }
 
-    if (!path.empty()) {
-        font = TTF_OpenFont(path.c_str(), size);
-        smallFont = TTF_OpenFont(path.c_str(), size - 2);
+    // Log what was actually loaded to simplify font debugging
+    if (font) {
+        const char* fam = TTF_FontFaceFamilyName(font);
+        const char* sty = TTF_FontFaceStyleName(font);
+        std::cout << "Loaded regular font: " << path
+                  << " (" << (fam ? fam : "?") << ", " << (sty ? sty : "?") << ")" << std::endl;
+    } else {
+        std::cerr << "Failed to load regular font from path: " << path << std::endl;
+    }
+    if (smallFont) {
+        const char* fam = TTF_FontFaceFamilyName(smallFont);
+        const char* sty = TTF_FontFaceStyleName(smallFont);
+        std::cout << "Loaded small font: " << (smallPath.empty() ? path : smallPath)
+                  << " (" << (fam ? fam : "?") << ", " << (sty ? sty : "?") << ")" << std::endl;
+    }
+    if (boldFont) {
+        const char* fam = TTF_FontFaceFamilyName(boldFont);
+        const char* sty = TTF_FontFaceStyleName(boldFont);
+        std::cout << "Loaded bold font: " << (boldPath.empty() ? path : boldPath)
+                  << " (" << (fam ? fam : "?") << ", " << (sty ? sty : "?") << ")" << std::endl;
+    } else {
+        std::cerr << "Failed to load bold font from path: " << (boldPath.empty() ? path : boldPath) << std::endl;
+    }
+    if (boldSmallFont) {
+        const char* fam = TTF_FontFaceFamilyName(boldSmallFont);
+        const char* sty = TTF_FontFaceStyleName(boldSmallFont);
+        std::cout << "Loaded small bold font: " << (!smallBoldPath.empty() ? smallBoldPath : (!boldPath.empty() ? boldPath : (smallPath.empty() ? path : smallPath)))
+                  << " (" << (fam ? fam : "?") << ", " << (sty ? sty : "?") << ")" << std::endl;
+    }
 
-        // Load bold variants
-        boldFont = TTF_OpenFont(path.c_str(), size);
-        if (boldFont) {
-            TTF_SetFontStyle(boldFont, TTF_STYLE_BOLD);
-        }
+    // Determine if we used preferred fonts (exact 7x13/6x10 family) or fallbacks
+    auto basename = [](const std::string& p) -> std::string {
+        if (p.empty()) return p;
+        size_t pos = p.find_last_of("/\\");
+        return (pos == std::string::npos) ? p : p.substr(pos + 1);
+    };
 
-        boldSmallFont = TTF_OpenFont(path.c_str(), size - 2);
-        if (boldSmallFont) {
-            TTF_SetFontStyle(boldSmallFont, TTF_STYLE_BOLD);
+    auto isPreferredName = [](const std::string& name) -> bool {
+        static const char* preferred[] = {
+            "7x13.otb", "7x13-ISO8859-1.pcf", "7x13.pcf", "7x13.bdf", "7x13.ttf",
+            "7x13B.otb", "7x13B-ISO8859-1.pcf", "7x13B.pcf", "7x13B.bdf", "7x13B.ttf",
+            "6x10B.otb", "6x10B.pcf", "6x10B.bdf", "6x10-ISO8859-1.pcf"
+        };
+        for (auto* n : preferred) if (name == n) return true;
+        return false;
+    };
+
+    bool regPreferred = isPreferredName(basename(path));
+    bool boldPreferred = !boldPath.empty() && isPreferredName(basename(boldPath)) && !usedSyntheticBold;
+
+    // Show helpful message once if we fell back
+    static bool warned = false;
+    if (!warned && (!regPreferred || !boldPreferred)) {
+        warned = true;
+
+        // Suggest concrete env var values based on where fonts likely live
+        auto suggest = [&](const std::vector<std::string>& names) -> std::string
+        {
+            // Reuse the same directory search used for discovery
+            std::vector<std::string> dirs = getBaseDirs();
+            for (const auto& dir : dirs) {
+                for (const auto& n : names) {
+                    std::string p1 = joinPath(joinPath(dir, "fonts"), n);
+                    if (fileExists(p1)) return p1;
+                    std::string p2 = joinPath(dir, n);
+                    if (fileExists(p2)) return p2;
+                }
+            }
+            return std::string();
+        };
+
+        std::string suggestedReg = suggest({"7x13.otb", "7x13-ISO8859-1.pcf", "7x13.pcf", "7x13.bdf", "7x13.ttf"});
+        std::string suggestedBold = suggest({"7x13B.otb", "7x13B-ISO8859-1.pcf", "7x13B.pcf", "7x13B.bdf", "7x13B.ttf"});
+
+        std::cerr << "\n[mm4obs] Using fallback system fonts (preferred 7x13/6x10 not found)." << std::endl;
+        std::cerr << "To use the original X11-styled fonts, set:" << std::endl;
+        if (!suggestedReg.empty()) {
+            std::cerr << "  export MM4_FONT_REGULAR_PATH='" << suggestedReg << "'" << std::endl;
+        } else {
+            std::cerr << "  export MM4_FONT_REGULAR_PATH=/path/to/7x13.otb" << std::endl;
         }
+        if (!suggestedBold.empty()) {
+            std::cerr << "  export MM4_FONT_BOLD_PATH='" << suggestedBold << "'" << std::endl;
+        } else {
+            std::cerr << "  export MM4_FONT_BOLD_PATH=/path/to/7x13B.otb" << std::endl;
+        }
+        std::cerr << std::endl;
+        std::cerr << "Font locations in this distribution:" << std::endl;
+        std::cerr << "  - Source tree: team/src/fonts" << std::endl;
+        #ifdef MM4_SHARE_DIR
+        std::cerr << "  - Installed path: " << MM4_SHARE_DIR << "/fonts" << std::endl;
+        #endif
+        std::cerr << std::endl;
+        #ifdef MM4_FONTS_GITHUB_URL
+        std::cerr << "Download the font files from GitHub:" << std::endl;
+        std::cerr << "  " << MM4_FONTS_GITHUB_URL << std::endl;
+        #endif
+        std::cerr << std::endl;
     }
 
     return font != nullptr;
@@ -384,6 +675,8 @@ void SDL2Graphics::DrawText(const std::string& text, int x, int y, const Color& 
         useFont = small ? (smallFont ? smallFont : font) : font;
     }
     if (!useFont) return;
+
+    // Hinting already set during font loading, no need to set again
 
     SDL_Color sdlColor = ColorToSDL(color);
     SDL_Surface* surface = TTF_RenderText_Solid(useFont, text.c_str(), sdlColor);
