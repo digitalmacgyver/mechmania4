@@ -48,6 +48,7 @@ COPY --from=builder /build/build/mm4team* .
 # Copy graphics resources directly from source (not symlinks)
 COPY --from=builder /build/team/src/gfx ./gfx
 COPY --from=builder /build/team/src/graphics.reg .
+COPY --from=builder /build/team/src/fonts ./fonts
 
 # Create shell scripts using heredoc for better formatting
 RUN cat > run_game.sh << 'EOF'

@@ -37,7 +37,8 @@ RUN cp /build/build/mm4* . || true && \
     # Remove any symlinks first, then copy the actual files
     rm -f gfx graphics.reg && \
     cp -r /build/team/src/gfx . && \
-    cp /build/team/src/graphics.reg .
+    cp /build/team/src/graphics.reg . && \
+    cp -r /build/team/src/fonts ./fonts
 
 # Create run_game.sh script using heredoc
 RUN cat > run_game.sh << 'EOF'
