@@ -8,6 +8,8 @@
 #include <fstream>
 #include <sstream>
 #include <cmath>
+#include <vector>
+#include <SDL2/SDL.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -26,8 +28,76 @@ SpriteManager::~SpriteManager() {
     }
 }
 
+static inline std::string JoinPath(const std::string& a, const std::string& b)
+{
+    if (a.empty()) return b;
+    if (b.empty()) return a;
+    char sep = '/';
+    if (a.back() == sep) return a + b;
+    return a + sep + b;
+}
+
+static inline bool FileExists(const std::string& p)
+{
+    std::ifstream f(p);
+    return f.good();
+}
+
+static std::vector<std::string> GetBaseDirs()
+{
+    std::vector<std::string> dirs;
+
+    // Executable base and common relatives
+    char* base = SDL_GetBasePath();
+    if (base)
+    {
+        std::string baseDir(base);
+        SDL_free(base);
+        dirs.push_back(baseDir);
+        dirs.push_back(JoinPath(baseDir, "../"));
+        dirs.push_back(JoinPath(baseDir, "../team/src"));
+    }
+
+    // Installed share dir
+    #ifdef MM4_SHARE_DIR
+    dirs.push_back(MM4_SHARE_DIR);
+    #endif
+
+    // Legacy CWD
+    dirs.push_back(".");
+
+    return dirs;
+}
+
+// Resolve a registry file path robustly
+static std::string ResolveRegistryPath(const std::string& input)
+{
+    // Try as given
+    if (FileExists(input)) return input;
+
+    // Absolute path failed – nothing else to do
+    if (!input.empty() && (input[0] == '/'
+        #ifdef _WIN32
+        || (input.size() > 1 && input[1] == ':')
+        #endif
+        ))
+    {
+        return input;
+    }
+
+    // Try across base dirs
+    auto dirs = GetBaseDirs();
+    for (const auto& d : dirs)
+    {
+        std::string cand = JoinPath(d, input);
+        if (FileExists(cand)) return cand;
+    }
+    return input; // return original (will fail later with a clear error)
+}
+
 bool SpriteManager::LoadSprites(const std::string& registryFile) {
-    std::vector<std::string> spriteFiles = ParseGraphicsRegistry(registryFile);
+    std::string regPath = ResolveRegistryPath(registryFile);
+    std::vector<std::string> spriteFiles = ParseGraphicsRegistry(regPath);
 
     if (spriteFiles.size() != SPRITE_COUNT) {
         std::cerr << "Sprite count mismatch - expected " << SPRITE_COUNT
@@ -38,7 +108,7 @@ bool SpriteManager::LoadSprites(const std::string& registryFile) {
     // Load each sprite (up to the minimum of available files or SPRITE_COUNT)
     size_t numToLoad = std::min(spriteFiles.size(), static_cast<size_t>(SPRITE_COUNT));
     for (size_t i = 0; i < numToLoad; i++) {
-        // The path is already included in the registry file
+        // The registry entries are resolved relative to the registry file location
         sprites[i] = XPMLoader::LoadXPM(renderer, spriteFiles[i]);
 
         if (!sprites[i]) {
@@ -60,6 +130,14 @@ std::vector<std::string> SpriteManager::ParseGraphicsRegistry(const std::string&
         return files;
     }
 
+    // Base directory used to resolve relative sprite paths
+    auto dirOf = [](const std::string& p) -> std::string {
+        size_t pos = p.find_last_of("/\\");
+        if (pos == std::string::npos) return std::string(".");
+        return p.substr(0, pos);
+    };
+    std::string baseDir = dirOf(filename);
+
     std::string line;
     while (std::getline(file, line)) {
         // Skip comments (lines starting with semicolon) and empty lines
@@ -67,9 +145,19 @@ std::vector<std::string> SpriteManager::ParseGraphicsRegistry(const std::string&
             continue;
         }
 
-        // Each non-comment line is a sprite filename
-        // Just add them in order
-        files.push_back(line);
+        // Each non-comment line is a sprite filename; resolve relative to the registry file
+        if (!line.empty()) {
+            if (line[0] == '/'
+                #ifdef _WIN32
+                || (line.size() > 1 && line[1] == ':')
+                #endif
+                )
+            {
+                files.push_back(line);
+            } else {
+                files.push_back(JoinPath(baseDir, line));
+            }
+        }
     }
 
     file.close();

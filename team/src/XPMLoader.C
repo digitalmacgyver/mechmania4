@@ -8,14 +8,83 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <vector>
+#include <SDL2/SDL.h>
+
+static inline std::string JoinPath(const std::string& a, const std::string& b)
+{
+    if (a.empty()) return b;
+    if (b.empty()) return a;
+    char sep = '/';
+    if (a.back() == sep) return a + b;
+    return a + sep + b;
+}
+
+static bool FileReadable(const std::string& p)
+{
+    std::ifstream f(p);
+    return f.good();
+}
+
+static std::vector<std::string> GetGfxSearchDirs()
+{
+    std::vector<std::string> dirs;
+    // Executable base and common relatives
+    char* base = SDL_GetBasePath();
+    if (base)
+    {
+        std::string baseDir(base);
+        SDL_free(base);
+        dirs.push_back(baseDir);
+        dirs.push_back(JoinPath(baseDir, "gfx"));
+        dirs.push_back(JoinPath(baseDir, "../"));
+        dirs.push_back(JoinPath(baseDir, "../gfx"));
+        dirs.push_back(JoinPath(baseDir, "../team/src"));
+        dirs.push_back(JoinPath(baseDir, "../team/src/gfx"));
+    }
+    // Installed share dir
+    #ifdef MM4_SHARE_DIR
+    dirs.push_back(MM4_SHARE_DIR);
+    dirs.push_back(JoinPath(MM4_SHARE_DIR, "gfx"));
+    #endif
+    // Legacy CWD
+    dirs.push_back(".");
+    dirs.push_back("./gfx");
+    return dirs;
+}
 
 SDL_Texture* XPMLoader::LoadXPM(SDL_Renderer* renderer, const std::string& filename) {
     XPMInfo info;
     std::map<std::string, SDL_Color> colorMap;
     std::vector<std::string> pixels;
 
-    if (!ParseXPMFile(filename, info, colorMap, pixels)) {
-        std::cerr << "Failed to parse XPM file: " << filename << std::endl;
+    auto resolve = [&]() -> std::string
+    {
+        // Try the filename as-is
+        if (FileReadable(filename)) return filename;
+        // Absolute path? give up
+        if (!filename.empty() && (filename[0] == '/'
+            #ifdef _WIN32
+            || (filename.size() > 1 && filename[1] == ':')
+            #endif
+            ))
+        {
+            return filename;
+        }
+        // Search in common gfx directories relative to executable/share/CWD
+        auto dirs = GetGfxSearchDirs();
+        for (const auto& d : dirs)
+        {
+            std::string cand = JoinPath(d, filename);
+            if (FileReadable(cand)) return cand;
+        }
+        return filename;
+    };
+
+    std::string resolved = resolve();
+
+    if (!ParseXPMFile(resolved, info, colorMap, pixels)) {
+        std::cerr << "Failed to parse XPM file: " << resolved << std::endl;
         return nullptr;
     }
 
