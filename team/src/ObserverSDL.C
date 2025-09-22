@@ -106,6 +106,21 @@ void ObserverSDL::Draw() {
     // Clear screen with X11-style gray background
     graphics->Clear(Color(160, 160, 160));  // Gray #A0A0A0
 
+    // Draw black backgrounds for UI panels
+    // Message area background
+    graphics->DrawRect(msgPosX, msgPosY, msgWidth, msgHeight,
+                      Color(0, 0, 0), true);
+
+    // Time area background
+    graphics->DrawRect(timeX, timeY - 10, timeWidth, 30,
+                      Color(0, 0, 0), true);
+
+    // Team info areas background
+    graphics->DrawRect(t1PosX, t1PosY - 5, msgWidth, 190,
+                      Color(0, 0, 0), true);
+    graphics->DrawRect(t2PosX, t2PosY - 5, msgWidth, 190,
+                      Color(0, 0, 0), true);
+
     // Draw main components
     DrawStarfield();
     DrawSpace();
@@ -193,6 +208,10 @@ bool ObserverSDL::HandleEvents() {
 }
 
 void ObserverSDL::DrawSpace() {
+    // Draw black background for space area
+    graphics->DrawRect(borderX, borderY, spaceWidth, spaceHeight,
+                      Color(0, 0, 0), true);
+
     // Draw space border
     graphics->DrawRect(borderX, borderY, spaceWidth, spaceHeight,
                       Color(100, 100, 100), false);
@@ -324,12 +343,13 @@ void ObserverSDL::DrawShip(CShip* ship, int teamNum) {
         graphics->DrawLine(x, y, vx, vy, Color(0, 255, 0));
     }
 
-    // Draw name
+    // Draw name centered below ship
     if (drawnames) {
-        char info[64];
-        snprintf(info, sizeof(info), "S%d",
-                ship->GetWorldIndex());  // No health info available
-        graphics->DrawText(info, x + 10, y - 10, color, true);
+        const char* shipName = ship->GetName();
+        if (shipName && strlen(shipName) > 0) {
+            int textWidth = strlen(shipName) * 7; // Approximate width
+            graphics->DrawText(shipName, x - textWidth/2, y + 15, color, true);
+        }
     }
 }
 
@@ -382,17 +402,19 @@ void ObserverSDL::DrawStation(CStation* station, int teamNum) {
 
     Color color = GetTeamColor(teamNum);
 
-    // Draw station as square
+    // Draw station as empty square with 2 pixel stroke
     int size = 15;
-    graphics->DrawRect(x - size, y - size, size * 2, size * 2, color, true);
-    graphics->DrawRect(x - size - 2, y - size - 2, size * 2 + 4, size * 2 + 4, color, false);
+    graphics->DrawRect(x - size, y - size, size * 2, size * 2, color, false);
+    graphics->DrawRect(x - size + 1, y - size + 1, size * 2 - 2, size * 2 - 2, color, false);
 
     if (drawnames) {
         const char* stationName = station->GetName();
         if (stationName && strlen(stationName) > 0) {
-            graphics->DrawText(stationName, x + 20, y - 20, color, true);
+            // Center name below station
+            int textWidth = strlen(stationName) * 7; // Approximate width
+            graphics->DrawText(stationName, x - textWidth/2, y + size + 5, color, true);
         } else {
-            graphics->DrawText("Station", x + 20, y - 20, color, true);
+            graphics->DrawText("Station", x - 24, y + size + 5, color, true);
         }
     }
 }
@@ -421,70 +443,68 @@ void ObserverSDL::DrawAsteroid(CAsteroid* asteroid) {
     }
 
     int radius = static_cast<int>(asteroid->GetSize());
-    graphics->DrawCircle(x, y, radius, color, true);
-
-    if (drawnames) {
-        const char* typeName = (asteroid->GetMaterial() == URANIUM) ? "U" : "V";
-        graphics->DrawText(typeName, x - 5, y - 5, Color(255, 255, 255), false);
-    }
+    // Draw as empty circle with 2 pixel stroke
+    graphics->DrawCircle(x, y, radius, color, false);
+    graphics->DrawCircle(x, y, radius - 1, color, false);
+    // Never show asteroid names per X11 style
 }
 
 void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     if (!team) return;
 
     Color color = GetTeamColor(team->GetTeamNumber());
-    int lineHeight = 15;
+    Color whiteText(255, 255, 255);
+    int lineHeight = 14;
     int currentY = y;
-
-    // Draw team name
-    graphics->DrawText(team->GetName(), x, currentY, color, false);
-    currentY += lineHeight + 5;
-
-    // Draw score and vinyl at station
     char info[256];
+
+    // Team header: "DD: TEAM_NAME"
+    snprintf(info, sizeof(info), "%02d: %s", team->GetTeamNumber(), team->GetName());
+    graphics->DrawText(info, x, currentY, color, false);
+    currentY += lineHeight;
+
+    // Station info line
     CStation* station = team->GetStation();
     if (station) {
-        snprintf(info, sizeof(info), "Score: %.0f  Vinyl: %.1f",
-                team->GetScore(), station->GetVinylStore());
-        graphics->DrawText(info, x, currentY, color, true);
-        currentY += lineHeight;
+        snprintf(info, sizeof(info), "Time: %.2f         %s: %.3f",
+                0.0, station->GetName(), station->GetVinylStore());
     } else {
-        snprintf(info, sizeof(info), "Score: %.0f", team->GetScore());
-        graphics->DrawText(info, x, currentY, color, true);
-        currentY += lineHeight;
+        snprintf(info, sizeof(info), "Time: %.2f         No Station", 0.0);
     }
+    graphics->DrawText(info, x, currentY, whiteText, true);
+    currentY += lineHeight;
 
-    // Draw ship count
-    snprintf(info, sizeof(info), "Ships: %d", team->GetShipCount());
-    graphics->DrawText(info, x, currentY, color, true);
-    currentY += lineHeight + 3;
+    // Column headers
+    graphics->DrawText("Ship        SHD     Fuel/Cap Vinyl/Cap", x, currentY, whiteText, true);
+    currentY += lineHeight;
 
-    // Draw detailed info for each ship
+    // Draw ships in tabular format
     for (UINT i = 0; i < team->GetShipCount() && i < 4; i++) {
         CShip* ship = team->GetShip(i);
         if (ship && ship->IsAlive()) {
-            // Ship name and position
-            const CCoord& pos = ship->GetPos();
             const char* shipName = ship->GetName();
-            if (shipName && strlen(shipName) > 0) {
-                snprintf(info, sizeof(info), "%s: (%.0f,%.0f)",
-                        shipName, pos.fX, pos.fY);
-            } else {
-                snprintf(info, sizeof(info), "Ship %d: (%.0f,%.0f)",
-                        i+1, pos.fX, pos.fY);
+            if (!shipName || strlen(shipName) == 0) {
+                shipName = "Ship";
             }
-            graphics->DrawText(info, x, currentY, color, true);
-            currentY += lineHeight;
 
-            // Ship resources
+            // Get ship resources
             double fuel = ship->GetAmount(S_FUEL);
             double fuelMax = ship->GetCapacity(S_FUEL);
             double cargo = ship->GetAmount(S_CARGO);
             double cargoMax = ship->GetCapacity(S_CARGO);
             double shield = ship->GetAmount(S_SHIELD);
 
-            // Format fuel with color based on threshold
-            char fuelStr[32];
+            // Determine shield color
+            Color shieldColor;
+            if (shield > 12.5) {
+                shieldColor = Color(0, 255, 0);  // Green
+            } else if (shield >= 5.0) {
+                shieldColor = Color(255, 255, 0);  // Yellow
+            } else {
+                shieldColor = Color(255, 0, 0);  // Red
+            }
+
+            // Determine fuel color
             double fuelPercent = (fuelMax > 0) ? (fuel / fuelMax) * 100.0 : 0;
             Color fuelColor;
             if (fuelPercent > 50.0) {
@@ -494,30 +514,28 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
             } else {
                 fuelColor = Color(255, 0, 0);  // Red
             }
-            snprintf(fuelStr, sizeof(fuelStr), "F:%.1f/%.0f", fuel, fuelMax);
 
-            // Format shield with color based on threshold
-            char shieldStr[32];
-            Color shieldColor;
-            if (shield > 12.5) {
-                shieldColor = Color(0, 255, 0);  // Green
-            } else if (shield >= 5.0) {
-                shieldColor = Color(255, 255, 0);  // Yellow
-            } else {
-                shieldColor = Color(255, 0, 0);  // Red
-            }
-            snprintf(shieldStr, sizeof(shieldStr), "S:%.1f", shield);
+            // Format ship name (11 chars max)
+            char nameStr[12];
+            snprintf(nameStr, sizeof(nameStr), "%-11s", shipName);
+            graphics->DrawText(nameStr, x, currentY, whiteText, true);
 
-            // Draw fuel, cargo, and shield separately with appropriate colors
-            graphics->DrawText("  ", x, currentY, color, true);
-            graphics->DrawText(fuelStr, x + 20, currentY, fuelColor, true);
+            // Format shield (4 chars)
+            char shieldStr[16];
+            snprintf(shieldStr, sizeof(shieldStr), "%-6.1f", shield);
+            graphics->DrawText(shieldStr, x + 84, currentY, shieldColor, true);
 
+            // Format fuel
+            char fuelStr[32];
+            snprintf(fuelStr, sizeof(fuelStr), "%.1f/%.1f", fuel, fuelMax);
+            graphics->DrawText(fuelStr, x + 140, currentY, fuelColor, true);
+
+            // Format cargo
             char cargoStr[32];
-            snprintf(cargoStr, sizeof(cargoStr), " V:%.1f/%.0f ", cargo, cargoMax);
-            graphics->DrawText(cargoStr, x + 100, currentY, color, true);
+            snprintf(cargoStr, sizeof(cargoStr), " %.1f/%.1f", cargo, cargoMax);
+            graphics->DrawText(cargoStr, x + 200, currentY, whiteText, true);
 
-            graphics->DrawText(shieldStr, x + 180, currentY, shieldColor, true);
-            currentY += lineHeight + 2;
+            currentY += lineHeight;
         }
     }
 
@@ -601,11 +619,15 @@ void ObserverSDL::DrawTimeDisplay() {
 
     char timeStr[64];
     double gameTime = myWorld->GetGameTime();
-    int minutes = static_cast<int>(gameTime / 60);
-    int seconds = static_cast<int>(gameTime) % 60;
 
-    snprintf(timeStr, sizeof(timeStr), "Time: %02d:%02d", minutes, seconds);
-    graphics->DrawText(timeStr, timeX, timeY, Color(0, 0, 0), false);  // Black text
+    // Display to tenth of second as per X11 style
+    snprintf(timeStr, sizeof(timeStr), "Game Time: %.1f", gameTime);
+
+    // Center text horizontally in the time area
+    int textWidth = strlen(timeStr) * 7;
+    int centerX = timeX + (timeWidth / 2) - (textWidth / 2);
+
+    graphics->DrawText(timeStr, centerX, timeY, Color(255, 255, 255), false);  // White text
 }
 
 int ObserverSDL::WorldToScreenX(double wx) {
@@ -802,12 +824,14 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
         graphics->DrawLine(x, y, vx, vy, Color(0, 255, 0));
     }
 
-    // Draw name
+    // Draw name centered below ship
     if (drawnames) {
-        char info[64];
-        snprintf(info, sizeof(info), "%s", ship->GetName());
-        Color color = GetTeamColor(teamNum);
-        graphics->DrawText(info, x + 18, y - 18, color, true);
+        const char* shipName = ship->GetName();
+        if (shipName && strlen(shipName) > 0) {
+            Color color = GetTeamColor(teamNum);
+            int textWidth = strlen(shipName) * 7; // Approximate width
+            graphics->DrawText(shipName, x - textWidth/2, y + 20, color, true);
+        }
     }
 
     // Draw laser beam
