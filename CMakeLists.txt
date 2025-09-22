@@ -226,4 +226,6 @@ message(STATUS "  Graphics Support: ${BUILD_WITH_GRAPHICS}")
 if(BUILD_WITH_GRAPHICS)
     # Default install tree is <prefix>/share/mm4
     target_compile_definitions(mm4obs PRIVATE MM4_SHARE_DIR="${CMAKE_INSTALL_PREFIX}/share/mm4")
+    # Link to repository fonts directory for runtime instructions
+    target_compile_definitions(mm4obs PRIVATE MM4_FONTS_GITHUB_URL="https://github.com/digitalmacgyver/mechmania4/tree/master/team/src/fonts")
 endif()
