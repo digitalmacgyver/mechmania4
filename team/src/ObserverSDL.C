@@ -73,23 +73,30 @@ bool ObserverSDL::Initialize() {
     borderX = static_cast<int>(displayWidth * 0.015);
     borderY = static_cast<int>((displayHeight - spaceHeight) * 0.1);
 
-    // Message area
-    msgPosX = 2 * borderX + spaceWidth;
-    msgPosY = borderY;
-    msgWidth = displayWidth - msgPosX - borderX;
-    msgHeight = spaceHeight / 3;
+    // Right panel dimensions
+    int rightPanelX = 2 * borderX + spaceWidth;
+    int rightPanelWidth = displayWidth - rightPanelX - borderX;
 
-    // Time display
-    timeX = msgPosX;
-    timeY = msgPosY + msgHeight + borderY;
-    timeWidth = msgWidth;
-    timeHeight = 50;
+    // Time display area (3 lines tall)
+    timeX = rightPanelX;
+    timeY = borderY;
+    timeWidth = rightPanelWidth;
+    timeHeight = 45;  // ~3 lines of text
 
-    // Team info positions (in right panel)
-    t1PosX = msgPosX;
-    t1PosY = timeY + timeHeight + borderY;
-    t2PosX = msgPosX;
-    t2PosY = t1PosY + 200;  // More space for first team's info with ship details
+    // Team 1 info area (7 lines tall)
+    t1PosX = rightPanelX;
+    t1PosY = timeY + timeHeight + 5;
+    int teamInfoHeight = 105;  // ~7 lines of text
+
+    // Team 2 info area (7 lines tall)
+    t2PosX = rightPanelX;
+    t2PosY = t1PosY + teamInfoHeight + 5;
+
+    // Message area (remaining space at bottom)
+    msgPosX = rightPanelX;
+    msgPosY = t2PosY + teamInfoHeight + 5;
+    msgWidth = rightPanelWidth;
+    msgHeight = spaceHeight - (msgPosY - borderY);
 
     // Initialize message buffer
     messageBuffer.resize(MSG_ROWS);
@@ -107,18 +114,20 @@ void ObserverSDL::Draw() {
     graphics->Clear(Color(160, 160, 160));  // Gray #A0A0A0
 
     // Draw black backgrounds for UI panels
+    // Time area background
+    graphics->DrawRect(timeX, timeY, timeWidth, timeHeight,
+                      Color(0, 0, 0), true);
+
+    // Team 1 info area background
+    graphics->DrawRect(t1PosX, t1PosY, msgWidth, 105,
+                      Color(0, 0, 0), true);
+
+    // Team 2 info area background
+    graphics->DrawRect(t2PosX, t2PosY, msgWidth, 105,
+                      Color(0, 0, 0), true);
+
     // Message area background
     graphics->DrawRect(msgPosX, msgPosY, msgWidth, msgHeight,
-                      Color(0, 0, 0), true);
-
-    // Time area background
-    graphics->DrawRect(timeX, timeY - 10, timeWidth, 30,
-                      Color(0, 0, 0), true);
-
-    // Team info areas background
-    graphics->DrawRect(t1PosX, t1PosY - 5, msgWidth, 190,
-                      Color(0, 0, 0), true);
-    graphics->DrawRect(t2PosX, t2PosY - 5, msgWidth, 190,
                       Color(0, 0, 0), true);
 
     // Draw main components
@@ -452,30 +461,35 @@ void ObserverSDL::DrawAsteroid(CAsteroid* asteroid) {
 void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     if (!team) return;
 
-    Color color = GetTeamColor(team->GetTeamNumber());
+    Color teamColor = GetTeamColor(team->GetTeamNumber());
     Color whiteText(255, 255, 255);
+    Color grayText(160, 160, 160);  // #A0A0A0
     int lineHeight = 14;
-    int currentY = y;
+    int currentY = y + 2;  // Start slightly down from top
     char info[256];
 
-    // Team header: "DD: TEAM_NAME"
+    // Team header: "DD: TEAM_NAME" (bold, team color)
     snprintf(info, sizeof(info), "%02d: %s", team->GetTeamNumber(), team->GetName());
-    graphics->DrawText(info, x, currentY, color, false);
+    graphics->DrawText(info, x, currentY, teamColor, false, true);
     currentY += lineHeight;
 
-    // Station info line
+    // Station info line (gray Time:, team color station name)
     CStation* station = team->GetStation();
     if (station) {
-        snprintf(info, sizeof(info), "Time: %.2f         %s: %.3f",
-                0.0, station->GetName(), station->GetVinylStore());
+        // Draw "Time: " in gray
+        graphics->DrawText("Time: 0.00", x, currentY, grayText, true, false);
+
+        // Draw station name and vinyl in team color
+        snprintf(info, sizeof(info), "         %s: %.3f",
+                station->GetName(), station->GetVinylStore());
+        graphics->DrawText(info, x + 70, currentY, teamColor, true, true);
     } else {
-        snprintf(info, sizeof(info), "Time: %.2f         No Station", 0.0);
+        graphics->DrawText("Time: 0.00         No Station", x, currentY, grayText, true, false);
     }
-    graphics->DrawText(info, x, currentY, whiteText, true);
     currentY += lineHeight;
 
-    // Column headers
-    graphics->DrawText("Ship        SHD     Fuel/Cap Vinyl/Cap", x, currentY, whiteText, true);
+    // Column headers (gray, bold)
+    graphics->DrawText("Ship        SHD     Fuel/Cap Vinyl/Cap", x, currentY, grayText, true, true);
     currentY += lineHeight;
 
     // Draw ships in tabular format
@@ -515,25 +529,25 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
                 fuelColor = Color(255, 0, 0);  // Red
             }
 
-            // Format ship name (11 chars max)
+            // Format ship name (11 chars max, team color, bold)
             char nameStr[12];
             snprintf(nameStr, sizeof(nameStr), "%-11s", shipName);
-            graphics->DrawText(nameStr, x, currentY, whiteText, true);
+            graphics->DrawText(nameStr, x, currentY, teamColor, true, true);
 
-            // Format shield (4 chars)
+            // Format shield (bold, left-aligned)
             char shieldStr[16];
-            snprintf(shieldStr, sizeof(shieldStr), "%-6.1f", shield);
-            graphics->DrawText(shieldStr, x + 84, currentY, shieldColor, true);
+            snprintf(shieldStr, sizeof(shieldStr), "%.1f", shield);
+            graphics->DrawText(shieldStr, x + 84, currentY, shieldColor, true, true);
 
-            // Format fuel
+            // Format fuel (bold, left-aligned)
             char fuelStr[32];
             snprintf(fuelStr, sizeof(fuelStr), "%.1f/%.1f", fuel, fuelMax);
-            graphics->DrawText(fuelStr, x + 140, currentY, fuelColor, true);
+            graphics->DrawText(fuelStr, x + 140, currentY, fuelColor, true, true);
 
-            // Format cargo
+            // Format cargo (bold, left-aligned)
             char cargoStr[32];
-            snprintf(cargoStr, sizeof(cargoStr), " %.1f/%.1f", cargo, cargoMax);
-            graphics->DrawText(cargoStr, x + 200, currentY, whiteText, true);
+            snprintf(cargoStr, sizeof(cargoStr), "%.1f/%.1f", cargo, cargoMax);
+            graphics->DrawText(cargoStr, x + 200, currentY, whiteText, true, true);
 
             currentY += lineHeight;
         }
@@ -569,7 +583,10 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
 }
 
 void ObserverSDL::DrawMessages() {
-    int y = msgPosY;
+    // Draw message header
+    graphics->DrawText("Messages:", msgPosX + 2, msgPosY + 2, Color(200, 200, 200), true, true);
+
+    int y = msgPosY + 18;  // Start below header
     Color msgColor(200, 200, 200);
 
     // Calculate max characters per line based on available width
@@ -623,11 +640,12 @@ void ObserverSDL::DrawTimeDisplay() {
     // Display to tenth of second as per X11 style
     snprintf(timeStr, sizeof(timeStr), "Game Time: %.1f", gameTime);
 
-    // Center text horizontally in the time area
+    // Center text horizontally, align to top of time area
     int textWidth = strlen(timeStr) * 7;
     int centerX = timeX + (timeWidth / 2) - (textWidth / 2);
 
-    graphics->DrawText(timeStr, centerX, timeY, Color(255, 255, 255), false);  // White text
+    // Draw at top of time area with bold white text
+    graphics->DrawText(timeStr, centerX, timeY + 5, Color(255, 255, 255), false, true);  // Bold white text
 }
 
 int ObserverSDL::WorldToScreenX(double wx) {

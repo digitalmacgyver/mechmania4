@@ -4,6 +4,14 @@ contest in 1998.
 
 This code is not used and is included for historic reference only.
 
+Original Server Code:
+  * mm4/
+  * mm4.tar (an archive of the mm4/ directory)
+
+Team Groogroo Code:
+  * team13/
+  * team13.tar (an archive of the team13/ directory)
+
 I am not sure if this is our furthest developed code for the contest,
 or just what I was able to snapshot at some time.
 

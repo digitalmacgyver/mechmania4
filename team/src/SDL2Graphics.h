@@ -27,6 +27,8 @@ private:
     SDL_Renderer* renderer;
     TTF_Font* font;
     TTF_Font* smallFont;
+    TTF_Font* boldFont;
+    TTF_Font* boldSmallFont;
 
     // Screen dimensions
     int displayWidth;
@@ -80,7 +82,7 @@ public:
 
     // Text rendering
     bool LoadFont(const std::string& fontPath, int size);
-    void DrawText(const std::string& text, int x, int y, const Color& color, bool small = false);
+    void DrawText(const std::string& text, int x, int y, const Color& color, bool small = false, bool bold = false);
     void GetTextSize(const std::string& text, int& w, int& h, bool small = false);
 
     // Image handling

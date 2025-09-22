@@ -10,6 +10,7 @@
 
 SDL2Graphics::SDL2Graphics()
     : window(nullptr), renderer(nullptr), font(nullptr), smallFont(nullptr),
+      boldFont(nullptr), boldSmallFont(nullptr),
       displayWidth(0), displayHeight(0), canvas(nullptr), spaceCanvas(nullptr) {
 
     // Initialize default colors to match X11 appearance
@@ -153,6 +154,14 @@ void SDL2Graphics::Cleanup() {
     if (smallFont) {
         TTF_CloseFont(smallFont);
         smallFont = nullptr;
+    }
+    if (boldFont) {
+        TTF_CloseFont(boldFont);
+        boldFont = nullptr;
+    }
+    if (boldSmallFont) {
+        TTF_CloseFont(boldSmallFont);
+        boldSmallFont = nullptr;
     }
 
     // Destroy renderer and window
@@ -344,15 +353,36 @@ bool SDL2Graphics::LoadFont(const std::string& fontPath, int size) {
     if (!path.empty()) {
         font = TTF_OpenFont(path.c_str(), size);
         smallFont = TTF_OpenFont(path.c_str(), size - 2);
+
+        // Load bold variants
+        boldFont = TTF_OpenFont(path.c_str(), size);
+        if (boldFont) {
+            TTF_SetFontStyle(boldFont, TTF_STYLE_BOLD);
+        }
+
+        boldSmallFont = TTF_OpenFont(path.c_str(), size - 2);
+        if (boldSmallFont) {
+            TTF_SetFontStyle(boldSmallFont, TTF_STYLE_BOLD);
+        }
     }
 
     return font != nullptr;
 }
 
-void SDL2Graphics::DrawText(const std::string& text, int x, int y, const Color& color, bool small) {
+void SDL2Graphics::DrawText(const std::string& text, int x, int y, const Color& color, bool small, bool bold) {
     if (text.empty()) return;
 
-    TTF_Font* useFont = small ? (smallFont ? smallFont : font) : font;
+    TTF_Font* useFont;
+    if (bold) {
+        useFont = small ? (boldSmallFont ? boldSmallFont : boldFont) : boldFont;
+    } else {
+        useFont = small ? (smallFont ? smallFont : font) : font;
+    }
+
+    if (!useFont) {
+        // Fallback to regular font if bold not available
+        useFont = small ? (smallFont ? smallFont : font) : font;
+    }
     if (!useFont) return;
 
     SDL_Color sdlColor = ColorToSDL(color);
