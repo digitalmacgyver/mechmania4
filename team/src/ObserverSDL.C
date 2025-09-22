@@ -103,8 +103,8 @@ void ObserverSDL::Update() {
 }
 
 void ObserverSDL::Draw() {
-    // Clear screen
-    graphics->Clear(Color(40, 40, 40));
+    // Clear screen with X11-style gray background
+    graphics->Clear(Color(160, 160, 160));  // Gray #A0A0A0
 
     // Draw main components
     DrawStarfield();
@@ -410,12 +410,12 @@ void ObserverSDL::DrawAsteroid(CAsteroid* asteroid) {
     int x = WorldToScreenX(pos.fX);
     int y = WorldToScreenY(pos.fY);
 
-    // Determine color based on type
+    // Determine color based on type - match X11 colors
     Color color;
     if (asteroid->GetMaterial() == URANIUM) {
-        color = Color(0, 255, 100);
+        color = Color(0, 255, 0);  // Green #00FF00
     } else if (asteroid->GetMaterial() == VINYL) {
-        color = Color(255, 255, 0);
+        color = Color(255, 0, 255); // Magenta #FF00FF
     } else {
         color = Color(128, 128, 128);
     }
@@ -483,9 +483,40 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
             double cargoMax = ship->GetCapacity(S_CARGO);
             double shield = ship->GetAmount(S_SHIELD);
 
-            snprintf(info, sizeof(info), "  F:%.1f/%.0f V:%.1f/%.0f S:%.1f",
-                    fuel, fuelMax, cargo, cargoMax, shield);
-            graphics->DrawText(info, x, currentY, color, true);
+            // Format fuel with color based on threshold
+            char fuelStr[32];
+            double fuelPercent = (fuelMax > 0) ? (fuel / fuelMax) * 100.0 : 0;
+            Color fuelColor;
+            if (fuelPercent > 50.0) {
+                fuelColor = Color(0, 255, 0);  // Green
+            } else if (fuelPercent >= 20.0) {
+                fuelColor = Color(255, 255, 0);  // Yellow
+            } else {
+                fuelColor = Color(255, 0, 0);  // Red
+            }
+            snprintf(fuelStr, sizeof(fuelStr), "F:%.1f/%.0f", fuel, fuelMax);
+
+            // Format shield with color based on threshold
+            char shieldStr[32];
+            Color shieldColor;
+            if (shield > 12.5) {
+                shieldColor = Color(0, 255, 0);  // Green
+            } else if (shield >= 5.0) {
+                shieldColor = Color(255, 255, 0);  // Yellow
+            } else {
+                shieldColor = Color(255, 0, 0);  // Red
+            }
+            snprintf(shieldStr, sizeof(shieldStr), "S:%.1f", shield);
+
+            // Draw fuel, cargo, and shield separately with appropriate colors
+            graphics->DrawText("  ", x, currentY, color, true);
+            graphics->DrawText(fuelStr, x + 20, currentY, fuelColor, true);
+
+            char cargoStr[32];
+            snprintf(cargoStr, sizeof(cargoStr), " V:%.1f/%.0f ", cargo, cargoMax);
+            graphics->DrawText(cargoStr, x + 100, currentY, color, true);
+
+            graphics->DrawText(shieldStr, x + 180, currentY, shieldColor, true);
             currentY += lineHeight + 2;
         }
     }
@@ -574,7 +605,7 @@ void ObserverSDL::DrawTimeDisplay() {
     int seconds = static_cast<int>(gameTime) % 60;
 
     snprintf(timeStr, sizeof(timeStr), "Time: %02d:%02d", minutes, seconds);
-    graphics->DrawText(timeStr, timeX, timeY, Color(255, 255, 255), false);
+    graphics->DrawText(timeStr, timeX, timeY, Color(0, 0, 0), false);  // Black text
 }
 
 int ObserverSDL::WorldToScreenX(double wx) {
@@ -603,13 +634,13 @@ double ObserverSDL::ScreenToWorldY(int sy) {
 
 Color ObserverSDL::GetTeamColor(int teamNum) {
     switch (teamNum % 6) {
-        case 0: return Color(255, 0, 0);     // Red
-        case 1: return Color(0, 0, 255);     // Blue
-        case 2: return Color(0, 255, 0);     // Green
-        case 3: return Color(255, 255, 0);   // Yellow
-        case 4: return Color(255, 0, 255);   // Magenta
-        case 5: return Color(0, 255, 255);   // Cyan
-        default: return Color(255, 255, 255); // White
+        case 0: return Color(0xFF, 0xB5, 0x73);  // Orange #FFB573
+        case 1: return Color(0x00, 0xC6, 0x8C);  // Teal #00C68C
+        case 2: return Color(0, 255, 0);         // Green
+        case 3: return Color(255, 255, 0);       // Yellow
+        case 4: return Color(255, 0, 255);       // Magenta
+        case 5: return Color(0, 255, 255);       // Cyan
+        default: return Color(255, 255, 255);    // White
     }
 }
 

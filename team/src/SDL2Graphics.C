@@ -12,22 +12,22 @@ SDL2Graphics::SDL2Graphics()
     : window(nullptr), renderer(nullptr), font(nullptr), smallFont(nullptr),
       displayWidth(0), displayHeight(0), canvas(nullptr), spaceCanvas(nullptr) {
 
-    // Initialize default colors
+    // Initialize default colors to match X11 appearance
     black = Color(0, 0, 0);
     white = Color(255, 255, 255);
-    gray = Color(160, 160, 160);
+    gray = Color(160, 160, 160);  // Window background gray
     red = Color(255, 0, 0);
     lasCol = red;
     fuelCol = Color(0, 255, 0);
-    vinylCol = Color(255, 255, 0);
+    vinylCol = Color(255, 0, 255);  // Magenta for vinyl asteroids
 
-    // Team colors
-    teamColors[0] = Color(255, 0, 0);     // Red
-    teamColors[1] = Color(0, 0, 255);     // Blue
-    teamColors[2] = Color(0, 255, 0);     // Green
-    teamColors[3] = Color(255, 255, 0);   // Yellow
-    teamColors[4] = Color(255, 0, 255);   // Magenta
-    teamColors[5] = Color(0, 255, 255);   // Cyan
+    // Team colors matching X11 original
+    teamColors[0] = Color(0xFF, 0xB5, 0x73);     // Orange #FFB573
+    teamColors[1] = Color(0x00, 0xC6, 0x8C);     // Teal #00C68C
+    teamColors[2] = Color(0, 255, 0);            // Green (fallback)
+    teamColors[3] = Color(255, 255, 0);          // Yellow (fallback)
+    teamColors[4] = Color(255, 0, 255);          // Magenta (fallback)
+    teamColors[5] = Color(0, 255, 255);          // Cyan (fallback)
 }
 
 SDL2Graphics::~SDL2Graphics() {
