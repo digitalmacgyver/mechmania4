@@ -68,7 +68,7 @@ private:
     double ScreenToWorldY(int sy);
 
     // Colors
-    Color GetTeamColor(int teamNum);
+    Color GetTeamColor(int teamIndex);  // Based on world index (connection order)
     Color GetThingColor(CThing* thing);
 
 public:

@@ -289,13 +289,15 @@ void ObserverSDL::DrawThing(CThing* thing) {
     // Determine what type of thing this is
     CShip* ship = dynamic_cast<CShip*>(thing);
     if (ship && ship->GetTeam()) {
-        DrawShip(ship, ship->GetTeam()->GetTeamNumber());
+        // Use world index for colors (connection order), not team number
+        DrawShip(ship, ship->GetTeam()->GetWorldIndex());
         return;
     }
 
     CStation* station = dynamic_cast<CStation*>(thing);
     if (station && station->GetTeam()) {
-        DrawStation(station, station->GetTeam()->GetTeamNumber());
+        // Use world index for colors (connection order), not team number
+        DrawStation(station, station->GetTeam()->GetWorldIndex());
         return;
     }
 
@@ -461,14 +463,15 @@ void ObserverSDL::DrawAsteroid(CAsteroid* asteroid) {
 void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     if (!team) return;
 
-    Color teamColor = GetTeamColor(team->GetTeamNumber());
+    // Use world index for color (connection order)
+    Color teamColor = GetTeamColor(team->GetWorldIndex());
     Color whiteText(255, 255, 255);
     Color grayText(160, 160, 160);  // #A0A0A0
     int lineHeight = 14;
     int currentY = y + 2;  // Start slightly down from top
     char info[256];
 
-    // Team header: "DD: TEAM_NAME" (bold, team color)
+    // Team header: "DD: TEAM_NAME" (display team's chosen number, not world index)
     snprintf(info, sizeof(info), "%02d: %s", team->GetTeamNumber(), team->GetName());
     graphics->DrawText(info, x, currentY, teamColor, false, true);
     currentY += lineHeight;
@@ -672,14 +675,19 @@ double ObserverSDL::ScreenToWorldY(int sy) {
     return (normalized * 1024.0) - 512.0;
 }
 
-Color ObserverSDL::GetTeamColor(int teamNum) {
-    switch (teamNum % 6) {
-        case 0: return Color(0xFF, 0xB5, 0x73);  // Orange #FFB573
-        case 1: return Color(0x00, 0xC6, 0x8C);  // Teal #00C68C
-        case 2: return Color(0, 255, 0);         // Green
-        case 3: return Color(255, 255, 0);       // Yellow
-        case 4: return Color(255, 0, 255);       // Magenta
-        case 5: return Color(0, 255, 255);       // Cyan
+Color ObserverSDL::GetTeamColor(int teamIndex) {
+    // Colors based on world index (connection order)
+    // Index 0: first team to connect (spawns top-left)
+    // Index 1: second team to connect (spawns bottom-right)
+    // Index 2: third team to connect (spawns bottom-left)
+    // Index 3: fourth team to connect (spawns top-right)
+    switch (teamIndex % 6) {
+        case 0: return Color(0xFF, 0xB5, 0x73);  // Orange #FFB573 (top-left spawn)
+        case 1: return Color(0x00, 0xC6, 0x8C);  // Teal #00C68C (bottom-right spawn)
+        case 2: return Color(0xFF, 0x11, 0xAC);  // Pink #FF11AC (bottom-left spawn)
+        case 3: return Color(0xFF, 0xFF, 0x22);  // Yellow #FFFF22 (top-right spawn)
+        case 4: return Color(255, 0, 255);       // Magenta (extra)
+        case 5: return Color(0, 255, 255);       // Cyan (extra)
         default: return Color(255, 255, 255);    // White
     }
 }
@@ -802,10 +810,10 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
     // Get image set from ship (0=normal, 1=thrust, 2=brake, 3=left, 4=right)
     int imageSet = ship->GetImage();
 
-    // Get the appropriate sprite - use actual team number, not passed teamNum
-    int actualTeamNum = ship->GetTeam()->GetTeamNumber();
+    // Get the appropriate sprite - use world index for sprite selection
+    int worldIndex = ship->GetTeam()->GetWorldIndex();
     SDL_Texture* sprite = spriteManager->GetShipSprite(
-        actualTeamNum, imageSet, orient);
+        worldIndex, imageSet, orient);
 
     if (sprite) {
         // Draw sprite centered at ship position
@@ -866,10 +874,10 @@ void ObserverSDL::DrawStationSprite(CStation* station, int teamNum) {
     // Use station's actual orientation (omega = 0.9 rad/s)
     int frame = spriteManager->AngleToFrame(station->GetOrient());
 
-    // Use actual team number from station
-    int actualTeamNum = station->GetTeam()->GetTeamNumber();
+    // Use world index for sprite selection
+    int worldIndex = station->GetTeam()->GetWorldIndex();
     SDL_Texture* sprite = spriteManager->GetStationSprite(
-        actualTeamNum, frame);
+        worldIndex, frame);
 
     if (sprite) {
         SDL_Rect dest = {x - 24, y - 24, 48, 48};  // Stations are bigger
