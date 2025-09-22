@@ -26,6 +26,7 @@ private:
     bool useXpm;
     bool useSpriteMode;
     bool useVelVectors;
+    bool isPaused;
     int drawnames;
     int attractor;
 
@@ -90,6 +91,8 @@ public:
     void SetDrawNames(int val) { drawnames = val; }
     void ToggleVelVectors() { useVelVectors = !useVelVectors; }
     void ToggleSpriteMode() { useSpriteMode = !useSpriteMode; }
+    void TogglePause() { isPaused = !isPaused; }
+    bool IsPaused() const { return isPaused; }
 
     // Message system
     void AddMessage(const std::string& msg);

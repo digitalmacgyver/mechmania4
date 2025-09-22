@@ -20,6 +20,8 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag)
       logoTexture(nullptr), attractor(0), useSpriteMode(gfxFlag == 1) {  // Enable sprite mode when -G is used
 
     drawnames = 1;
+    isPaused = false;
+    useVelVectors = false;
 
     if (gfxFlag == 1) {
         useXpm = true;
@@ -209,6 +211,16 @@ bool ObserverSDL::HandleEvents() {
                         std::cout << "Logo mode: " << (attractor ? "ON" : "OFF")
                                   << " (level " << attractor << ")" << std::endl;
                         break;
+                    case SDLK_p:
+                        // Toggle pause
+                        TogglePause();
+                        std::cout << (isPaused ? "PAUSED" : "RESUMED") << std::endl;
+                        if (isPaused) {
+                            AddMessage("Game PAUSED - Press P to resume");
+                        } else {
+                            AddMessage("Game RESUMED");
+                        }
+                        break;
                 }
                 break;
         }
@@ -332,18 +344,32 @@ void ObserverSDL::DrawShip(CShip* ship, int teamNum) {
 
     Color color = GetTeamColor(teamNum);
 
-    // Draw ship as triangle
-    int size = 8;
-    int x1 = x + static_cast<int>(size * cos(orient));
-    int y1 = y + static_cast<int>(size * sin(orient));
-    int x2 = x + static_cast<int>(size * cos(orient + 2.4));
-    int y2 = y + static_cast<int>(size * sin(orient + 2.4));
-    int x3 = x + static_cast<int>(size * cos(orient - 2.4));
-    int y3 = y + static_cast<int>(size * sin(orient - 2.4));
+    // Draw ship as "V" glyph (two lines from tip to rear points)
+    double shipSize = 12.0;  // Default ship size in world units
+    double factor = 0.7071;  // sqrt(2)/2 to keep within circle
 
-    int xPoints[] = {x1, x2, x3};
-    int yPoints[] = {y1, y2, y3};
-    graphics->DrawPolygon(xPoints, yPoints, 3, color, true);
+    // World scaling factors
+    double sclx = spaceWidth / 1024.0;
+    double scly = spaceHeight / 1024.0;
+
+    // Calculate ship points in world units, then scale to screen
+    // Tip point at orientation angle
+    int tipX = x + static_cast<int>(factor * shipSize * cos(orient) * sclx);
+    int tipY = y + static_cast<int>(factor * shipSize * sin(orient) * scly);
+
+    // Rear-left point (orient + 120 degrees)
+    double angle1 = orient + (2.0 * 3.14159265359 / 3.0);
+    int x1 = x + static_cast<int>(factor * shipSize * cos(angle1) * sclx);
+    int y1 = y + static_cast<int>(factor * shipSize * sin(angle1) * scly);
+
+    // Rear-right point (orient + 240 degrees)
+    double angle2 = orient + (4.0 * 3.14159265359 / 3.0);
+    int x2 = x + static_cast<int>(factor * shipSize * cos(angle2) * sclx);
+    int y2 = y + static_cast<int>(factor * shipSize * sin(angle2) * scly);
+
+    // Draw two lines from tip to rear points (V shape)
+    graphics->DrawLine(tipX, tipY, x1, y1, color);
+    graphics->DrawLine(tipX, tipY, x2, y2, color);
 
     // Draw velocity vector if enabled
     if (useVelVectors) {
@@ -413,19 +439,26 @@ void ObserverSDL::DrawStation(CStation* station, int teamNum) {
 
     Color color = GetTeamColor(teamNum);
 
+    // Station size in world units (default is 30, so square is 60x60 world units)
+    double stationSize = 30.0;  // Default station size
+    double worldSize = stationSize * 2;  // Square side length in world units
+
+    // Convert world size to screen pixels
+    int pixelWidth = static_cast<int>(worldSize * spaceWidth / 1024.0);
+    int pixelHeight = static_cast<int>(worldSize * spaceHeight / 1024.0);
+
     // Draw station as empty square with 2 pixel stroke
-    int size = 15;
-    graphics->DrawRect(x - size, y - size, size * 2, size * 2, color, false);
-    graphics->DrawRect(x - size + 1, y - size + 1, size * 2 - 2, size * 2 - 2, color, false);
+    graphics->DrawRect(x - pixelWidth/2, y - pixelHeight/2, pixelWidth, pixelHeight, color, false);
+    graphics->DrawRect(x - pixelWidth/2 + 1, y - pixelHeight/2 + 1, pixelWidth - 2, pixelHeight - 2, color, false);
 
     if (drawnames) {
         const char* stationName = station->GetName();
         if (stationName && strlen(stationName) > 0) {
             // Center name below station
             int textWidth = strlen(stationName) * 7; // Approximate width
-            graphics->DrawText(stationName, x - textWidth/2, y + size + 5, color, true);
+            graphics->DrawText(stationName, x - textWidth/2, y + pixelHeight/2 + 5, color, true);
         } else {
-            graphics->DrawText("Station", x - 24, y + size + 5, color, true);
+            graphics->DrawText("Station", x - 24, y + pixelHeight/2 + 5, color, true);
         }
     }
 }
@@ -479,20 +512,20 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     // Station info line (gray Time:, team color station name)
     CStation* station = team->GetStation();
     if (station) {
-        // Draw "Time: " in gray
-        graphics->DrawText("Time: 0.00", x, currentY, grayText, true, false);
+        // Draw "Time: " in gray, bold
+        graphics->DrawText("Time: 0.00", x, currentY, grayText, true, true);
 
-        // Draw station name and vinyl in team color
+        // Draw station name and vinyl in team color, bold
         snprintf(info, sizeof(info), "         %s: %.3f",
                 station->GetName(), station->GetVinylStore());
         graphics->DrawText(info, x + 70, currentY, teamColor, true, true);
     } else {
-        graphics->DrawText("Time: 0.00         No Station", x, currentY, grayText, true, false);
+        graphics->DrawText("Time: 0.00         No Station", x, currentY, grayText, true, true);
     }
     currentY += lineHeight;
 
-    // Column headers (gray, bold)
-    graphics->DrawText("Ship        SHD     Fuel/Cap Vinyl/Cap", x, currentY, grayText, true, true);
+    // Column headers (gray, bold) with better spacing
+    graphics->DrawText("Ship  SHD Fuel/Cap Vinyl/Cap", x, currentY, grayText, true, true);
     currentY += lineHeight;
 
     // Draw ships in tabular format
@@ -532,25 +565,25 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
                 fuelColor = Color(255, 0, 0);  // Red
             }
 
-            // Format ship name (11 chars max, team color, bold)
+            // Format ship name (team color, bold)
             char nameStr[12];
-            snprintf(nameStr, sizeof(nameStr), "%-11s", shipName);
+            snprintf(nameStr, sizeof(nameStr), "%-10s", shipName);
             graphics->DrawText(nameStr, x, currentY, teamColor, true, true);
 
             // Format shield (bold, left-aligned)
             char shieldStr[16];
             snprintf(shieldStr, sizeof(shieldStr), "%.1f", shield);
-            graphics->DrawText(shieldStr, x + 84, currentY, shieldColor, true, true);
+            graphics->DrawText(shieldStr, x + 70, currentY, shieldColor, true, true);
 
             // Format fuel (bold, left-aligned)
             char fuelStr[32];
             snprintf(fuelStr, sizeof(fuelStr), "%.1f/%.1f", fuel, fuelMax);
-            graphics->DrawText(fuelStr, x + 140, currentY, fuelColor, true, true);
+            graphics->DrawText(fuelStr, x + 110, currentY, fuelColor, true, true);
 
             // Format cargo (bold, left-aligned)
             char cargoStr[32];
             snprintf(cargoStr, sizeof(cargoStr), "%.1f/%.1f", cargo, cargoMax);
-            graphics->DrawText(cargoStr, x + 200, currentY, whiteText, true, true);
+            graphics->DrawText(cargoStr, x + 180, currentY, whiteText, true, true);
 
             currentY += lineHeight;
         }
