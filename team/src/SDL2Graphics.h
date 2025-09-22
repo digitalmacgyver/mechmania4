@@ -82,8 +82,11 @@ public:
 
     // Text rendering
     bool LoadFont(const std::string& fontPath, int size);
-    void DrawText(const std::string& text, int x, int y, const Color& color, bool small = false, bool bold = false);
+    // Prefer bold fonts by default to match original X11 "misc-fixed bold" look
+    void DrawText(const std::string& text, int x, int y, const Color& color, bool small = false, bool bold = true);
     void GetTextSize(const std::string& text, int& w, int& h, bool small = false);
+    // Extended: measure with bold selection to match DrawText rendering
+    void GetTextSizeEx(const std::string& text, int& w, int& h, bool small = false, bool bold = false);
 
     // Image handling
     SDL_Texture* LoadImage(const std::string& path);

@@ -471,22 +471,32 @@ bool SDL2Graphics::LoadFont(const std::string& fontPath, int size) {
         auto searchDirs = getBaseDirs();
         auto tryNamesInDirs = [&](const std::vector<std::string>& names) -> std::string
         {
-            for (const auto& dir : searchDirs)
+            // First try all relative names across all directories
+            for (const auto& n : names)
             {
-                // Try dir/fonts/name first
-                for (const auto& n : names)
+                if (!n.empty() && n[0] == '/')
                 {
-                    if (!n.empty() && n[0] == '/')
-                    {
-                        if (fileExists(n)) return n;
-                        continue;
-                    }
+                    // Skip absolute names in this pass
+                    continue;
+                }
+                for (const auto& dir : searchDirs)
+                {
                     std::string p1 = joinPath(joinPath(dir, "fonts"), n);
                     if (fileExists(p1)) return p1;
                     std::string p2 = joinPath(dir, n);
                     if (fileExists(p2)) return p2;
                 }
             }
+
+            // Then try absolute fallback names (system locations)
+            for (const auto& n : names)
+            {
+                if (!n.empty() && n[0] == '/')
+                {
+                    if (fileExists(n)) return n;
+                }
+            }
+
             return std::string();
         };
 
@@ -702,6 +712,21 @@ void SDL2Graphics::GetTextSize(const std::string& text, int& w, int& h, bool sma
     TTF_SizeText(useFont, text.c_str(), &w, &h);
 }
 
+void SDL2Graphics::GetTextSizeEx(const std::string& text, int& w, int& h, bool small, bool bold) {
+    TTF_Font* useFont = nullptr;
+    if (bold) {
+        useFont = small ? (boldSmallFont ? boldSmallFont : (boldFont ? boldFont : (smallFont ? smallFont : font)))
+                        : (boldFont ? boldFont : font);
+    } else {
+        useFont = small ? (smallFont ? smallFont : font) : font;
+    }
+    if (!useFont) {
+        w = h = 0;
+        return;
+    }
+    TTF_SizeText(useFont, text.c_str(), &w, &h);
+}
+
 SDL_Texture* SDL2Graphics::LoadImage(const std::string& path) {
     // Check cache first
     auto it = imageCache.find(path);
@@ -724,6 +749,8 @@ SDL_Texture* SDL2Graphics::LoadImage(const std::string& path) {
 
     return texture;
 }
+
+// Removed BMP frame dump helper to revert bitmap generation functionality
 
 SDL_Texture* SDL2Graphics::LoadXPM(const char** xpmData) {
     // SDL2 doesn't have native XPM support, but SDL_image can load XPM from memory

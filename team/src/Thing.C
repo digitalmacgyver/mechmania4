@@ -19,7 +19,7 @@ CThing::CThing (double fx0, double fy0)
   for (UINT i=0; i<maxnamelen; i++)
      Name[i]=0;  // Initialize Name
 
-  sprintf (Name,"Generic Thing");
+  snprintf(Name, maxnamelen, "Generic Thing");
   ulIDCookie=rand();
   DeadFlag=false;
   bIsColliding=NO_DAMAGE;

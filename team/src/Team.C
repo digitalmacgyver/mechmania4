@@ -37,12 +37,12 @@ bool CTeam::Create (UINT numSh, UINT uCrd)
   apShips = new CShip*[numShips];
   for (i=0; i<numShips; i++) {
     apShips[i] = new CShip(StPos,this,i);
-    sprintf (namebuf,"Ship-%d-of-%d",i,GetTeamNumber());
+    snprintf (namebuf, maxnamelen, "Ship-%d-of-%d",i,GetTeamNumber());
     apShips[i]->SetName(namebuf);
   }
   
   pStation = new CStation(StPos,this);
-  sprintf(Name,"Team#%d",GetTeamNumber());
+  snprintf(Name, maxTeamNameLen, "Team#%d",GetTeamNumber());
   pStation->SetName(Name);
 
   return true;

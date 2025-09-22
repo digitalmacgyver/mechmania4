@@ -80,29 +80,35 @@ bool ObserverSDL::Initialize() {
     int rightPanelX = 2 * borderX + spaceWidth;
     int rightPanelWidth = displayWidth - rightPanelX - borderX;
 
+    // Compute character metrics for layout spacing
+    int charW = 7, charH = 13;
+    graphics->GetTextSize("W", charW, charH, true);
+    int lineHeight = (charH > 0 ? charH : 13) + 1;
+
     // Time display area (3 lines tall)
     timeX = rightPanelX;
     timeY = borderY;
     timeWidth = rightPanelWidth;
-    timeHeight = 45;  // ~3 lines of text
+    timeHeight = 3 * lineHeight;  // ~3 lines of text
 
-    // Team 1 info area (7 lines tall)
+    // Team 1 info area (7 lines tall + ~1/2 line)
     t1PosX = rightPanelX;
-    t1PosY = timeY + timeHeight + 5;
-    int teamInfoHeight = 105;  // ~7 lines of text
+    t1PosY = timeY + timeHeight + lineHeight;  // ~1 line gap
+    int teamInfoHeight = 7 * lineHeight + (lineHeight / 2);  // add ~1/2 line for breathing room
+    tHeight = teamInfoHeight;  // store for drawing
 
     // Team 2 info area (7 lines tall)
     t2PosX = rightPanelX;
-    t2PosY = t1PosY + teamInfoHeight + 5;
+    t2PosY = t1PosY + teamInfoHeight + lineHeight;  // ~1 line gap
 
     // Message area (remaining space at bottom)
     msgPosX = rightPanelX;
-    msgPosY = t2PosY + teamInfoHeight + 5;
+    msgPosY = t2PosY + teamInfoHeight + lineHeight;  // ~1 line gap
     msgWidth = rightPanelWidth;
     msgHeight = spaceHeight - (msgPosY - borderY);
 
-    // Initialize message buffer
-    messageBuffer.resize(MSG_ROWS);
+    // Initialize message buffer (start empty; we keep full history)
+    messageBuffer.clear();
 
     return true;
 }
@@ -129,12 +135,12 @@ void ObserverSDL::Draw() {
     graphics->DrawRect(timeX, timeY, timeWidth, timeHeight,
                       Color(0, 0, 0), true);
 
-    // Team 1 info area background
-    graphics->DrawRect(t1PosX, t1PosY, msgWidth, 105,
+    // Team 1 info area background (7 lines tall)
+    graphics->DrawRect(t1PosX, t1PosY, msgWidth, tHeight,
                       Color(0, 0, 0), true);
 
-    // Team 2 info area background
-    graphics->DrawRect(t2PosX, t2PosY, msgWidth, 105,
+    // Team 2 info area background (7 lines tall)
+    graphics->DrawRect(t2PosX, t2PosY, msgWidth, tHeight,
                       Color(0, 0, 0), true);
 
     // Message area background
@@ -208,7 +214,8 @@ bool ObserverSDL::HandleEvents() {
                     case SDLK_q:
                         return false;
                     case SDLK_n:
-                        drawnames = !drawnames;
+                        // Cycle drawnames: 0 = off, 1 = human names, 2 = numeric/status labels
+                        drawnames = (drawnames + 1) % 3;
                         break;
                     case SDLK_s:
                         showStarfield = !showStarfield;
@@ -288,7 +295,7 @@ void ObserverSDL::DrawStarfield() {
     static std::vector<std::pair<int, int>> stars;
 
     if (!starsInit) {
-        for (int i = 0; i < 200; i++) {
+        for (int i = 0; i < 2048; i++) {
             int x = rand() % spaceWidth;
             int y = rand() % spaceHeight;
             stars.push_back({x, y});
@@ -337,6 +344,8 @@ void ObserverSDL::DrawThing(CThing* thing) {
     if (drawnames) {
         graphics->DrawText(thing->GetName(), x + 10, y - 10, color, true);
     }
+    // Velocity vector for generic things
+    DrawVelocityVector(thing);
 }
 
 void ObserverSDL::DrawShip(CShip* ship, int teamNum) {
@@ -384,23 +393,33 @@ void ObserverSDL::DrawShip(CShip* ship, int teamNum) {
     graphics->DrawLine(tipX, tipY, x2, y2, color);
     graphics->DrawLine(tipX + 1, tipY, x2 + 1, y2, color);  // 2nd line for weight
 
-    // Draw velocity vector if enabled
-    if (useVelVectors) {
-        const CTraj& vel = ship->GetVelocity();
-        CCoord velCoord = vel.ConvertToCoord();
-        int vx = x + static_cast<int>(velCoord.fX * 2);
-        int vy = y + static_cast<int>(velCoord.fY * 2);
-        graphics->DrawLine(x, y, vx, vy, Color(0, 255, 0));
-    }
+    // Velocity vector for ship (legacy style)
+    DrawVelocityVector(ship);
 
-    // Draw name centered below ship
-    if (drawnames) {
+    // Draw name/status below ship
+    if (drawnames == 1) {
         const char* shipName = ship->GetName();
         if (shipName && strlen(shipName) > 0) {
             int textWidth = 0, textHeight = 0;
             graphics->GetTextSize(shipName, textWidth, textHeight, true);
             graphics->DrawText(shipName, x - textWidth/2, y + 15, color, true, true);
         }
+    } else if (drawnames == 2) {
+        // ship_number:shield:fuel:cargo (no decimals)
+        int shipNum = 0;
+        if (ship->GetTeam()) {
+            CTeam* team = ship->GetTeam();
+            for (UINT i = 0; i < team->GetShipCount(); i++) {
+                if (team->GetShip(i) == ship) { shipNum = static_cast<int>(i); break; }
+            }
+        }
+        double sh = ship->GetAmount(S_SHIELD);
+        double fu = ship->GetAmount(S_FUEL);
+        double ca = ship->GetAmount(S_CARGO);
+        char label[64];
+        snprintf(label, sizeof(label), "%d:%.0f:%.0f:%.0f", shipNum, sh, fu, ca);
+        int tw=0, th=0; graphics->GetTextSize(label, tw, th, true);
+        graphics->DrawText(label, x - tw/2, y + 15, color, true, true);
     }
 }
 
@@ -458,16 +477,23 @@ void ObserverSDL::DrawStation(CStation* station, int teamNum) {
     graphics->DrawRect(x - pixelWidth/2, y - pixelHeight/2, pixelWidth, pixelHeight, color, false);
     graphics->DrawRect(x - pixelWidth/2 + 1, y - pixelHeight/2 + 1, pixelWidth - 2, pixelHeight - 2, color, false);
 
-    if (drawnames) {
+    // Velocity vector for station
+    DrawVelocityVector(station);
+
+    if (drawnames == 1) {
         const char* stationName = station->GetName();
-        if (stationName && strlen(stationName) > 0) {
-            // Center name below station
-            int textWidth = 0, textHeight = 0;
-            graphics->GetTextSize(stationName, textWidth, textHeight, true);
-            graphics->DrawText(stationName, x - textWidth/2, y + pixelHeight/2 + 5, color, true);
-        } else {
-            graphics->DrawText("Station", x - 24, y + pixelHeight/2 + 5, color, true);
-        }
+        const char* text = (stationName && strlen(stationName) > 0) ? stationName : "Station";
+        int textWidth = 0, textHeight = 0;
+        graphics->GetTextSize(text, textWidth, textHeight, true);
+        graphics->DrawText(text, x - textWidth/2, y + pixelHeight/2 + 5, color, true);
+    } else if (drawnames == 2) {
+        // team_id: score (3 decimals)
+        int teamId = station->GetTeam() ? static_cast<int>(station->GetTeam()->GetWorldIndex()) : 0;
+        double score = station->GetVinylStore();
+        char label[64];
+        snprintf(label, sizeof(label), "%d: %.3f", teamId, score);
+        int tw=0, th=0; graphics->GetTextSize(label, tw, th, true);
+        graphics->DrawText(label, x - tw/2, y + pixelHeight/2 + 5, color, true, true);
     }
 }
 
@@ -499,6 +525,8 @@ void ObserverSDL::DrawAsteroid(CAsteroid* asteroid) {
     graphics->DrawCircle(x, y, radius, color, false);
     graphics->DrawCircle(x, y, radius - 1, color, false);
     // Never show asteroid names per X11 style
+    // Velocity vector for asteroid
+    DrawVelocityVector(asteroid);
 }
 
 void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
@@ -515,9 +543,9 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     int currentY = y + 2;  // Start slightly down from top
     char info[256];
 
-    // Team header: "DD: TEAM_NAME" (display team's chosen number, not world index)
+    // Team header aligned with ship column start
     snprintf(info, sizeof(info), "%02d: %s", team->GetTeamNumber(), team->GetName());
-    graphics->DrawText(info, x, currentY, teamColor, false, true);
+    graphics->DrawText(info, x + 5, currentY, teamColor, false, true);
     currentY += lineHeight;
 
     // Station info line (gray Time:, team color station name)
@@ -526,16 +554,16 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
         // Draw "Time: " in gray, bold with actual wait time
         char timeStr[32];
         snprintf(timeStr, sizeof(timeStr), "Time: %.2f", team->GetWallClock());
-        graphics->DrawText(timeStr, x, currentY, grayText, true, true);
+        graphics->DrawText(timeStr, x + 5, currentY, grayText, true, true);
 
-        // Draw station name and vinyl in team color, bold
-        snprintf(info, sizeof(info), "         %s: %.3f",
-                station->GetName(), station->GetVinylStore());
-        graphics->DrawText(info, x + 70, currentY, teamColor, true, true);
+        // Draw station name and vinyl in team color, bold, aligned with Fuel/Cap column below
+        int stationX = x + 5 + (23 * charW); // align with Fuel/Cap column
+        snprintf(info, sizeof(info), "%s: %.3f", station->GetName(), station->GetVinylStore());
+        graphics->DrawText(info, stationX, currentY, teamColor, true, true);
     } else {
         char timeStr[64];
         snprintf(timeStr, sizeof(timeStr), "Time: %.2f         No Station", team->GetWallClock());
-        graphics->DrawText(timeStr, x, currentY, grayText, true, true);
+        graphics->DrawText(timeStr, x + 5, currentY, grayText, true, true);
     }
     currentY += lineHeight;
 
@@ -543,7 +571,7 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     int col0  = x + 5;                    // Ship name
     int colSHD = x + 5 + (16 * charW);    // SHD column shifted 3 chars to the right from 13 -> 16
     int colFuel = x + 5 + (23 * charW);   // Fuel/Cap shifted 1 additional char (19 -> 23)
-    int colVinyl = x + 5 + (29 * charW);  // Vinyl/Cap unchanged
+    int colVinyl = x + 5 + (34 * charW);  // Vinyl/Cap shifted right by ~5 chars
 
     // Column headers aligned to columns (no leading spaces)
     graphics->DrawText("Ship",      col0,    currentY, grayText, true, true);
@@ -642,72 +670,118 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
 }
 
 void ObserverSDL::DrawMessages() {
-    // Draw message header
-    graphics->DrawText("Messages:", msgPosX + 2, msgPosY + 2, Color(200, 200, 200), true, true);
-
-    int y = msgPosY + 18;  // Start below header
-
-    // Measure font height once
+    // No header; render newest messages at the bottom and fill upward
     int charWidth = 7, charHeight = 13;
-    graphics->GetTextSize("W", charWidth, charHeight, true);
+    graphics->GetTextSizeEx("W", charWidth, charHeight, true, true);
     if (charHeight <= 0) charHeight = 13;
 
-    // Padding within the message box
-    const int padX = 2;
-    int leftX = msgPosX + padX;
-    int rightX = msgPosX + msgWidth - padX;
-    int maxPixelWidth = rightX - leftX;
+    const int padX = 3;   // slightly larger horizontal padding to avoid border bleed
+    const int lineGap = 2;
+    int usableHeight = msgHeight - 4; // top/bottom padding
+    int linesFit = usableHeight / (charHeight + lineGap);
+    if (linesFit <= 0) return;
 
-    for (const auto& msg : messageBuffer) {
-        if (!msg.text.empty()) {
-            // Determine color based on stored world index
-            Color msgColor(200, 200, 200);  // Default gray for system messages
-            if (msg.worldIndex >= 0) {
-                msgColor = GetTeamColor(msg.worldIndex);
-            }
+    // Prepare a list of wrapped display lines from newest to oldest
+    struct WrappedLine { std::string text; Color color; int seconds; bool showTime; std::string timeStr; int timeW; };
+    std::vector<WrappedLine> lines;
+    lines.reserve(linesFit + 8);
 
-            // Pixel-accurate word wrap within the message box
-            std::istringstream iss(msg.text);
-            std::string word;
-            std::string lineAccum;
-            while (iss >> word) {
-                std::string candidate = lineAccum.empty() ? word : (lineAccum + " " + word);
-                int w = 0, h = 0;
-                graphics->GetTextSize(candidate, w, h, true);
-                if (w <= maxPixelWidth) {
-                    lineAccum = candidate;
-                } else {
-                    if (!lineAccum.empty()) {
-                        graphics->DrawText(lineAccum, leftX, y, msgColor, true, true);
-                        y += (charHeight + 2);
-                        if (y >= (msgPosY + msgHeight - 2)) break; // Stop drawing if no space
-                    }
-                    // If single word too long, hard clip by characters to fit
-                    int ww = 0, hh = 0;
-                    graphics->GetTextSize(word, ww, hh, true);
-                    if (ww > maxPixelWidth) {
-                        // Find max characters that fit
-                        std::string clipped;
-                        clipped.reserve(word.size());
-                        for (size_t i = 0; i < word.size(); ++i) {
-                            std::string tmp = clipped + word[i];
-                            int tw = 0, th = 0;
-                            graphics->GetTextSize(tmp, tw, th, true);
-                            if (tw > maxPixelWidth) break;
-                            clipped.push_back(word[i]);
+    // Set a clip rect so drawing cannot spill into gray UI borders
+    // Define an inner clip region that matches where we actually draw text
+    const int clipLeft  = msgPosX + padX + 1;
+    const int clipRight = msgPosX + msgWidth - padX - 1;
+    const int clipTop   = msgPosY + 1;
+    const int clipBottom= msgPosY + msgHeight - 1;
+    SDL_Rect clipRect = { clipLeft, clipTop, clipRight - clipLeft, clipBottom - clipTop };
+    SDL_RenderSetClipRect(graphics->GetRenderer(), &clipRect);
+
+    // Walk messages newest → oldest and wrap by measured pixel width until we have enough
+    for (int i = (int)messageBuffer.size() - 1; i >= 0 && (int)lines.size() < linesFit; --i) {
+        const auto& msg = messageBuffer[(size_t)i];
+        if (msg.text.empty()) continue;
+        Color msgColor(200, 200, 200);
+        if (msg.worldIndex >= 0) msgColor = GetTeamColor(msg.worldIndex);
+
+        // Build timestamp string and measure its width
+        char tbuf[8];
+        snprintf(tbuf, sizeof(tbuf), "%3ds ", std::max(0, msg.seconds));
+        int timeW = 0, timeH = 0;
+        graphics->GetTextSizeEx(tbuf, timeW, timeH, true, true);
+        if (timeW <= 0) timeW = 4 * (charWidth > 0 ? charWidth : 7);
+
+        // Pixel-accurate word wrap. First line width accounts for timestamp; subsequent lines indent by same width.
+        // Available pixel width from the text start to the inner clip right edge
+        const int clipWidth = clipRight - clipLeft;
+        const int borderFudge = (charWidth > 0 ? charWidth : 7); // ~1 char safety
+        const int maxWFirst = std::max(0, clipWidth - timeW - borderFudge);
+        const int maxWNext  = std::max(0, clipWidth - timeW - borderFudge);
+
+        std::vector<std::string> wrapped; wrapped.reserve(4);
+        std::istringstream iss(msg.text);
+        std::string word;
+        std::string accum;
+        auto fits = [&](const std::string& s, int maxW){ int w=0,h=0; graphics->GetTextSizeEx(s, w, h, true, true); return w <= maxW || maxW==0; };
+        bool firstLine = true;
+        int curMax = maxWFirst;
+        while (iss >> word) {
+            std::string candidate = accum.empty() ? word : (accum + " " + word);
+            if (fits(candidate, curMax)) {
+                accum = candidate;
+            } else {
+                if (!accum.empty()) wrapped.push_back(accum);
+                // If a single word is too long, hard clip it into chunks that fit
+                int w=0,h=0; graphics->GetTextSizeEx(word, w, h, true, true);
+                if (w > curMax && curMax > 0) {
+                    std::string chunk;
+                    chunk.reserve(word.size());
+                    for (char c : word) {
+                        std::string tmp = chunk; tmp.push_back(c);
+                        int tw=0,th=0; graphics->GetTextSizeEx(tmp, tw, th, true, true);
+                        if (tw > curMax) {
+                            if (!chunk.empty()) { wrapped.push_back(chunk); chunk.clear(); }
+                            // Switch to next line width after first wrap
+                            if (firstLine) { firstLine = false; curMax = maxWNext; }
                         }
-                        lineAccum = clipped;
-                    } else {
-                        lineAccum = word;
+                        chunk.push_back(c);
                     }
+                    accum = chunk;
+                } else {
+                    accum = word;
                 }
-            }
-            if (!lineAccum.empty() && y < (msgPosY + msgHeight - 2)) {
-                graphics->DrawText(lineAccum, leftX, y, msgColor, true, true);
-                y += (charHeight + 2);
+                // Switch to next line width after first wrap
+                if (firstLine) { firstLine = false; curMax = maxWNext; }
             }
         }
+        if (!accum.empty()) wrapped.push_back(accum);
+
+        // Push wrapped lines in reverse so the last segment is at bottom
+        for (int w = (int)wrapped.size() - 1; w >= 0 && (int)lines.size() < linesFit; --w) {
+            bool showTime = (w == 0);
+            lines.push_back({wrapped[(size_t)w], msgColor, msg.seconds, showTime, std::string(tbuf), timeW});
+        }
     }
+
+    // Draw from bottom upward
+    int y = msgPosY + msgHeight - 2 - charHeight; // bottom line position
+    int leftX = clipLeft;
+    Color grayText(160, 160, 160);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const auto& L = lines[i];
+        int x = leftX;
+        if (L.showTime) {
+            graphics->DrawText(L.timeStr, x, y, grayText, true, true);
+            x += L.timeW;
+        } else {
+            // indent to line up with wrapped content using measured timestamp width
+            x += L.timeW;
+        }
+        graphics->DrawText(L.text, x, y, L.color, true, true);
+        y -= (charHeight + lineGap);
+        if (y < msgPosY + 2) break;
+    }
+
+    // Reset clip
+    SDL_RenderSetClipRect(graphics->GetRenderer(), nullptr);
 }
 
 void ObserverSDL::DrawTimeDisplay() {
@@ -777,11 +851,12 @@ Color ObserverSDL::GetThingColor(CThing* thing) {
 }
 
 void ObserverSDL::AddMessage(const std::string& msg, int worldIndex) {
-    // Shift messages up
-    for (size_t i = 0; i < messageBuffer.size() - 1; i++) {
-        messageBuffer[i] = messageBuffer[i + 1];
+    int secs = 0;
+    if (myWorld) {
+        double gt = myWorld->GetGameTime();
+        if (gt >= 0.0) secs = (int)gt; // truncate to whole seconds
     }
-    messageBuffer.back() = {msg, worldIndex};
+    messageBuffer.push_back({msg, worldIndex, secs});
 }
 
 void ObserverSDL::ClearMessages() {
@@ -799,14 +874,14 @@ void ObserverSDL::DrawLogo() {
     SDL_QueryTexture(logoTexture, nullptr, nullptr, &logoW, &logoH);
 
     if (attractor == 2) {
-        // Mode 2: Opaque logo covering entire window
+        // Mode 2: Opaque logo maximized within window (fit, keep aspect)
         int displayWidth = graphics->GetDisplayWidth();
         int displayHeight = graphics->GetDisplayHeight();
 
-        // Scale logo to cover entire window while maintaining aspect ratio
+        // Scale logo to fit inside window while maintaining aspect ratio
         float scaleX = (float)displayWidth / logoW;
         float scaleY = (float)displayHeight / logoH;
-        float scale = std::max(scaleX, scaleY);  // Use max to ensure full coverage
+        float scale = std::min(scaleX, scaleY);  // Use min to ensure it stays within bounds
 
         int scaledW = (int)(logoW * scale);
         int scaledH = (int)(logoH * scale);
@@ -851,15 +926,22 @@ void ObserverSDL::DrawHelpFooter() {
     SDL_SetRenderDrawBlendMode(graphics->GetRenderer(), SDL_BLENDMODE_BLEND);
     SDL_RenderFillRect(graphics->GetRenderer(), &footerRect);
 
-    // Draw help text (measured widths for exact spacing)
+    // Draw help text with better spacing
     Color helpColor(200, 200, 200);
     int textY = footerY + 5;
     int x = 10;
-    const int gap = 20;  // padding between items
+    int charW = 7, charH = 13; graphics->GetTextSize("W", charW, charH, true);
 
-    // Left-side items
-    const char* items[] = {
-        "MechMania IV: The Vinyl Frontier",
+    // Title first at left
+    const char* title = "MechMania IV: The Vinyl Frontier";
+    int titleW = 0, titleH = 0; graphics->GetTextSize(title, titleW, titleH, true);
+    graphics->DrawText(title, x, textY, Color(255, 255, 255), true);
+
+    // Controls start ~15 characters to the right of title end
+    int gapAfterTitleChars = 15;
+    x = 10 + titleW + gapAfterTitleChars * (charW > 0 ? charW : 7);
+
+    const char* controls[] = {
         "[S] Stars",
         "[N] Names",
         "[V] Velocities",
@@ -870,13 +952,13 @@ void ObserverSDL::DrawHelpFooter() {
         nullptr
     };
 
-    // Colors per item (title is white, others help gray)
-    for (int i = 0; items[i] != nullptr; i++) {
+    int gapChars = 7; // spread commands out more
+    int gapPixels = gapChars * (charW > 0 ? charW : 7);
+    for (int i = 0; controls[i] != nullptr; i++) {
         int w = 0, h = 0;
-        graphics->GetTextSize(items[i], w, h, true);
-        Color c = (i == 0) ? Color(255, 255, 255) : helpColor;
-        graphics->DrawText(items[i], x, textY, c, true);
-        x += w + gap;
+        graphics->GetTextSize(controls[i], w, h, true);
+        graphics->DrawText(controls[i], x, textY, helpColor, true);
+        x += w + gapPixels;
     }
 
     // Right-side status (align to right using measured widths)
@@ -887,11 +969,11 @@ void ObserverSDL::DrawHelpFooter() {
     graphics->GetTextSize(spriteStr, w1, h1, true);
     graphics->GetTextSize(stateStr, w2, h2, true);
 
-    int rightGroupWidth = w1 + gap + w2;
+    int rightGroupWidth = w1 + gapPixels + w2;
     int rightX = displayWidth - 10 - rightGroupWidth;
 
     graphics->DrawText(spriteStr, rightX, textY, useSpriteMode ? Color(0, 255, 0) : Color(150, 150, 150), true);
-    graphics->DrawText(stateStr, rightX + w1 + gap, textY, isPaused ? Color(255, 255, 0) : Color(0, 255, 0), true, true);
+    graphics->DrawText(stateStr, rightX + w1 + gapPixels, textY, isPaused ? Color(255, 255, 0) : Color(0, 255, 0), true, true);
 }
 
 void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
@@ -911,8 +993,11 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
         worldIndex, imageSet, orient);
 
     if (sprite) {
-        // Draw sprite centered at ship position
-        SDL_Rect dest = {x - 16, y - 16, 32, 32};  // Assuming 32x32 sprites
+        // Draw at native texture size for pixel-perfect crispness
+        int tw = 0, th = 0;
+        SDL_QueryTexture(sprite, nullptr, nullptr, &tw, &th);
+        if (tw <= 0 || th <= 0) { tw = 32; th = 32; }
+        SDL_Rect dest = {x - tw/2, y - th/2, tw, th};
         SDL_RenderCopy(graphics->GetRenderer(), sprite, nullptr, &dest);
     }
 
@@ -936,17 +1021,11 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
         }
     }
 
-    // Draw velocity vector if enabled
-    if (useVelVectors) {
-        const CTraj& vel = ship->GetVelocity();
-        CCoord velCoord = vel.ConvertToCoord();
-        int vx = x + static_cast<int>(velCoord.fX * 2);
-        int vy = y + static_cast<int>(velCoord.fY * 2);
-        graphics->DrawLine(x, y, vx, vy, Color(0, 255, 0));
-    }
+    // Velocity vector for ship
+    DrawVelocityVector(ship);
 
     // Draw name centered below ship
-    if (drawnames) {
+    if (drawnames == 1) {
         const char* shipName = ship->GetName();
         if (shipName && strlen(shipName) > 0) {
             Color color = GetTeamColor(teamNum);
@@ -954,6 +1033,23 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
             graphics->GetTextSize(shipName, textWidth, textHeight, true);
             graphics->DrawText(shipName, x - textWidth/2, y + 20, color, true, true);
         }
+    } else if (drawnames == 2) {
+        // Numeric label: ship_number:shield:fuel:cargo (no decimals)
+        int shipNum = 0;
+        if (ship->GetTeam()) {
+            CTeam* team = ship->GetTeam();
+            for (UINT i = 0; i < team->GetShipCount(); i++) {
+                if (team->GetShip(i) == ship) { shipNum = static_cast<int>(i); break; }
+            }
+        }
+        double sh = ship->GetAmount(S_SHIELD);
+        double fu = ship->GetAmount(S_FUEL);
+        double ca = ship->GetAmount(S_CARGO);
+        char label[64];
+        snprintf(label, sizeof(label), "%d:%.0f:%.0f:%.0f", shipNum, sh, fu, ca);
+        Color color = GetTeamColor(teamNum);
+        int tw=0, th=0; graphics->GetTextSize(label, tw, th, true);
+        graphics->DrawText(label, x - tw/2, y + 20, color, true, true);
     }
 
     // Draw laser beam
@@ -976,7 +1072,11 @@ void ObserverSDL::DrawStationSprite(CStation* station, int teamNum) {
         worldIndex, frame);
 
     if (sprite) {
-        SDL_Rect dest = {x - 24, y - 24, 48, 48};  // Stations are bigger
+        // Draw at native texture size
+        int tw = 0, th = 0;
+        SDL_QueryTexture(sprite, nullptr, nullptr, &tw, &th);
+        if (tw <= 0 || th <= 0) { tw = 48; th = 48; }
+        SDL_Rect dest = {x - tw/2, y - th/2, tw, th};
         SDL_RenderCopy(graphics->GetRenderer(), sprite, nullptr, &dest);
     }
 
@@ -1002,15 +1102,19 @@ void ObserverSDL::DrawStationSprite(CStation* station, int teamNum) {
 
     if (drawnames) {
         Color color = GetTeamColor(teamNum);
-        const char* stationName = station->GetName();
-        if (stationName && strlen(stationName) > 0) {
-            // Center the text below the station
+        if (drawnames == 1) {
+            const char* stationName = station->GetName();
+            const char* text = (stationName && strlen(stationName) > 0) ? stationName : "Station";
             int textWidth = 0, textHeight = 0;
-            graphics->GetTextSize(stationName, textWidth, textHeight, true);
-            graphics->DrawText(stationName, x - textWidth/2, y + 30, color, true);
-        } else {
-            // Center "Station" below the station
-            graphics->DrawText("Station", x - 24, y + 30, color, true);
+            graphics->GetTextSize(text, textWidth, textHeight, true);
+            graphics->DrawText(text, x - textWidth/2, y + 30, color, true);
+        } else if (drawnames == 2) {
+            int teamId = station->GetTeam() ? static_cast<int>(station->GetTeam()->GetWorldIndex()) : 0;
+            double score = station->GetVinylStore();
+            char label[64];
+            snprintf(label, sizeof(label), "%d: %.3f", teamId, score);
+            int tw=0, th=0; graphics->GetTextSize(label, tw, th, true);
+            graphics->DrawText(label, x - tw/2, y + 30, color, true, true);
         }
     }
 }
@@ -1030,12 +1134,52 @@ void ObserverSDL::DrawAsteroidSprite(CAsteroid* asteroid) {
         isVinyl, asteroid->GetMass(), frame);
 
     if (sprite) {
-        int size = (asteroid->GetMass() > 200.0) ? 32 : 24;
-        SDL_Rect dest = {x - size/2, y - size/2, size, size};
+        // Draw at native texture size to avoid any scaling blur
+        int tw = 0, th = 0;
+        SDL_QueryTexture(sprite, nullptr, nullptr, &tw, &th);
+        if (tw <= 0 || th <= 0) {
+            // Fallback: infer by mass if query fails
+            int size = (asteroid->GetMass() > 200.0) ? 32 : 24;
+            tw = th = size;
+        }
+        SDL_Rect dest = {x - tw/2, y - th/2, tw, th};
         SDL_RenderCopy(graphics->GetRenderer(), sprite, nullptr, &dest);
     }
 
     // Never show asteroid names in sprite mode
+    // Velocity vector for asteroid (sprite mode)
+    DrawVelocityVector(asteroid);
+}
+
+void ObserverSDL::DrawVelocityVector(CThing* thing) {
+    if (!useVelVectors || !thing) return;
+
+    const CTraj& vel = thing->GetVelocity();
+    double speed = vel.rho;
+    if (speed <= 0.0) return;
+    // Clamp speed to world max (legacy behaviour)
+    if (speed > maxspeed) speed = maxspeed;
+
+    double theta = vel.theta; // direction of motion
+    double rad = thing->GetSize();
+    const CCoord& pos = thing->GetPos();
+
+    // Compute world-space endpoints from leading edge along velocity vector
+    double ux = cos(theta);
+    double uy = sin(theta);
+    double srcX = pos.fX + rad * ux;
+    double srcY = pos.fY + rad * uy;
+    double dstX = pos.fX + (rad + speed) * ux;
+    double dstY = pos.fY + (rad + speed) * uy;
+
+    // Convert to screen pixels
+    int x1 = WorldToScreenX(srcX);
+    int y1 = WorldToScreenY(srcY);
+    int x2 = WorldToScreenX(dstX);
+    int y2 = WorldToScreenY(dstY);
+
+    // Draw in white, 1px stroke
+    graphics->DrawLine(x1, y1, x2, y2, Color(255, 255, 255));
 }
 
 void ObserverSDL::Run() {

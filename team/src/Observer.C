@@ -68,9 +68,11 @@ Observer::Observer(char* regFileName, int gfxFlag)
   XSelectInput(display, win, ExposureMask | PointerMotionMask | 
 	       KeyPressMask | ButtonPressMask | ButtonReleaseMask);
 
-  // Load the fonts
-  char fontname[]="-*-fixed-*-*-*-*-*-120-*-*-*-*-*-*";
-  char smfnt[]="-*-fixed-*-*-*-*-*-100-*-*-*-*-*-*";
+  // Load bold misc-fixed fonts to match original look precisely
+  // XLFD for 7x13 bold at 75 DPI: -misc-fixed-bold-r-normal--13-120-75-75-c-70-iso8859-1
+  char fontname[]="-misc-fixed-bold-r-normal--13-120-75-75-c-70-iso8859-1";
+  // Smaller bold variant (10pt at 75 DPI)
+  char smfnt[]="-misc-fixed-bold-r-normal--10-100-75-75-c-60-iso8859-1";
 
   smallfont = XLoadQueryFont(display,smfnt);
   if (smallfont==NULL) smallfont = XLoadQueryFont(display,"fixed");
@@ -325,16 +327,16 @@ int Observer::plotWorld()
 
 	memset(thname,0, 128);
 	if (aThing->GetKind()!=ASTEROID) {
-  	  if (drawnames==1) sprintf(thname,"%s",aThing->GetName());
+  	  if (drawnames==1) snprintf(thname, sizeof(thname), "%s",aThing->GetName());
 	  else if (drawnames==2) {
 	     if (aThing->GetKind()==SHIP) 
-	     sprintf (thname,"%d:%.0f:%.0f:%.0f",
+	     snprintf (thname, sizeof(thname), "%d:%.0f:%.0f:%.0f",
                       ((CShip*)aThing)->GetShipNumber(),
                       ((CShip*)aThing)->GetAmount(S_SHIELD),
-                      ((CShip*)aThing)->GetAmount(S_FUEL), 
+                      ((CShip*)aThing)->GetAmount(S_FUEL),
                       ((CShip*)aThing)->GetAmount(S_CARGO));  
 	     else if (aThing->GetKind()==STATION)
-	             sprintf (thname,"%d: %.3f",
+	             snprintf (thname, sizeof(thname), "%d: %.3f",
 		            aThing->GetTeam()->GetTeamNumber(),
 			    aThing->GetTeam()->GetScore());
 	     }
@@ -596,7 +598,7 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas)
 
   // Display the team name, score, and wall-clock
   XSetForeground(display, gc, tmcol);
-  sprintf(bldstr,"%2.2d: %-45.45s",
+  snprintf(bldstr, sizeof(bldstr), "%2.2d: %-45.45s",
 	  pTeam->GetTeamNumber(), pTeam->GetName());
   ypos+=font_height;
   XDrawString(display,tCanvas,gc, 
@@ -604,15 +606,15 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas)
 	      bldstr,strlen(bldstr));
 
   XSetForeground(display,gc, gray);
-  sprintf (bldstr,"Time: %.2f",pTeam->GetWallClock());
+  snprintf (bldstr, sizeof(bldstr), "Time: %.2f",pTeam->GetWallClock());
   ypos+=font_height;
   XDrawString(display,tCanvas,gc, 
 	      5,ypos,
 	      bldstr,strlen(bldstr));
 
   XSetForeground(display, gc, tmcol);
-  sprintf(bldstr,"%14s: %.3f",
-	  pTeam->GetStation()->GetName(), 
+  snprintf(bldstr, sizeof(bldstr), "%14s: %.3f",
+	  pTeam->GetStation()->GetName(),
 	  pTeam->GetScore());
   XDrawString(display,tCanvas,gc, 
 	      5+font_width*15,ypos,
@@ -639,7 +641,7 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas)
 
     // Print ship's name
     XSetForeground (display,gc, tmcol);
-    sprintf (bldstr,pSh->GetName());
+    snprintf (bldstr, sizeof(bldstr), "%s", pSh->GetName());
     XDrawString (display,tCanvas,gc,
 		 xpos,ypos,
 		 bldstr, strlen(bldstr));
@@ -649,7 +651,7 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas)
     dAmt = pSh->GetAmount(S_SHIELD);
     color = AlertStatus(dAmt,25.0);  // What waste...
     XSetForeground (display,gc,color);
-    sprintf (bldstr," %.1f",dAmt);
+    snprintf (bldstr, sizeof(bldstr), " %.1f",dAmt);
     XDrawString (display,tCanvas,gc,
 		 xpos,ypos,
 		 bldstr, strlen(bldstr));
@@ -660,8 +662,8 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas)
     dCap = pSh->GetCapacity(S_FUEL);
     color = AlertStatus(dAmt,dCap);
     XSetForeground (display,gc,color);
-    sprintf (bldstr," %.1f/%.1f",dAmt,dCap);
-    if (pSh->IsDocked()) sprintf(bldstr," Docked");
+    snprintf (bldstr, sizeof(bldstr), " %.1f/%.1f",dAmt,dCap);
+    if (pSh->IsDocked()) snprintf(bldstr, sizeof(bldstr), " Docked");
     XDrawString (display,tCanvas,gc,
 		 xpos,ypos,
 		 bldstr, strlen(bldstr));
@@ -671,7 +673,7 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas)
     dAmt = pSh->GetAmount(S_CARGO);
     dCap = pSh->GetCapacity(S_CARGO);
     XSetForeground (display,gc,white);
-    sprintf (bldstr," %.1f/%.1f",dAmt,dCap);
+    snprintf (bldstr, sizeof(bldstr), " %.1f/%.1f",dAmt,dCap);
     XDrawString (display,tCanvas,gc,
 		 xpos,ypos,
 		 bldstr, strlen(bldstr));
@@ -760,7 +762,7 @@ void Observer::printGameTime( double game_time )
 {
     char str[256];
     
-    sprintf(str, "               Game Time: %.1f", game_time );
+    snprintf(str, sizeof(str), "               Game Time: %.1f", game_time );
     XSetForeground(display, gc, white );
     XDrawString(display,timeCanvas,gc,
 		0, (int)(font_info->ascent * 1.5),

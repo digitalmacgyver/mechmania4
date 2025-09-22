@@ -201,6 +201,18 @@ int CClient::SendAck ()
   return pmyNet->SendPkt(1,n_oback,strlen(n_oback));
 }
 
+int CClient::SendPause()
+{
+  if (IsOpen()==0) return 0;
+  return pmyNet->SendPkt(1, n_pause, strlen(n_pause));
+}
+
+int CClient::SendResume()
+{
+  if (IsOpen()==0) return 0;
+  return pmyNet->SendPkt(1, n_resume, strlen(n_resume));
+}
+
 void CClient::DoTurn()
 {
   static char buf[4096];  // static to save on realloc

@@ -19,6 +19,9 @@ const char n_oback[]="ObReady!";  // Observer acknowledge string
 const char n_servconack[]="Conn MM4 Serv";  // Connect ack
 const char n_obcon[] = "Observer Conned";  // Connect observer
 const char n_teamcon[]="Team  Connected";  // Connect team, same length as obcon
+// Observer control messages
+const char n_pause[] = "ObPause!";   // Observer-initiated pause
+const char n_resume[] = "ObResume!"; // Observer-initiated resume
 
 class CNetwork
 {

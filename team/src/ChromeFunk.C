@@ -205,9 +205,9 @@ UINT Gatherer::SelectTarget()
 
   if (pShip->GetAmount(S_CARGO)>0.0) {    // We have cargo, let's go home
     if (pTarget!=pmyTeam->GetStation()) {
-      sprintf (shipmsg,"%s gets %.1f tons of vinyl and goes home\n",
+      snprintf (shipmsg, sizeof(shipmsg), "%s gets %.1f tons of vinyl and goes home\n",
 	       pShip->GetName(), pShip->GetAmount(S_CARGO));
-      strcat(pmyTeam->MsgText,shipmsg);
+      strncat(pmyTeam->MsgText, shipmsg, maxTextLen - strlen(pmyTeam->MsgText) - 1);
     }
     return pmyTeam->GetStation()->GetWorldIndex();
   }
@@ -291,9 +291,9 @@ void Gatherer::AvoidCollide()
       // This can be done much better than it's being done here,
       //  but this is merely a sample client
       pShip->SetOrder(O_THRUST,-15.0);  // Accelerate 
-      sprintf (shipmsg,"%s brakes for %s\n",
+      snprintf (shipmsg, sizeof(shipmsg), "%s brakes for %s\n",
 	       pShip->GetName(),pTh->GetName());
-      strcat(pmyTeam->MsgText,shipmsg);
+      strncat(pmyTeam->MsgText, shipmsg, maxTextLen - strlen(pmyTeam->MsgText) - 1);
       return;  // We already know we need to move.
     }
     else {   // No time to get out of the way

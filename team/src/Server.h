@@ -35,6 +35,11 @@ class CServer
 
   double Simulation();      // return game time
 
+  // Pause control
+  void SetPaused(bool p) { bPaused = p; }
+  bool IsPaused() const { return bPaused; }
+  void ResumeSync();
+
  protected:
   UINT nTms;     // # teams
   UINT *auTCons;  // Array of team connection #'s
@@ -48,6 +53,8 @@ class CServer
   CServerNet *pmyNet;
   CWorld *pmyWorld;
   CTeam **aTms;
+
+  bool bPaused = false;
 };
 
 #endif

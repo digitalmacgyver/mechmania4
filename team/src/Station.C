@@ -18,11 +18,11 @@ CStation::CStation (CCoord StPos, CTeam* pTeam)
   pmyTeam = pTeam;
 
   if (pmyTeam!=NULL) {
-    sprintf (Name,"Station #%d",pmyTeam->GetTeamNumber());
+    snprintf(Name, maxnamelen, "Station #%d", pmyTeam->GetTeamNumber());
     uImgSet=pTeam->uImgSet;
   }
   else {
-    sprintf(Name,"Station");
+    snprintf(Name, maxnamelen, "Station");
     uImgSet=0;
   }
 

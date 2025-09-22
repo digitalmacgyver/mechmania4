@@ -27,6 +27,7 @@ private:
     bool useSpriteMode;
     bool useVelVectors;
     bool isPaused;
+    bool showStarfield;
     int drawnames;
     int attractor;
 
@@ -40,10 +41,13 @@ private:
     int msgPosX, msgPosY;
     int timeX, timeY, timeWidth, timeHeight;
 
-    // Message display
-    static const int MSG_ROWS = 20;
-    static const int MSG_COLS = 80;
-    std::vector<std::string> messageBuffer;
+    // Message display (unbounded history; render last lines that fit)
+    struct Message {
+        std::string text;
+        int worldIndex;  // -1 for system messages, team world index for team messages
+        int seconds;     // game time (whole seconds) when captured
+    };
+    std::vector<Message> messageBuffer;
 
     // Drawing helpers
     void DrawSpace();
@@ -61,6 +65,7 @@ private:
     void DrawStarfield();
     void DrawHelpFooter();
     void DrawLogo();
+    void DrawVelocityVector(CThing* thing);
 
     // Coordinate transformation
     int WorldToScreenX(double wx);
@@ -95,7 +100,7 @@ public:
     bool IsPaused() const { return isPaused; }
 
     // Message system
-    void AddMessage(const std::string& msg);
+    void AddMessage(const std::string& msg, int worldIndex = -1);
     void ClearMessages();
 
     // Main loop

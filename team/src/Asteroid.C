@@ -31,9 +31,9 @@ CAsteroid::CAsteroid (double dm, AsteroidKind mat) : CThing(0.0,0.0)
   if (material==URANIUM) uImgSet+=3;
 
   switch (material) {
-    case VINYL: sprintf(Name,"Vinyl %.1f",mass);  break;
-    case URANIUM: sprintf(Name,"Urnm %.1f",mass); break;
-    default: sprintf (Name,"Astrd %.1f",mass);
+    case VINYL: snprintf(Name, maxnamelen, "Vinyl %.1f",mass);  break;
+    case URANIUM: snprintf(Name, maxnamelen, "Urnm %.1f",mass); break;
+    default: snprintf (Name, maxnamelen, "Astrd %.1f",mass);
   }
   
   Pos=CCoord(0,0);

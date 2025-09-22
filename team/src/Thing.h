@@ -22,7 +22,7 @@ const double minmass=3.0,
   NO_DAMAGE = -123.45;
 
 #ifndef maxnamelen
-#define maxnamelen 16  // Increased to accommodate longer names
+#define maxnamelen 14  // Thing names buffer: 14 bytes (13 characters + NUL)
 #endif
 
 class CWorld;

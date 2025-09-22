@@ -82,7 +82,7 @@ main()
   for (unTm=0; unTm<2; unTm++) {
     if (aTms[unTm]->GetScore() > maxvin) {
       maxvin=aTms[unTm]->GetScore();
-      sprintf(wintm,aTms[unTm]->GetName());
+      snprintf(wintm, sizeof(wintm), "%s", aTms[unTm]->GetName());
     }
     delete aTms[unTm];
     delete aTestTms[unTm];

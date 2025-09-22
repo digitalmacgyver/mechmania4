@@ -74,6 +74,7 @@ int main(int argc, char *argv[])
     bool running = true;
     Uint32 lastReconnectAttempt = 0;
 
+    bool prevPaused = false;
     while (running) {
         Uint32 currentTime = SDL_GetTicks();
 
@@ -125,6 +126,15 @@ int main(int argc, char *argv[])
                 if (world) {
                     myObs.SetWorld(world);
                 }
+            }
+        }
+
+        // Send pause/resume control if toggled
+        if (connected && myClient) {
+            bool nowPaused = myObs.IsPaused();
+            if (nowPaused != prevPaused) {
+                if (nowPaused) myClient->SendPause(); else myClient->SendResume();
+                prevPaused = nowPaused;
             }
         }
 

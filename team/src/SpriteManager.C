@@ -204,22 +204,22 @@ SDL_Texture* SpriteManager::GetShipSprite(int team, int imageSet, double angle) 
 }
 
 SDL_Texture* SpriteManager::GetAsteroidSprite(bool isVinyl, double mass, int frame) {
-    // Determine size based on mass thresholds
-    // Large > 300, Medium 150-300, Small < 150
+    // Determine size based on original X11 thresholds (tons):
+    // Large: mass >= 40 (32x32), Medium: 10 <= mass < 40 (24x24), Small: 3 <= mass < 10 (16x16)
     SpriteType type;
 
     if (isVinyl) {
-        if (mass > 300.0) {
+        if (mass >= 40.0) {
             type = SPRITE_VINYL_LARGE;
-        } else if (mass > 150.0) {
+        } else if (mass >= 10.0) {
             type = SPRITE_VINYL_MEDIUM;
         } else {
             type = SPRITE_VINYL_SMALL;
         }
     } else {
-        if (mass > 300.0) {
+        if (mass >= 40.0) {
             type = SPRITE_URANIUM_LARGE;
-        } else if (mass > 150.0) {
+        } else if (mass >= 10.0) {
             type = SPRITE_URANIUM_MEDIUM;
         } else {
             type = SPRITE_URANIUM_SMALL;

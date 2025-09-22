@@ -25,6 +25,8 @@ class CClient
   UINT ReceiveWorld();
 
   int SendAck();  // Send Observer acknowledge
+  int SendPause();   // Send pause control
+  int SendResume();  // Send resume control
   void DoTurn();   // Run Team::Turn() and send orders to server
   int IsOpen();   // Returns pmyNet->IsOpen(1);
 

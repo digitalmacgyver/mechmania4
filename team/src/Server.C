@@ -97,7 +97,7 @@ UINT CServer::ConnectClients()
     printf ("Establishing connection #%d\n",conn);
 
     // Tell them they've connected
-    sprintf (outbuf,n_servconack);
+    snprintf (outbuf, sizeof(outbuf), n_servconack);
     pmyNet->SendPkt(conn,outbuf,strlen(outbuf));
   }
 
@@ -114,14 +114,14 @@ UINT CServer::ConnectClients()
     totcl++;   // It responded, whoever the hell it is    
     if (memcmp(pmyNet->GetQueue(conn),n_obcon,slen)==0) {
       ObsConn=conn;   // That's our observer
-      sprintf (outbuf,"X");  // Dummy character, eases clientside parsing
+      snprintf (outbuf, sizeof(outbuf), "X");  // Dummy character, eases clientside parsing
       pmyNet->SendPkt(conn, outbuf,1);
     }
 
     if (memcmp(pmyNet->GetQueue(conn),n_teamcon,slen)==0) {
       if ((UINT)tmindex>=GetNumTeams()) continue;  // Who are all these people!?
       auTCons[tmindex]=conn;
-      sprintf (outbuf,"%c",tmindex);
+      snprintf (outbuf, sizeof(outbuf), "%c",tmindex);
       pmyNet->SendPkt(conn, outbuf,1);
       tmindex++;
     }
@@ -172,6 +172,10 @@ UINT CServer::SendWorld(int conn)
 
 void CServer::BroadcastWorld()
 {
+  if (bPaused) {
+    // While paused, avoid waking teams; observer gets updates elsewhere
+    return;
+  }
   for (UINT conn=1; conn<=GetNumTeams()+1; conn++) {
     if (conn==ObsConn) continue;  // Observer gets world elsewhere
     if (abOpen[conn-1]!=true) continue;  // This connection closed, next!
@@ -187,13 +191,31 @@ void CServer::BroadcastWorld()
   }
 }
 
+void CServer::ResumeSync()
+{
+  // Reset team timing
+  double now = pmyWorld->GetTimeStamp();
+  for (UINT tm=0; tm<GetNumTeams(); tm++) {
+    pmyWorld->atstamp[tm] = now;
+  }
+  // Clear per-step flags without advancing time
+  pmyWorld->PhysicsModel(0.0);
+  // Push a fresh world snapshot to all teams even if paused was engaged
+  for (UINT conn=1; conn<=GetNumTeams()+1; conn++) {
+    if (conn==ObsConn) continue;
+    if (abOpen[conn-1]!=true) continue;
+    if (pmyNet->IsOpen(conn)==0) continue;
+    SendWorld(conn);
+  }
+}
+
 void CServer::WaitForObserver()
 {
   // Don't wait for a disconnected server
   if (abOpen[ObsConn-1]==false) return;
 
   UINT len;
-  char *pq = pmyNet->GetQueue(ObsConn);
+  char *pq;
 
   while (true) {
     while ((len=pmyNet->GetQueueLength(ObsConn))
@@ -206,6 +228,25 @@ void CServer::WaitForObserver()
 	printf ("Observer disconnected\n");
 	return;
       }
+    }
+
+    // Refresh pointer to queue for current contents
+    pq = pmyNet->GetQueue(ObsConn);
+
+    // Check for control commands from observer
+    if (len >= (int)strlen(n_pause) && memcmp(pq, n_pause, strlen(n_pause))==0) {
+      SetPaused(true);
+      pmyNet->FlushQueue(ObsConn);
+      printf("Observer requested PAUSE\n");
+      continue; // Keep waiting for ack
+    }
+    if (len >= (int)strlen(n_resume) && memcmp(pq, n_resume, strlen(n_resume))==0) {
+      SetPaused(false);
+      pmyNet->FlushQueue(ObsConn);
+      printf("Observer requested RESUME\n");
+      // Perform resume-safe sync: reset team timers, settle flags, and push snapshot
+      ResumeSync();
+      continue; // Keep waiting for ack
     }
 
     if (memcmp(pq,n_oback,strlen(n_oback))==0)
@@ -261,6 +302,12 @@ void CServer::MeetTeams()
 
 void CServer::ReceiveTeamOrders()
 {
+  if (bPaused) {
+    // While paused, still service observer traffic and refresh world view
+    WaitForObserver();
+    SendWorld(ObsConn);
+    return;
+  }
   int conn, len;
   UINT tn, totresp=0;
   char *buf;
@@ -340,6 +387,12 @@ void CServer::ReceiveTeamOrders()
 
 double CServer::Simulation()
 {
+  if (bPaused) {
+    // Don't advance physics or lasers, just keep observer connection alive
+    WaitForObserver();
+    SendWorld(ObsConn);
+    return GetTime();
+  }
   double t, maxt=1.0, tstep=0.2;
   UINT tm;
   for (t=0.0; t<maxt; t+=tstep) {

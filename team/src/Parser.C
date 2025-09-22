@@ -48,8 +48,8 @@ void CParser::SetDefaults()
   memset(hostname, 0, 128);
   memset(gfxreg, 0, 128);
 
-  sprintf(hostname,"localhost");
-  sprintf(gfxreg,"graphics.reg");
+  snprintf(hostname, sizeof(hostname), "localhost");
+  snprintf(gfxreg, sizeof(gfxreg), "graphics.reg");
   port=2323;
   numteams=2;
   gfxflag=0;
