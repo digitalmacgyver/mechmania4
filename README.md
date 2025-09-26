@@ -23,7 +23,6 @@ For detailed information, consult the following documentation:
 - **[Build Instructions](docs/README_BUILD.md)** - Detailed build instructions
 - **[Team API](docs/TEAM_API.md)** - API for developing teams
 - **[Modernization Notes](docs/README_MODERNIZED.md)** - Details about code updates
-- **[Agents Guide](AGENTS.md)** - Information about AI agents
 
 ### Docker Setup
 

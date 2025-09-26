@@ -219,7 +219,7 @@ CAsteroid* asteroid = (CAsteroid*)thing;
 // Material type
 AsteroidKind material = asteroid->GetMaterial();
 if (material == VINYL) {
-    // Yellow - goes in cargo hold
+    // Purple - goes in cargo hold
 } else if (material == URANIUM) {
     // Green - goes in fuel tank
 }
