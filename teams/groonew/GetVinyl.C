@@ -1,7 +1,7 @@
 #include "Asteroid.h"
 #include "FuelTraj.h"
 #include "GetVinyl.h"
-#include "Groogroo.h"
+#include "Groonew.h"
 #include "MagicBag.h"
 #include "Ship.h"
 #include "Station.h"
@@ -20,7 +20,7 @@ void GetVinyl::Decide() {
   CWorld *pmyWorld = pmyTeam->GetWorld();
 
   UINT shipnum = pShip->GetShipNumber();
-  MagicBag *mbp = ((Groogroo *)pmyTeam)->mb;
+  MagicBag *mbp = ((Groonew *)pmyTeam)->mb;
 
   Entry *e;
   Entry *best_e = NULL;
@@ -145,20 +145,20 @@ void GetVinyl::Decide() {
   if (!lock_orders) {
     AsteroidKind prefered_asteroid;
     if (!(((cur_fuel <= 5.0) &&
-           ((((Groogroo *)pmyTeam)->uranium_left > 0.0))) ||
-          ((((Groogroo *)pmyTeam)->vinyl_left < 0.01) &&
-           (((Groogroo *)pmyTeam)->uranium_left > 0.0)))) {
+           ((((Groonew *)pmyTeam)->uranium_left > 0.0))) ||
+          ((((Groonew *)pmyTeam)->vinyl_left < 0.01) &&
+           (((Groonew *)pmyTeam)->uranium_left > 0.0)))) {
       prefered_asteroid = VINYL;
     } else {
       prefered_asteroid = URANIUM;
     }
 
     if ((pShip->GetAmount(S_CARGO) > 13.01) ||
-        ((((Groogroo *)pmyTeam)->vinyl_left < 0.01) &&
+        ((((Groonew *)pmyTeam)->vinyl_left < 0.01) &&
          (pShip->GetAmount(S_CARGO) > 0.01))) {
       // make the return to station better
       for (UINT j = 0; j < 50; j++) {
-        FuelTraj ft = ((Groogroo *)pmyTeam)
+        FuelTraj ft = ((Groonew *)pmyTeam)
                           ->determine_orders(pmyTeam->GetStation(), j, pShip);
         if (ft.fuel_used >= 0.0) {
           pShip->SetOrder(ft.order_kind, ft.order_mag);

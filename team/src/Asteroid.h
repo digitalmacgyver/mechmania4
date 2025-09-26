@@ -11,14 +11,11 @@
 
 #include "Thing.h"
 
-enum AsteroidKind {
-  GENAST, VINYL, URANIUM
-};
+enum AsteroidKind { GENAST, VINYL, URANIUM };
 
-class CAsteroid : public CThing
-{
+class CAsteroid : public CThing {
  public:
-  CAsteroid(double dm=40.0, AsteroidKind mat=GENAST);
+  CAsteroid(double dm = 40.0, AsteroidKind mat = GENAST);
   virtual ~CAsteroid();
 
   AsteroidKind GetMaterial() const;
@@ -26,15 +23,15 @@ class CAsteroid : public CThing
 
   // Serialization routines
   unsigned GetSerialSize() const;
-  unsigned SerialPack (char *buf, unsigned buflen) const;
-  unsigned SerialUnpack (char *buf, unsigned buflen);
+  unsigned SerialPack(char* buf, unsigned buflen) const;
+  unsigned SerialUnpack(char* buf, unsigned buflen);
 
  protected:
   AsteroidKind material;
-  CThing* pThEat;   // Ptr to ship which captures asteroid, initially NULL
+  CThing* pThEat;  // Ptr to ship which captures asteroid, initially NULL
 
-  virtual CAsteroid* MakeChildAsteroid(double dm=40.0);
-  virtual void HandleCollision(CThing* pOthThing, CWorld *pWorld=NULL);
+  virtual CAsteroid* MakeChildAsteroid(double dm = 40.0);
+  virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
 };
 
-#endif // _ASTEROID_H_KEFLKJSEHFLKJWEHFKWEHFWEHFLJHEF
+#endif  // _ASTEROID_H_KEFLKJSEHFLKJWEHFKWEHFWEHFLJHEF

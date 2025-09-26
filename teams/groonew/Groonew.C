@@ -1,5 +1,5 @@
-/* Groogroo Eat Groogroo
- * "Groogroo don't eat Groogroo; Groogroo do."
+/* Groonew Eat Groonew
+ * "Groonew don't eat Groonew; Groonew do."
  * MechMania IV: The Vinyl Frontier
  * Team 13: Zach, Arun, Matt 10/3/1998
  * based on Sample file by Misha Voloshin 9/26/98
@@ -7,19 +7,19 @@
 
 #include "Asteroid.h"
 #include "GetVinyl.h"
-#include "Groogroo.h"
+#include "Groonew.h"
 
 // Factory function - tells the game to use our team class
-CTeam* CTeam::CreateTeam() { return new Groogroo; }
+CTeam* CTeam::CreateTeam() { return new Groonew; }
 
 //////////////////////////////////////////
-// GrooGroo class implementation
+// Groonew class implementation
 
-Groogroo::Groogroo() {
+Groonew::Groonew() {
   // Constructor - no initialization needed here
 }
 
-Groogroo::~Groogroo() {
+Groonew::~Groonew() {
   // Destructor - clean up ship AI brains to prevent memory leaks
   CShip* pSh;
   CBrain* pBr;
@@ -38,13 +38,13 @@ Groogroo::~Groogroo() {
   }
 }
 
-void Groogroo::Init() {
+void Groonew::Init() {
   // Initialize random number generator for any random decisions
   srand(time(NULL));
 
   // Set team identity
   SetTeamNumber(13);                  // Lucky 13!
-  SetName("GrooGroo eat Groogroo!");  // Team motto
+  SetName("Groonew eat Groonew!");  // Team motto
   GetStation()->SetName("Tree!");     // Base station name
 
   // Biological/symbiotic naming theme for ships
@@ -63,12 +63,12 @@ void Groogroo::Init() {
   }
 }
 
-void Groogroo::Turn() {
+void Groonew::Turn() {
   CShip* pSh;
 
   // PHASE 1: Calculate optimal paths to all objects for all ships
   // Creates new MagicBag and fills it with precalculated trajectories
-  PopulateMagicBag();  // Allocates new Groogroo::mb
+  PopulateMagicBag();  // Allocates new Groonew::mb
 
   // PHASE 2: Each ship's AI uses the MagicBag to make decisions
   for (UINT i = 0; i < GetShipCount(); i++) {
@@ -90,7 +90,7 @@ void Groogroo::Turn() {
   delete mb;
 }
 
-void Groogroo::PopulateMagicBag() {
+void Groonew::PopulateMagicBag() {
   // Create MagicBag: 4 ships × 100 potential targets each
   mb = new MagicBag(4, 100);
   CWorld* worldp = GetWorld();
@@ -162,7 +162,7 @@ void Groogroo::PopulateMagicBag() {
   }
 }
 
-FuelTraj Groogroo::determine_orders(CThing* thing, double time, CShip* ship) {
+FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
   FuelTraj fj;  // Will contain the optimal order and fuel cost
 
   // Calculate where target will be in 'time' seconds
@@ -216,7 +216,7 @@ FuelTraj Groogroo::determine_orders(CThing* thing, double time, CShip* ship) {
   return fj;
 }
 
-double Groogroo::determine_probable_fuel_cost(CThing* thing, double time,
+double Groonew::determine_probable_fuel_cost(CThing* thing, double time,
                                               CShip* ship) {
   // TODO: Should calculate actual fuel cost based on:
   // - Distance to target
@@ -227,7 +227,7 @@ double Groogroo::determine_probable_fuel_cost(CThing* thing, double time,
   return (double)5.0;
 }
 
-Collision Groogroo::detect_collisions_on_path(CThing* thing, double time,
+Collision Groonew::detect_collisions_on_path(CThing* thing, double time,
                                               CShip* ship) {
   Collision collision;
 

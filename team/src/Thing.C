@@ -2,54 +2,49 @@
  * Definition of class CThing
  * For use with MechMania IV
  * 4/29/98 by Misha Voloshin
-*/ 
+ */
+
+#include <cmath>  // For sqrt()
 
 #include "Coord.h"
-#include "Traj.h"
-#include "Thing.h"
-#include "World.h"
 #include "ParserModern.h"
-#include <cmath>  // For sqrt()
 #include "Team.h"
+#include "Thing.h"
+#include "Traj.h"
+#include "World.h"
 
 /////////////////////////////////////////////
 // Construction/destruction
 
-CThing::CThing (double fx0, double fy0)
-{
-  TKind=GENTHING;
-  for (UINT i=0; i<maxnamelen; i++)
-     Name[i]=0;  // Initialize Name
+CThing::CThing(double fx0, double fy0) {
+  TKind = GENTHING;
+  for (UINT i = 0; i < maxnamelen; i++) {
+    Name[i] = 0;  // Initialize Name
+  }
 
   snprintf(Name, maxnamelen, "Generic Thing");
-  ulIDCookie=rand();
-  DeadFlag=false;
-  bIsColliding=NO_DAMAGE;
-  bIsGettingShot=NO_DAMAGE;
+  ulIDCookie = rand();
+  DeadFlag = false;
+  bIsColliding = NO_DAMAGE;
+  bIsGettingShot = NO_DAMAGE;
 
-  pmyTeam=NULL;
-  pmyWorld=NULL;
-  uWldIndex=(UINT)-1;
+  pmyTeam = NULL;
+  pmyWorld = NULL;
+  uWldIndex = (UINT)-1;
 
-  Pos=CCoord(fx0,fy0);
-  Vel=CTraj(0.0,0.0);
-  orient=0.0;
-  omega=0.0;
-  uImgSet=0;
+  Pos = CCoord(fx0, fy0);
+  Vel = CTraj(0.0, 0.0);
+  orient = 0.0;
+  omega = 0.0;
+  uImgSet = 0;
 
-  mass=1.0;
-  size=1.0;
+  mass = 1.0;
+  size = 1.0;
 }
 
-CThing::CThing (const CThing& OthThing)
-{
-  *this = OthThing;
-}
+CThing::CThing(const CThing& OthThing) { *this = OthThing; }
 
-CThing::~CThing()
-{
-
-}
+CThing::~CThing() {}
 
 ////////////////////////////////////////////////
 // Data Access functions
@@ -57,183 +52,170 @@ CThing::~CThing()
 /////
 // Outgoing data
 
-const CCoord& CThing::GetPos() const
-{
-  return Pos;
-}
+const CCoord& CThing::GetPos() const { return Pos; }
 
-ThingKind CThing::GetKind() const
-{
-  return TKind;
-}
+ThingKind CThing::GetKind() const { return TKind; }
 
-double CThing::GetMass() const
-{
-  return mass;
-}
+double CThing::GetMass() const { return mass; }
 
-double CThing::GetSize() const
-{
-  return size;
-}
+double CThing::GetSize() const { return size; }
 
-double CThing::GetOrient() const
-{
-  return orient;
-}
+double CThing::GetOrient() const { return orient; }
 
-const CTraj& CThing::GetVelocity() const
-{
-  return Vel;
-}
+const CTraj& CThing::GetVelocity() const { return Vel; }
 
-CTraj CThing::GetMomentum() const
-{
-  return Vel*GetMass();
-}
+CTraj CThing::GetMomentum() const { return Vel * GetMass(); }
 
-CTeam *CThing::GetTeam() const
-{
-  return pmyTeam;
-}
+CTeam* CThing::GetTeam() const { return pmyTeam; }
 
-bool CThing::IsAlive() const
-{
-  if (DeadFlag==true) return false;
+bool CThing::IsAlive() const {
+  if (DeadFlag == true) {
+    return false;
+  }
   return true;
 }
 
-UINT CThing::GetImage() const
-{
-  return uImgSet;
-}
+UINT CThing::GetImage() const { return uImgSet; }
 
-const char *CThing::GetName() const
-{
-  return Name;
-}
+const char* CThing::GetName() const { return Name; }
 
 ///////
 // Incoming data
 
-void CThing::SetName (const char *strsrc)
-{
-  bool bGotZero=false;
+void CThing::SetName(const char* strsrc) {
+  bool bGotZero = false;
 
-  for (UINT i=0; i<maxnamelen-1; i++) {
-    if (bGotZero==true) Name[i]=0;
-    Name[i]=strsrc[i];
-    if (Name[i]=='\n') Name[i]=' ';
-    if (Name[i]==0) bGotZero=true;
+  for (UINT i = 0; i < maxnamelen - 1; i++) {
+    if (bGotZero == true) {
+      Name[i] = 0;
+    }
+    Name[i] = strsrc[i];
+    if (Name[i] == '\n') {
+      Name[i] = ' ';
+    }
+    if (Name[i] == 0) {
+      bGotZero = true;
+    }
   }
 
-  Name[maxnamelen-1]=0;
+  Name[maxnamelen - 1] = 0;
 }
 
-void CThing::KillThing()
-{
-  DeadFlag=true;
-}
+void CThing::KillThing() { DeadFlag = true; }
 
 ////////////////////////////////////////////////
 // Explicit methods
 
-void CThing::Drift (double dt)
-{
-  bIsColliding=NO_DAMAGE;
-  bIsGettingShot=NO_DAMAGE;
-  if (Vel.rho > maxspeed) Vel.rho=maxspeed;
+void CThing::Drift(double dt) {
+  bIsColliding = NO_DAMAGE;
+  bIsGettingShot = NO_DAMAGE;
+  if (Vel.rho > maxspeed) {
+    Vel.rho = maxspeed;
+  }
 
-  Pos += (Vel*dt).ConvertToCoord();
-  orient += omega*dt;
+  Pos += (Vel * dt).ConvertToCoord();
+  orient += omega * dt;
 
-  if (orient<-PI || orient>PI) {
-    CTraj VTmp(1.0,orient);
+  if (orient < -PI || orient > PI) {
+    CTraj VTmp(1.0, orient);
     VTmp.Normalize();
     orient = VTmp.theta;
   }
 }
 
-bool CThing::Collide (CThing* pOthThing, CWorld *pWorld)
-{
-  if (pOthThing==NULL) {
-    printf ("Colliding with NULL!\n");
+bool CThing::Collide(CThing* pOthThing, CWorld* pWorld) {
+  if (pOthThing == NULL) {
+    printf("Colliding with NULL!\n");
     return false;  // How did THAT happen!!??
   }
-  if (*pOthThing==*this) return false;  // Can't collide with yourself!
+  if (*pOthThing == *this) {
+    return false;  // Can't collide with yourself!
+  }
 
-  if (Overlaps(*pOthThing)==false) return false;
+  if (Overlaps(*pOthThing) == false) {
+    return false;
+  }
 
   double dAng = GetPos().AngleTo(pOthThing->GetPos());
-  if (pOthThing->GetKind()==GENTHING) bIsGettingShot=dAng;
-  else bIsColliding=dAng;
+  if (pOthThing->GetKind() == GENTHING) {
+    bIsGettingShot = dAng;
+  } else {
+    bIsColliding = dAng;
+  }
 
-  HandleCollision(pOthThing,pWorld);
+  HandleCollision(pOthThing, pWorld);
   return true;
 }
 
-bool CThing::Overlaps (const CThing& OthThing) const
-{
-  if (OthThing==*this) return false;  // Overlap yourself? :P
+bool CThing::Overlaps(const CThing& OthThing) const {
+  if (OthThing == *this) {
+    return false;  // Overlap yourself? :P
+  }
 
-  double dtmprad,ddist;
-    dtmprad = size + OthThing.GetSize();
+  double dtmprad, ddist;
+  dtmprad = size + OthThing.GetSize();
   ddist = Pos.DistTo(OthThing.GetPos());
 
-  if (ddist<dtmprad) return true; 
+  if (ddist < dtmprad) {
+    return true;
+  }
   return false;
 }
 
 ////////////////////////////////////////////////
 // Helper functions
 
-CCoord CThing::PredictPosition (double dt) const
-{
+CCoord CThing::PredictPosition(double dt) const {
   CCoord PosRes = GetPos();
   CTraj TmpVel(GetVelocity());
-  if (TmpVel.rho==0.0) return PosRes;
+  if (TmpVel.rho == 0.0) {
+    return PosRes;
+  }
 
-  PosRes += (CCoord)(GetVelocity()*dt);
+  PosRes += (CCoord)(GetVelocity() * dt);
   return PosRes;
 }
 
-CTraj CThing::RelativeVelocity (const CThing& OthThing) const
-{
-  return (OthThing.Vel-Vel);
+CTraj CThing::RelativeVelocity(const CThing& OthThing) const {
+  return (OthThing.Vel - Vel);
 }
 
-CTraj CThing::RelativeMomentum (const CThing& OthThing) const
-{
-  return (RelativeVelocity(OthThing)*OthThing.GetMass());
+CTraj CThing::RelativeMomentum(const CThing& OthThing) const {
+  return (RelativeVelocity(OthThing) * OthThing.GetMass());
 }
 
-bool CThing::IsFacing (const CThing& OthThing) const
-{
-  if (*this==OthThing) return false;  // Won't laser-fire yourself
+bool CThing::IsFacing(const CThing& OthThing) const {
+  if (*this == OthThing) {
+    return false;  // Won't laser-fire yourself
+  }
 
   // Work in relative coordinate system where 'this' object is at origin (0,0)
-  // cOrg = this object's position in relative coords, cOth = other object's relative position
-  CCoord cOrg(0.0,0.0), cOth(OthThing.GetPos()-GetPos());
-  if (cOrg==cOth) return true;
+  // cOrg = this object's position in relative coords, cOth = other object's
+  // relative position
+  CCoord cOrg(0.0, 0.0), cOth(OthThing.GetPos() - GetPos());
+  if (cOrg == cOth) {
+    return true;
+  }
 
   double ddist = cOrg.DistTo(cOth);
 
-  CTraj tGo(1.0,GetOrient());
+  CTraj tGo(1.0, GetOrient());
   tGo = tGo * ddist;
 
   CCoord cGo(cOrg);
   cGo += tGo.ConvertToCoord();
 
   double dhit = cGo.DistTo(cOth);
-  if (dhit <= OthThing.GetSize()) return true;
+  if (dhit <= OthThing.GetSize()) {
+    return true;
+  }
   return false;
 }
 
 // Global parser instance - will be set by main programs
 extern CParser* g_pParser;
 
-double CThing::DetectCollisionCourse(const CThing& OthThing) const
-{
+double CThing::DetectCollisionCourse(const CThing& OthThing) const {
   // Use ArgumentParser to determine which collision detection to use
   // Default to new behavior unless explicitly set to old
   if (g_pParser && !g_pParser->UseNewFeature("collision-detection")) {
@@ -242,58 +224,69 @@ double CThing::DetectCollisionCourse(const CThing& OthThing) const
   return DetectCollisionCourseNew(OthThing);
 }
 
-double CThing::DetectCollisionCourseOld(const CThing& OthThing) const
-{
+double CThing::DetectCollisionCourseOld(const CThing& OthThing) const {
   // LEGACY COLLISION DETECTION (retained for backward compatibility)
   // This uses an approximation that projects along relative velocity direction
   // for a distance equal to current separation. Works in some cases but fails
   // for perpendicular approaches and complex trajectories.
 
-  if (OthThing==*this) return NO_COLLIDE;
+  if (OthThing == *this) {
+    return NO_COLLIDE;
+  }
 
   CTraj VRel = RelativeVelocity(OthThing);  // Direction of vector
-  if (VRel.rho<=0.05) return NO_COLLIDE;  // Never gonna hit if effectively not moving
+  if (VRel.rho <= 0.05) {
+    return NO_COLLIDE;  // Never gonna hit if effectively not moving
+  }
 
-  double flyred = GetSize() + OthThing.GetSize();   // Don't allow them to scrape each other
+  double flyred =
+      GetSize() + OthThing.GetSize();  // Don't allow them to scrape each other
   double dist = GetPos().DistTo(OthThing.GetPos());  // Magnitude of vector
-  if (dist<flyred) return 0.0;   // They're already impacting
+  if (dist < flyred) {
+    return 0.0;  // They're already impacting
+  }
 
-  CTraj VHit (dist,VRel.theta);
-  CCoord RelPos = OthThing.GetPos()-GetPos(),
-    CHit(RelPos+VHit.ConvertToCoord());
+  CTraj VHit(dist, VRel.theta);
+  CCoord RelPos = OthThing.GetPos() - GetPos(),
+         CHit(RelPos + VHit.ConvertToCoord());
 
-  double flyby = CHit.DistTo(CCoord(0.0,0.0));
-  if (flyby>flyred) return NO_COLLIDE;
+  double flyby = CHit.DistTo(CCoord(0.0, 0.0));
+  if (flyby > flyred) {
+    return NO_COLLIDE;
+  }
 
   // Pending collision
-  double hittime = (dist-flyred) / VRel.rho;
+  double hittime = (dist - flyred) / VRel.rho;
   return hittime;
 }
 
-double CThing::DetectCollisionCourseNew(const CThing& OthThing) const
-{
+double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
   // Robust collision detection using the Quadratic Formula approach.
   // We analyze the motion in a relative frame of reference where 'this' object
   // is stationary at the origin, and 'OthThing' moves relative to it.
 
   // NOTE ON OVERALL APPROACH BELOW:
-  // Optimization: We operate on and compare squared distances (e.g. PMagSq < RSq)
-  // instead of actual distances (sqrt(PMagSq) < R). This is much faster because
-  // sqrt() is expensive. The result is mathematically identical since distances
-  // are always positive.
+  // Optimization: We operate on and compare squared distances (e.g. PMagSq <
+  // RSq) instead of actual distances (sqrt(PMagSq) < R). This is much faster
+  // because sqrt() is expensive. The result is mathematically identical since
+  // distances are always positive.
 
-  if (OthThing==*this) return NO_COLLIDE;
+  if (OthThing == *this) {
+    return NO_COLLIDE;
+  }
 
   // 1. Setup Relative Vectors in Cartesian Coordinates.
 
   // P: Relative Position (Vector from 'this' to 'OthThing').
-  // CCoord operator- correctly handles toroidal wrap-around, providing the shortest path vector.
+  // CCoord operator- correctly handles toroidal wrap-around, providing the
+  // shortest path vector.
   CCoord RelPos = OthThing.GetPos() - GetPos();
   double Px = RelPos.fX;
   double Py = RelPos.fY;
 
   // V: Relative Velocity (Velocity of 'OthThing' minus Velocity of 'this').
-  // We convert the result (CTraj) to Cartesian coordinates (CCoord) for the vector math.
+  // We convert the result (CTraj) to Cartesian coordinates (CCoord) for the
+  // vector math.
   CTraj VRel_Traj = OthThing.GetVelocity() - GetVelocity();
   CCoord VRel = VRel_Traj.ConvertToCoord();
   double Vx = VRel.fX;
@@ -305,9 +298,9 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const
 
   // 2. Check for immediate overlap.
   // PMagSq is the current distance squared.
-  double PMagSq = Px*Px + Py*Py;
+  double PMagSq = Px * Px + Py * Py;
   if (PMagSq < RSq) {
-    return 0.0; // Already impacting
+    return 0.0;  // Already impacting
   }
 
   // 3. Setup the Quadratic Equation.
@@ -316,50 +309,52 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const
   // Expanding and rearranging into the standard form At^2 + Bt + C = 0:
 
   // A = V.V (Squared magnitude of relative velocity)
-  double A = Vx*Vx + Vy*Vy;
+  double A = Vx * Vx + Vy * Vy;
 
   // B = 2 * (P.V) (Twice the dot product of relative position and velocity)
-  double PdotV = Px*Vx + Py*Vy;
+  double PdotV = Px * Vx + Py * Vy;
   double B = 2.0 * PdotV;
 
-  // C = P.P - R^2 (Squared magnitude of position minus squared collision radius)
+  // C = P.P - R^2 (Squared magnitude of position minus squared collision
+  // radius)
   double C = PMagSq - RSq;
 
   // 4. Analyze coefficients for early exits.
 
-  // Check for Zero Relative Velocity (Fixes Flaw 1: Division by zero/Incorrect Theta usage)
-  // If A is near zero, the relative velocity is zero.
-  // Since we already checked for overlap (C > 0), they will not collide.
+  // Check for Zero Relative Velocity (Fixes Flaw 1: Division by zero/Incorrect
+  // Theta usage) If A is near zero, the relative velocity is zero. Since we
+  // already checked for overlap (C > 0), they will not collide.
   const double EPSILON = 1e-9;
   if (A < EPSILON) {
-      return NO_COLLIDE;
+    return NO_COLLIDE;
   }
 
-  // Check if objects are receding after a collision in the past (Fixes Flaw 2: CPA in the past)
-  // PdotV indicates the rate of closure. If PdotV >= 0, the distance is increasing
-  // or constant (moving apart or parallel).
+  // Check if objects are receding after a collision in the past (Fixes Flaw 2:
+  // CPA in the past) PdotV indicates the rate of closure. If PdotV >= 0, the
+  // distance is increasing or constant (moving apart or parallel).
   if (PdotV >= 0.0) {
-      return NO_COLLIDE;
+    return NO_COLLIDE;
   }
 
   // 5. Calculate the Discriminant.
   // D = B^2 - 4AC.
-  // If D < 0, the equation has no real solutions; the trajectories never intersect.
-  double Discriminant = B*B - 4.0*A*C;
+  // If D < 0, the equation has no real solutions; the trajectories never
+  // intersect.
+  double Discriminant = B * B - 4.0 * A * C;
 
   if (Discriminant < 0.0) {
-      return NO_COLLIDE;
+    return NO_COLLIDE;
   }
 
-  // 6. Calculate the Time to Impact (TTC) (Fixes Flaw 3: Incorrect TTC calculation).
-  // A collision will occur. We want the smallest positive root of the equation:
-  // t = (-B +/- sqrt(D)) / 2A
-  // Since A > 0 and B < 0 (approaching), the smallest positive root is found using subtraction:
+  // 6. Calculate the Time to Impact (TTC) (Fixes Flaw 3: Incorrect TTC
+  // calculation). A collision will occur. We want the smallest positive root of
+  // the equation: t = (-B +/- sqrt(D)) / 2A Since A > 0 and B < 0
+  // (approaching), the smallest positive root is found using subtraction:
   double TTC = (-B - sqrt(Discriminant)) / (2.0 * A);
 
   // Final guard against floating point precision issues near the boundary.
   if (TTC < 0.0) {
-      return 0.0;
+    return 0.0;
   }
 
   return TTC;
@@ -368,53 +363,54 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const
 ////////////////////////////////////////////////
 // Operators
 
-CThing& CThing::operator= (const CThing& OthThing)
-{
-  char *buf;
-  UINT pksz, sz=OthThing.GetSerialSize();
+CThing& CThing::operator=(const CThing& OthThing) {
+  char* buf;
+  UINT pksz, sz = OthThing.GetSerialSize();
 
   buf = new char[sz];
-  pksz = OthThing.SerialPack(buf,sz);
+  pksz = OthThing.SerialPack(buf, sz);
 
-  if (pksz!=sz) {
-    printf ("ERROR: Assignment operator failure\n");
+  if (pksz != sz) {
+    printf("ERROR: Assignment operator failure\n");
     return *this;
   }
 
-  SerialUnpack(buf,pksz);
+  SerialUnpack(buf, pksz);
   delete buf;
   return *this;
 }
 
-bool CThing::operator== (const CThing& OthThing) const
-{
-  if (ulIDCookie!=OthThing.ulIDCookie) return false;
+bool CThing::operator==(const CThing& OthThing) const {
+  if (ulIDCookie != OthThing.ulIDCookie) {
+    return false;
+  }
 
   return true;
 }
 
-bool CThing::operator!= (const CThing& OthThing) const
-{
-  return (!(*this==OthThing));
+bool CThing::operator!=(const CThing& OthThing) const {
+  return (!(*this == OthThing));
 }
 
 //////////////////////////////////////////////////////////////
 // Protected methods
 
-void CThing::HandleCollision(CThing* pOthThing, CWorld *pWorld)
-{
-  if (pOthThing==NULL) return;
-  if (pWorld==NULL) return;
+void CThing::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
+  if (pOthThing == NULL) {
+    return;
+  }
+  if (pWorld == NULL) {
+    return;
+  }
 }
 
 ///////////////////////////////////////////////////
 // Serialization routines
 
-unsigned CThing::GetSerialSize() const
-{
-  UINT totsize=0;
+unsigned CThing::GetSerialSize() const {
+  UINT totsize = 0;
 
-  UINT uTK = (UINT) TKind;
+  UINT uTK = (UINT)TKind;
   totsize += BufWrite(NULL, uTK);
 
   totsize += BufWrite(NULL, ulIDCookie);
@@ -436,13 +432,14 @@ unsigned CThing::GetSerialSize() const
   return totsize;
 }
 
-unsigned CThing::SerialPack (char *buf, unsigned buflen) const
-{
+unsigned CThing::SerialPack(char* buf, unsigned buflen) const {
   UINT needlen = GetSerialSize();
-  if (buflen<needlen) return 0;
-  char *vpb = buf;
+  if (buflen < needlen) {
+    return 0;
+  }
+  char* vpb = buf;
 
-  UINT uTK = (UINT) TKind;
+  UINT uTK = (UINT)TKind;
   vpb += BufWrite(vpb, uTK);
 
   vpb += BufWrite(vpb, ulIDCookie);
@@ -458,20 +455,21 @@ unsigned CThing::SerialPack (char *buf, unsigned buflen) const
   vpb += BufWrite(vpb, bIsGettingShot);
   vpb += BufWrite(vpb, Name, maxnamelen);
 
-  vpb += Pos.SerialPack(vpb,Pos.GetSerialSize());
-  vpb += Vel.SerialPack(vpb,Vel.GetSerialSize());
+  vpb += Pos.SerialPack(vpb, Pos.GetSerialSize());
+  vpb += Vel.SerialPack(vpb, Vel.GetSerialSize());
 
-  return (vpb-buf);
+  return (vpb - buf);
 }
-  
-unsigned CThing::SerialUnpack (char *buf, unsigned buflen)
-{
-  if (buflen<GetSerialSize()) return 0;
-  char *vpb = buf;
+
+unsigned CThing::SerialUnpack(char* buf, unsigned buflen) {
+  if (buflen < GetSerialSize()) {
+    return 0;
+  }
+  char* vpb = buf;
 
   UINT uTK;
   vpb += BufRead(vpb, uTK);
-  TKind = (ThingKind) uTK;
+  TKind = (ThingKind)uTK;
 
   vpb += BufRead(vpb, ulIDCookie);
   vpb += BufRead(vpb, uImgSet);
@@ -486,8 +484,8 @@ unsigned CThing::SerialUnpack (char *buf, unsigned buflen)
   vpb += BufRead(vpb, bIsGettingShot);
   vpb += BufRead(vpb, Name, maxnamelen);
 
-  vpb += Pos.SerialUnpack((char*)vpb,Pos.GetSerialSize());
-  vpb += Vel.SerialUnpack((char*)vpb,Vel.GetSerialSize());
+  vpb += Pos.SerialUnpack((char*)vpb, Pos.GetSerialSize());
+  vpb += Vel.SerialUnpack((char*)vpb, Vel.GetSerialSize());
 
-  return (vpb-buf);
+  return (vpb - buf);
 }

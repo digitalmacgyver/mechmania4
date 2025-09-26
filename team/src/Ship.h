@@ -9,37 +9,37 @@
 #ifndef _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
 #define _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
 
-#include "Thing.h"
 #include "Asteroid.h"
+#include "Thing.h"
 
 class CTeam;
 class CBrain;
 
-const double dMaxStatTot=60.0;
+const double dMaxStatTot = 60.0;
 
-enum OrderKind
-{
-  O_SHIELD, O_LASER, O_THRUST, O_TURN, O_JETTISON, O_ALL_ORDERS
+enum OrderKind {
+  O_SHIELD,
+  O_LASER,
+  O_THRUST,
+  O_TURN,
+  O_JETTISON,
+  O_ALL_ORDERS
 };
 
-enum ShipStat
-{
-  S_CARGO, S_FUEL, S_SHIELD, S_ALL_STATS
-};
+enum ShipStat { S_CARGO, S_FUEL, S_SHIELD, S_ALL_STATS };
 
-class CShip : public CThing
-{
+class CShip : public CThing {
  public:
-  CShip (CCoord StPos, CTeam *pteam=NULL, UINT ShNum=0);
+  CShip(CCoord StPos, CTeam* pteam = NULL, UINT ShNum = 0);
   virtual ~CShip();
 
   UINT GetShipNumber() const;
   bool IsDocked() const;
 
-  double GetAmount(ShipStat st) const;        // Returns current amount
-  double GetCapacity(ShipStat st) const;       // Returns max capacity
-  double SetAmount(ShipStat st, double val);             // Returns new amt
-  double SetCapacity(ShipStat st, double val);           // Returns new capacity
+  double GetAmount(ShipStat st) const;          // Returns current amount
+  double GetCapacity(ShipStat st) const;        // Returns max capacity
+  double SetAmount(ShipStat st, double val);    // Returns new amt
+  double SetCapacity(ShipStat st, double val);  // Returns new capacity
 
   // Brain management for tactical AI context switching
   // Ships can dynamically switch between different behavioral contexts
@@ -47,11 +47,11 @@ class CShip : public CThing
   CBrain* SetBrain(CBrain* pBr);  // Returns old CBrain object
 
   virtual double GetMass() const;
-  
-  virtual void Drift(double dt=1.0);
+
+  virtual void Drift(double dt = 1.0);
   bool AsteroidFits(const CAsteroid* pAst);
 
-  CThing* LaserTarget();    // Returns what laserbeam will hit if fired
+  CThing* LaserTarget();          // Returns what laserbeam will hit if fired
   double GetLaserBeamDistance();  // Returns distance laserbeam will traverse
   double AngleToIntercept(const CThing& OthThing, double dtime);
 
@@ -60,29 +60,31 @@ class CShip : public CThing
 
   void ResetOrders();
   // NOTE: Use SetJettison() and GetJettison() helper functions instead of
-  // calling SetOrder(O_JETTISON, ...) directly for better type safety and readability
-  double GetOrder(OrderKind Ord) const;        // Returns value of order
-  double SetOrder(OrderKind Ord, double value);  // Returns fuel consumed for order
+  // calling SetOrder(O_JETTISON, ...) directly for better type safety and
+  // readability
+  double GetOrder(OrderKind Ord) const;  // Returns value of order
+  double SetOrder(OrderKind Ord,
+                  double value);  // Returns fuel consumed for order
   void SetJettison(AsteroidKind Mat, double amt);
   double GetJettison(AsteroidKind Mat);
 
   // Serialization routines
   unsigned GetSerialSize() const;
-  unsigned SerialPack (char *buf, unsigned buflen) const;
-  unsigned SerialUnpack (char *buf, unsigned buflen);
+  unsigned SerialPack(char* buf, unsigned buflen) const;
+  unsigned SerialUnpack(char* buf, unsigned buflen);
 
  protected:
   UINT myNum;
   bool bDockFlag;
   double dDockDist, dLaserDist;
-  CBrain *pBrain;
+  CBrain* pBrain;
 
   double adOrders[(UINT)O_ALL_ORDERS];
   double adStatCur[(UINT)S_ALL_STATS];
   double adStatMax[(UINT)S_ALL_STATS];
 
-  virtual void HandleCollision (CThing* pOthThing, CWorld *pWorld=NULL);
+  virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
   virtual void HandleJettison();
 };
 
-#endif // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
+#endif  // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF

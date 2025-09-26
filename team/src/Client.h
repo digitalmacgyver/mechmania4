@@ -12,23 +12,22 @@ class CWorld;
 class CTeam;
 class CClientNet;
 
-class CClient
-{
+class CClient {
  public:
-  CClient(int port, char *hostname, bool bObserv=false);
+  CClient(int port, char *hostname, bool bObserv = false);
   ~CClient();
 
   CWorld *GetWorld();
 
   void MeetWorld();
-  void MeetTeams();        // Only called by observer, once
+  void MeetTeams();  // Only called by observer, once
   UINT ReceiveWorld();
 
-  int SendAck();  // Send Observer acknowledge
+  int SendAck();     // Send Observer acknowledge
   int SendPause();   // Send pause control
   int SendResume();  // Send resume control
-  void DoTurn();   // Run Team::Turn() and send orders to server
-  int IsOpen();   // Returns pmyNet->IsOpen(1);
+  void DoTurn();     // Run Team::Turn() and send orders to server
+  int IsOpen();      // Returns pmyNet->IsOpen(1);
 
  protected:
   bool bObflag;
@@ -41,4 +40,4 @@ class CClient
   CTeam **aTms;
 };
 
-#endif // _CLIENT_H_DFJKSJHFSDKJFHLKJDSH
+#endif  // _CLIENT_H_DFJKSJHFSDKJFHLKJDSH

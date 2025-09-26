@@ -2,20 +2,19 @@
  * Standard included files and definitions
  * For use with MechMania IV
  * 4/29/98 by Misha Voloshin
-*/
+ */
 
 #ifndef _STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG
 #define _STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG
 
-#include <cstdlib>
-#include <cstdio>
-#include <iostream>
+#include <sys/types.h>
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
-
-#include <sys/types.h>
 #include <ctime>
+#include <iostream>
 
 using namespace std;
 
@@ -34,4 +33,4 @@ typedef unsigned int UINT;
 #define PI2 (2.0 * PI)
 #endif
 
-#endif // !_STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG
+#endif  // !_STDAFX_H_DIFHSDLIFHSLDFHLSEFGLSEFG

@@ -575,7 +575,7 @@ docker run --memory="512m" --cpus="1.0" mechmania4 ./run_game.sh
    ```
 
 **Q: Can I run without Docker?**
-Yes! See README_MODERNIZED.md for native build instructions. Docker just makes it easier and more consistent.
+Yes! See [README_MODERNIZED.md](README_MODERNIZED.md) for native build instructions. Docker just makes it easier and more consistent.
 
 **Q: Why are there three different Docker images?**
 - **mechmania4**: Full Ubuntu environment for development

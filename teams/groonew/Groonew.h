@@ -1,5 +1,5 @@
-/* Groogroo.h
- * Team Groogroo: "Groogroo eat Groogroo!"
+/* Groonew.h
+ * Team Groonew: "Groonew eat Groonew!"
  * MechMania IV Contest Team Implementation
  *
  * Strategy: Predictive path planning using "Magic Bag" data structure
@@ -7,8 +7,8 @@
  * Ships then select best targets based on time-to-reach
  */
 
-#ifndef _GROOGROO_
-#define _GROOGROO_
+#ifndef _GROONEW_
+#define _GROONEW_
 
 #include "Brain.h"
 #include "Collision.h"
@@ -19,13 +19,13 @@
 #include "Traj.h"
 
 //////////////////////////////////////
-// Main class: Groogroo team
+// Main class: Groonew team
 // Uses centralized planning with biological/hive-mind naming theme
 
-class Groogroo : public CTeam {
+class Groonew : public CTeam {
  public:
-  Groogroo();
-  ~Groogroo();
+  Groonew();
+  ~Groonew();
 
   // Central planning data structure - stores precalculated paths for all ships
   // Recreated each turn with fresh calculations
@@ -55,4 +55,4 @@ class Groogroo : public CTeam {
 
 /////////////////////////////////////
 
-#endif  // _GROOGROO_
+#endif  // _GROONEW_

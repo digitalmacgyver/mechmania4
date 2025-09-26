@@ -9,12 +9,11 @@
 
 #include "Network.h"
 
-class CClientNet : public CNetwork
-{
-private:
-public:
-    CClientNet( char * hostname, int port, int maxqueuelen=204800 );
-    ~CClientNet();
+class CClientNet : public CNetwork {
+ private:
+ public:
+  CClientNet(char* hostname, int port, int maxqueuelen = 204800);
+  ~CClientNet();
 };
 
 #endif

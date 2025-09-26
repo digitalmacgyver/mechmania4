@@ -7,31 +7,20 @@
 
 #include "EmptyTeam.h"
 
-// Specify our team as the 
+// Specify our team as the
 // team to use for the game
-CTeam* CTeam::CreateTeam()
-{
-  return new CEmptyTeam;
-}
+CTeam* CTeam::CreateTeam() { return new CEmptyTeam; }
 
 //////////////////////////////
 // Construction/Destruction
 
-CEmptyTeam::CEmptyTeam()
-{
-}
+CEmptyTeam::CEmptyTeam() {}
 
-CEmptyTeam::~CEmptyTeam()
-{
-}
+CEmptyTeam::~CEmptyTeam() {}
 
 /////////////////////////////
 // Inherited methods
 
-void CEmptyTeam::Init()
-{
-}
+void CEmptyTeam::Init() {}
 
-void CEmptyTeam::Turn()
-{
-}
+void CEmptyTeam::Turn() {}

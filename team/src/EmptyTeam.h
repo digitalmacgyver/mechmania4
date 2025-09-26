@@ -10,9 +10,8 @@
 
 #include "Team.h"
 
-class CEmptyTeam : public CTeam
-{
-public:
+class CEmptyTeam : public CTeam {
+ public:
   CEmptyTeam();
   ~CEmptyTeam();
 

@@ -9,18 +9,16 @@
 #ifndef _TRAJ_H_ESFJHFLKJWEJKLFH
 #define _TRAJ_H_ESFJHFLKJWEJKLFH
 
-#include "stdafx.h"
 #include "Sendable.h"
+#include "stdafx.h"
 
 class CCoord;
 
-const double PIi=3.1415926,
-  PIi2=6.2831853;
+const double PIi = 3.1415926, PIi2 = 6.2831853;
 
-class CTraj : public CSendable
-{
+class CTraj : public CSendable {
  public:
-  CTraj(double frho=0.0,double ftheta=0.0);
+  CTraj(double frho = 0.0, double ftheta = 0.0);
   CTraj(const CTraj& OthTraj);
   CTraj(const CCoord& OCrd);
   ~CTraj();
@@ -33,11 +31,11 @@ class CTraj : public CSendable
   double Cross(const CTraj& OthTraj);
 
   // Operators
-  CTraj& operator= (const CTraj& OthTraj);
-  CTraj& operator= (const CCoord& OthCrd);
-  CTraj& operator+= (const CTraj& OthTraj);
-  CTraj& operator-= (const CTraj& OthTraj);
-  CTraj& operator- ();
+  CTraj& operator=(const CTraj& OthTraj);
+  CTraj& operator=(const CCoord& OthCrd);
+  CTraj& operator+=(const CTraj& OthTraj);
+  CTraj& operator-=(const CTraj& OthTraj);
+  CTraj& operator-();
 
   // HISTORICAL NOTE: Equality operators commented out due to logical problems
   // See Traj.C for detailed explanation of issues with PI/-PI equivalence
@@ -47,22 +45,22 @@ class CTraj : public CSendable
   // bool operator!= (const CTraj& OthTraj) const;
 
   // Friends
-  friend CTraj operator+ (const CTraj& T1, const CTraj& T2);
-  friend CTraj operator- (const CTraj& T1, const CTraj& T2);
+  friend CTraj operator+(const CTraj& T1, const CTraj& T2);
+  friend CTraj operator-(const CTraj& T1, const CTraj& T2);
 
-  friend CTraj operator* (const CTraj& T1, double scale);
-  friend CTraj operator* (double scale, const CTraj& T1);
-  friend CTraj operator/ (const CTraj& T1, double scale);
+  friend CTraj operator*(const CTraj& T1, double scale);
+  friend CTraj operator*(double scale, const CTraj& T1);
+  friend CTraj operator/(const CTraj& T1, double scale);
 
   // Values
-  double rho,theta;
+  double rho, theta;
 
-  void Normalize();   // Keeps -PI<theta<PI, rho>0.0
+  void Normalize();  // Keeps -PI<theta<PI, rho>0.0
 
   // Serialization routines
   unsigned GetSerialSize() const;
-  unsigned SerialPack (char *buf, unsigned buflen) const;
-  unsigned SerialUnpack (char *buf, unsigned buflen);
+  unsigned SerialPack(char* buf, unsigned buflen) const;
+  unsigned SerialUnpack(char* buf, unsigned buflen);
 };
 
-#endif // ! _TRAJ_H_ESFJHFLKJWEJKLFH
+#endif  // ! _TRAJ_H_ESFJHFLKJWEJKLFH

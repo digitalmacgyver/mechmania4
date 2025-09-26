@@ -11,50 +11,51 @@
 #ifndef _WORLD_H_DSDFJSFLJKSEGFKLESF
 #define _WORLD_H_DSDFJSFLJKSEGFKLESF
 
-#include "stdafx.h"
-#include "Thing.h"
 #include "Asteroid.h"
 #include "Sendable.h"
+#include "Thing.h"
+#include "stdafx.h"
 
-#define MAX_THINGS  512
+#define MAX_THINGS 512
 
 const UINT BAD_INDEX = ((UINT)-1);
 
 class CTeam;
 
-class CWorld : public CSendable
-{
+class CWorld : public CSendable {
  public:
-  CWorld (UINT nTm);
+  CWorld(UINT nTm);
   ~CWorld();
   CWorld* CreateCopy();
 
-  CTeam* GetTeam(UINT nt) const;      // Returns ptr to team, NULL on error
-  UINT GetNumTeams() const;    // Tells how many teams
-  double GetGameTime() const;  // Tells elapsed game time
+  CTeam* GetTeam(UINT nt) const;  // Returns ptr to team, NULL on error
+  UINT GetNumTeams() const;       // Tells how many teams
+  double GetGameTime() const;     // Tells elapsed game time
 
-  UINT PhysicsModel (double dt=1.0);  // Specify amt of time to pass
-  void LaserModel();        // Compute all laser firings
+  UINT PhysicsModel(double dt = 1.0);  // Specify amt of time to pass
+  void LaserModel();                   // Compute all laser firings
   void AddThingToWorld(CThing* pNewThing);
 
   void CreateAsteroids(AsteroidKind mat, UINT numast, double mass);
-  CTeam* SetTeam(UINT n, CTeam* pTm);    // Returns previous team ptr, NULL on fail
+  CTeam* SetTeam(UINT n,
+                 CTeam* pTm);  // Returns previous team ptr, NULL on fail
 
-  CThing* GetThing(UINT index) const ;     // returns NULL on failure
-  UINT GetNextIndex(UINT curindex) const;   // returns (UINT)-1 if at end of list
-  UINT GetPrevIndex(UINT curindex) const;   // returns (UINT)-1 if at beginning of list
-  UINT UFirstIndex,ULastIndex;
+  CThing* GetThing(UINT index) const;      // returns NULL on failure
+  UINT GetNextIndex(UINT curindex) const;  // returns (UINT)-1 if at end of list
+  UINT GetPrevIndex(
+      UINT curindex) const;  // returns (UINT)-1 if at beginning of list
+  UINT UFirstIndex, ULastIndex;
 
   // Serialization routines
   unsigned GetSerialSize() const;
-  unsigned SerialPack (char *buf, unsigned buflen) const;
-  unsigned SerialUnpack (char *buf, unsigned buflen);
-  CThing* CreateNewThing (ThingKind TKind, UINT iTm);
+  unsigned SerialPack(char* buf, unsigned buflen) const;
+  unsigned SerialUnpack(char* buf, unsigned buflen);
+  CThing* CreateNewThing(ThingKind TKind, UINT iTm);
 
   // For internal use only
-  double GetTimeStamp();   // Returns #sec, to 1msec res
-  double *atstamp;
-  double *auClock;
+  double GetTimeStamp();  // Returns #sec, to 1msec res
+  double* atstamp;
+  double* auClock;
 
   bool bGameOver;
 
@@ -62,7 +63,7 @@ class CWorld : public CSendable
   CThing* apThings[MAX_THINGS];
   UINT aUNextInd[MAX_THINGS];
   UINT aUPrevInd[MAX_THINGS];
-  
+
   CThing* apTAddQueue[MAX_THINGS];
   UINT numNewThings;
 
@@ -74,7 +75,7 @@ class CWorld : public CSendable
 
   double gametime;
   UINT numTeams;
-  CTeam **apTeams;
+  CTeam** apTeams;
 };
 
-#endif // ! _WORLD_H_DSDFJSFLJKSEGFKLESF
+#endif  // ! _WORLD_H_DSDFJSFLJKSEGFKLESF

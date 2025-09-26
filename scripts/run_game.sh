@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Change to the build directory where executables are located
+cd "$(dirname "$0")/../build" || exit 1
+
 echo "Starting MechMania IV: The Vinyl Frontier"
 echo "========================================="
 echo ""

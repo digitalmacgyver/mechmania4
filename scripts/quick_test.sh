@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Change to the build directory where executables are located
+cd "$(dirname "$0")/../build" || exit 1
+
 echo "Running quick headless test: Vortex vs ChromeFunk"
 
 # Start server

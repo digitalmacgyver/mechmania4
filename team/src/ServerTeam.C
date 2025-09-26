@@ -7,33 +7,18 @@
 
 #include "ServerTeam.h"
 
-CTeam* CTeam::CreateTeam()
-{
-  return new CServerTeam();
-}
+CTeam* CTeam::CreateTeam() { return new CServerTeam(); }
 
 //////////////////////////////
 // Construction/Destruction
 
-CServerTeam::CServerTeam()
-{
+CServerTeam::CServerTeam() {}
 
-}
-
-CServerTeam::~CServerTeam()
-{
-
-}
+CServerTeam::~CServerTeam() {}
 
 //////////////////////////////
 // Methods
 
-void CServerTeam::Init()
-{
+void CServerTeam::Init() {}
 
-}
-
-void CServerTeam::Turn()
-{
-
-}
+void CServerTeam::Turn() {}

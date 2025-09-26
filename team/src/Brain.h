@@ -2,7 +2,8 @@
  * Strategic Context Switching System for AI Behaviors
  *
  * The Brain system implements a strategic context switching pattern where:
- * - Teams analyze strategic situations and select appropriate tactical behaviors
+ * - Teams analyze strategic situations and select appropriate tactical
+ * behaviors
  * - Brains execute focused, goal-oriented AI for specific contexts
  * - Ships can dynamically switch between different behavioral contexts
  *
@@ -24,19 +25,18 @@
 class CShip;
 class CTeam;
 
-class CBrain
-{
+class CBrain {
  public:
-  CBrain() { };
-  virtual ~CBrain() { };
+  CBrain() {}
+  virtual ~CBrain() {}
 
   // Execute tactical AI for the current strategic context
   // Each brain implements focused behavior for a specific goal/situation
-  virtual void Decide() { };
+  virtual void Decide() {}
 
   // References to team and ship for context-aware decision making
-  CTeam *pTeam;   // Strategic context and team resources
-  CShip *pShip;   // Individual ship state and capabilities
+  CTeam* pTeam;  // Strategic context and team resources
+  CShip* pShip;  // Individual ship state and capabilities
 };
 
-#endif // _BRAIN_H_DLFKHDSLFKJSDLFJSLDJFLSDJFLSD
+#endif  // _BRAIN_H_DLFKHDSLFKJSDLFJSLDJFLSDJFLSD

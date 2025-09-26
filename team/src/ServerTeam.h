@@ -11,14 +11,13 @@
 
 #include "Team.h"
 
-class CServerTeam : public CTeam
-{
+class CServerTeam : public CTeam {
  public:
   CServerTeam();   // Empty constructor, default CTeam
   ~CServerTeam();  // Empty destructor
 
-  void Init();     // Empty Init
-  void Turn();     // Empty Turn
+  void Init();  // Empty Init
+  void Turn();  // Empty Turn
 };
 
 #endif  // _SERVERTEAM_H_EFSKJHEFEFJKWEHFJKLHEFK

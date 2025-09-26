@@ -7,17 +7,16 @@
 #ifndef _PARSER_H_SDLFJHSDLFJHSDLFHDJK
 #define _PARSER_H_SDLFJHSDLFJHSDLFHDJK
 
-class CParser 
-{
+class CParser {
  public:
   CParser(int argc, char **argv);
   ~CParser();
 
-  char hostname[128],gfxreg[128];
-  int port,numteams,gfxflag, needhelp, retry, reconnect;
+  char hostname[128], gfxreg[128];
+  int port, numteams, gfxflag, needhelp, retry, reconnect;
 
  protected:
   void SetDefaults();
 };
 
-#endif // _PARSER_H_SDLFJHSDLFJHSDLFHDJK
+#endif  // _PARSER_H_SDLFJHSDLFJHSDLFHDJK

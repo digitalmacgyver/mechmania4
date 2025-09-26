@@ -6,56 +6,56 @@
 #ifndef _ARGUMENTPARSER_H_MM4
 #define _ARGUMENTPARSER_H_MM4
 
-#include <string>
 #include <map>
-#include <vector>
 #include <memory>
+#include <string>
+#include <vector>
 
 class ArgumentParser {
-public:
-    ArgumentParser();
-    ~ArgumentParser();
+ public:
+  ArgumentParser();
+  ~ArgumentParser();
 
-    // Parse command line arguments
-    bool Parse(int argc, char* argv[]);
+  // Parse command line arguments
+  bool Parse(int argc, char* argv[]);
 
-    // Basic options (backward compatible with CParser)
-    std::string hostname = "localhost";
-    std::string gfxreg = "graphics.reg";
-    int port = 2323;
-    int numteams = 2;
-    bool gfxflag = false;
-    bool needhelp = false;
-    bool retry = false;
-    bool reconnect = false;
+  // Basic options (backward compatible with CParser)
+  std::string hostname = "localhost";
+  std::string gfxreg = "graphics.reg";
+  int port = 2323;
+  int numteams = 2;
+  bool gfxflag = false;
+  bool needhelp = false;
+  bool retry = false;
+  bool reconnect = false;
 
-    // Config file
-    std::string configFile;
+  // Config file
+  std::string configFile;
 
-    // Feature flags
-    std::map<std::string, bool> features;
+  // Feature flags
+  std::map<std::string, bool> features;
 
-    // Check if a feature should use new behavior
-    bool UseNewFeature(const std::string& feature) const;
+  // Check if a feature should use new behavior
+  bool UseNewFeature(const std::string& feature) const;
 
-    // Print help message
-    void PrintHelp() const;
+  // Print help message
+  void PrintHelp() const;
 
-    // Load configuration from file
-    bool LoadConfig(const std::string& filename);
+  // Load configuration from file
+  bool LoadConfig(const std::string& filename);
 
-    // Save current configuration to file
-    bool SaveConfig(const std::string& filename) const;
+  // Save current configuration to file
+  bool SaveConfig(const std::string& filename) const;
 
-private:
-    // Apply a feature bundle
-    void ApplyBundle(const std::string& bundle);
+ private:
+  // Apply a feature bundle
+  void ApplyBundle(const std::string& bundle);
 
-    // Initialize default features
-    void InitializeFeatures();
+  // Initialize default features
+  void InitializeFeatures();
 
-    // Parse a JSON config file
-    bool ParseConfigJson(const std::string& content);
+  // Parse a JSON config file
+  bool ParseConfigJson(const std::string& content);
 };
 
-#endif // _ARGUMENTPARSER_H_MM4
+#endif  // _ARGUMENTPARSER_H_MM4

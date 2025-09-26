@@ -6,23 +6,22 @@
 #ifndef _CHROME_FUNKADELIC_
 #define _CHROME_FUNKADELIC_
 
-#include "Team.h"
 #include "Brain.h"
+#include "Team.h"
 
 //////////////////////////////////////
 // Main class: Chrome Funkadelic team
 
 // ChromeFunk: Example implementation of strategic context switching
 // This team demonstrates the Brain system with basic tactical behaviors
-class ChromeFunk : public CTeam
-{
+class ChromeFunk : public CTeam {
  public:
   ChromeFunk();
   ~ChromeFunk();
 
   // Strategic AI: Analyzes game state and assigns appropriate brains
-  void Init();   // Initialize ships with default Gatherer brains
-  void Turn();   // Execute tactical AI for each ship's current brain
+  void Init();  // Initialize ships with default Gatherer brains
+  void Turn();  // Execute tactical AI for each ship's current brain
 };
 
 /////////////////////////////////////
@@ -32,12 +31,11 @@ class ChromeFunk : public CTeam
 
 // Voyager: Temporary tactical context for station departure
 // Demonstrates dynamic context switching - replaces current brain temporarily
-class Voyager : public CBrain
-{
+class Voyager : public CBrain {
  public:
-  CBrain *pLastBrain;  // Store previous brain for restoration
+  CBrain* pLastBrain;  // Store previous brain for restoration
 
-  Voyager(CBrain* pLB=NULL);
+  Voyager(CBrain* pLB = NULL);
   ~Voyager();
 
   void Decide();  // Handle station departure, then restore previous brain
@@ -47,20 +45,19 @@ class Voyager : public CBrain
 
 // Stalker: Tactical context for pursuing and intercepting targets
 // Focused behavior for navigation and target tracking
-class Stalker : public CBrain
-{
+class Stalker : public CBrain {
  public:
-  CThing *pTarget;  // Current target to pursue
+  CThing* pTarget;  // Current target to pursue
 
-  Stalker() { pTarget=NULL; }
-  ~Stalker() { }
+  Stalker() { pTarget = NULL; }
+  ~Stalker() {}
 
   void Decide();  // Navigate toward target using interception logic
 
   // Legacy collision detection preserving original ChromeFunk behavior
-  // Uses the old engine's incorrect closest approach calculation that ChromeFunk's
-  // AI logic was designed around. The rest of ChromeFunk's behavior depends on
-  // this specific collision detection behavior.
+  // Uses the old engine's incorrect closest approach calculation that
+  // ChromeFunk's AI logic was designed around. The rest of ChromeFunk's
+  // behavior depends on this specific collision detection behavior.
   double LegacyDetectCollisionCourse(const CThing& OthThing) const;
 };
 
@@ -68,11 +65,10 @@ class Stalker : public CBrain
 
 // Shooter: Tactical context for combat and laser engagement
 // Inherits Stalker's navigation abilities and adds combat logic
-class Shooter : public Stalker
-{
+class Shooter : public Stalker {
  public:
-  Shooter() { }
-  ~Shooter() { }
+  Shooter() {}
+  ~Shooter() {}
 
   void Decide();  // Engage targets with lasers when in range
 };
@@ -82,8 +78,7 @@ class Shooter : public Stalker
 // Gatherer: Default tactical context for resource collection
 // Combines navigation (Stalker), combat (Shooter), and resource management
 // This is the primary brain for ChromeFunk's ships
-class Gatherer : public Shooter
-{
+class Gatherer : public Shooter {
  public:
   Gatherer();
   ~Gatherer();

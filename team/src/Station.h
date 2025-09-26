@@ -12,10 +12,9 @@
 
 class CTeam;
 
-class CStation : public CThing
-{
+class CStation : public CThing {
  public:
-  CStation(CCoord StPos, CTeam* pTeam=NULL);
+  CStation(CCoord StPos, CTeam* pTeam = NULL);
   virtual ~CStation();
 
   double GetVinylStore() const;
@@ -23,13 +22,13 @@ class CStation : public CThing
 
   // Serialization methods
   unsigned GetSerialSize() const;
-  unsigned SerialPack (char *buf, unsigned buflen) const;
-  unsigned SerialUnpack (char *buf, unsigned buflen);
+  unsigned SerialPack(char* buf, unsigned buflen) const;
+  unsigned SerialUnpack(char* buf, unsigned buflen);
 
  protected:
   double dCargo;
 
-  virtual void HandleCollision (CThing* pOthThing, CWorld *pWorld=NULL);
+  virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
 };
 
-#endif // ! _STATION_H_SDJKHSELKJFFAEJFLKA
+#endif  // ! _STATION_H_SDJKHSELKJFFAEJFLKA
