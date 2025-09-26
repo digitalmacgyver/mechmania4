@@ -130,6 +130,22 @@ add_executable(mm4team_groogroo
 target_link_libraries(mm4team_groogroo mm4_common pthread)
 target_include_directories(mm4team_groogroo PRIVATE teams/groogroo)
 
+# Groonew team executable
+add_executable(mm4team_groonew
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/groonew/Groonew.C
+    teams/groonew/GetVinyl.C
+    teams/groonew/MagicBag.C
+    teams/groonew/DumbThing.C
+    teams/groonew/ReturnToBase.C
+    teams/groonew/Entry.C
+)
+target_link_libraries(mm4team_groonew mm4_common pthread)
+target_include_directories(mm4team_groonew PRIVATE teams/groonew)
+
 # Vortex team executable
 add_executable(mm4team_vortex
     ${SRC_DIR}/mm4team.C

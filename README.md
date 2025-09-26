@@ -7,10 +7,11 @@ This repository contains a revised version of the server code and Team Groogroo 
 To see the simulation on Linux:
 
 ```bash
+mkdir -p build
 cd build
 cmake ..
 make -j
-./run_groogroo.sh
+../scripts/run_groogroo.sh
 ```
 
 ## Documentation
