@@ -1,0 +1,17 @@
+{
+  "description": "MechMania IV Legacy/Classic Tournament Configuration",
+  "profile": "legacy",
+  "options": {
+    "port": 2323,
+    "hostname": "localhost",
+    "gfxreg": "graphics.reg",
+    "numteams": 2,
+    "graphics": false,
+    "reconnect": false
+  },
+  "features": {
+    "collision-detection": "old",
+    "elastic-collisions": "old",
+    "conserve-momentum": "old"
+  }
+}

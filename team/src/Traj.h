@@ -39,8 +39,12 @@ class CTraj : public CSendable
   CTraj& operator-= (const CTraj& OthTraj);
   CTraj& operator- ();
 
-  bool operator== (const CTraj& OthTraj) const;
-  bool operator!= (const CTraj& OthTraj) const;
+  // HISTORICAL NOTE: Equality operators commented out due to logical problems
+  // See Traj.C for detailed explanation of issues with PI/-PI equivalence
+  // and backwards operator!= logic. These are preserved for historical
+  // interest but disabled to prevent unexpected behavior.
+  // bool operator== (const CTraj& OthTraj) const;
+  // bool operator!= (const CTraj& OthTraj) const;
 
   // Friends
   friend CTraj operator+ (const CTraj& T1, const CTraj& T2);

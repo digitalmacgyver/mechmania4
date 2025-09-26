@@ -35,6 +35,7 @@ ChromeFunk::~ChromeFunk()
 
 void ChromeFunk::Init()
 {
+  // Strategic initialization: Set up team and assign default tactical contexts
   srand(time(NULL));
   SetTeamNumber(1+(rand()%16));
   SetName("Chrome Funkadelic");
@@ -45,21 +46,29 @@ void ChromeFunk::Init()
   GetShip(2)->SetName("DiscoInferno");
   GetShip(3)->SetName("PurpleVelvet");
 
+  // Assign default tactical context: All ships start as resource gatherers
+  // This demonstrates the basic Brain system - ships get focused AI behaviors
   for (UINT i=0; i<GetShipCount(); i++) {
     GetShip(i)->SetCapacity(S_FUEL,45.0);
     GetShip(i)->SetCapacity(S_CARGO,15.0); // Redundant, but be safe
-    GetShip(i)->SetBrain(new Gatherer);     // Set a gatherer AI for each ship
+    GetShip(i)->SetBrain(new Gatherer);     // Default context: resource collection
   }
 }
 
 void ChromeFunk::Turn()
 {
+  // Strategic AI: Execute tactical behaviors for each ship
+  // ChromeFunk uses a simple strategy: Let each ship's brain handle its own context
+  // More advanced teams could analyze game state and switch brains dynamically
+
   CShip *pSh;
 
   for (UINT i=0; i<GetShipCount(); i++) {
     pSh=GetShip(i);
     if (pSh==NULL) continue;
 
+    // Execute tactical AI: Each ship's brain handles its current context
+    // Brains can switch contexts internally (e.g., Gatherer -> Voyager -> Gatherer)
     pSh->GetBrain()->Decide();
   }
 }
@@ -87,14 +96,22 @@ void Voyager::Decide()
     return;  // Let's blow this pop stand
   }
 
-  double tang = (double)(pShip->GetShipNumber()) * PI/2.0;
-  // Desired angle of station departure
+  // Otherwise, we're docked - time to depart!
 
+  // Desired angle of station departure
+  double tang = (double)(pShip->GetShipNumber()) * PI/2.0;
+
+  // Only one of O_TURN and O_THRUST can be active at a time. Here we set
+  // O_TURN, but then if our desired turning angle is small (probably because
+  // we did an O_TURN last turn), we then set an O_THRUST order, which will
+  // clear the O_TURN order.
   tang -= pShip->GetOrient();
   if (tang<-PI) tang+=PI2;
   if (tang>PI) tang-=PI2;
   pShip->SetOrder(O_TURN,tang);
 
+  // O_THRUST and O_TURN orders while docked cost us no fuel, so we can go all
+  // the way to maxspeed at no cost.
   if (fabs(tang)<0.2)
     pShip->SetOrder(O_THRUST,maxspeed);
 }
@@ -108,7 +125,13 @@ void Stalker::Decide()
       *pShip==*pTarget) return;  // Can't home in on ourselves!
   
   // First of all, are we going to crash into them anyway?
-  double dt = pShip->DetectCollisionCourse(*pTarget);
+  //
+  // NOTE: Here we use a legacy and estimated collision detection to preserve
+  // ChromeFunk's original behavior.
+  //
+  // NEW TEAMS: Should use *pShip->DetectCollisionCourse(*pTarget) instead, which
+  // is inherited from CThing.
+  double dt = LegacyDetectCollisionCourse(*pTarget);
   if (dt!=NO_COLLIDE) {
     pShip->SetOrder(O_THRUST,0.0);  // Yup. Cancel thrust orders, if any
     return;          // Our work here is done
@@ -148,6 +171,39 @@ void Stalker::Decide()
 }
 
 //------------------------------------
+// Legacy collision detection function for ChromeFunk team Preserves original
+// behavior under the old engine's collision detection estimation, which is
+// imperfect.
+//
+// ChromeFunk's AI logic was designed around this approximation approach, so we
+// maintain it to preserve their intended behavior.
+//------------------------------------
+double Stalker::LegacyDetectCollisionCourse(const CThing& OthThing) const
+{
+  if (OthThing==*pShip) return NO_COLLIDE;
+
+  CTraj VRel = pShip->RelativeVelocity(OthThing);  // Direction of vector
+  if (VRel.rho<=0.05) return NO_COLLIDE;  // Never gonna hit if effectively not moving
+
+  double flyred = pShip->GetSize() + OthThing.GetSize();   // Don't allow them to scrape each other
+  double dist = pShip->GetPos().DistTo(OthThing.GetPos());  // Magnitude of vector
+  if (dist<flyred) return 0.0;   // They're already impacting
+
+  // LEGACY LOGIC: This approximation projects along relative velocity direction
+  // for a distance equal to current separation looking for a collision.
+  CTraj VHit (dist,VRel.theta);
+  CCoord RelPos = OthThing.GetPos()-pShip->GetPos(),
+    CHit(RelPos+VHit.ConvertToCoord());
+
+  double flyby = CHit.DistTo(CCoord(0.0,0.0));
+  if (flyby>flyred) return NO_COLLIDE;
+
+  // Pending collision
+  double hittime = (dist-flyred) / VRel.rho;
+  return hittime;
+}
+
+//------------------------------------
 
 void Shooter::Decide()
 {
@@ -177,6 +233,9 @@ void Shooter::Decide()
   TurnVec.Normalize();
   double dang = TurnVec.theta;
 
+  // LEGACY BUG: The engine won't let us turn and thrust in the same turn, so
+  // the THRUST below never happens (the THRUST command is overridden by the
+  // TURN command). We leave the bug in place for historic interest.
   pShip->SetOrder(O_THRUST,0.0);  // Stabilize, get a decent shot
 
   pShip->SetOrder(O_TURN,dang);  // Turn to face him
@@ -225,6 +284,7 @@ UINT Gatherer::SelectTarget()
     pTh = pmyWorld->GetThing(index);  // Get ptr to CThing object
     ThKind = pTh->GetKind();   // What are you?
 
+    // If we find an enemy ship, we make that the target.
     if (ThKind==SHIP && pTh->GetTeam()!=pShip->GetTeam()) {
       return index;
     }
@@ -243,7 +303,7 @@ UINT Gatherer::SelectTarget()
     
     if (dbest<dist // If this is better than all previous potential targets
 	|| indbest==BAD_INDEX) {  // Or if this is our first potential target 
-      indbest = index;  // Rem7ember this is our best target candidate
+      indbest = index;  // Remember this is our best target candidate
       dbest = dist;   // Remember the best calculated distance
     }    
   }
@@ -271,7 +331,8 @@ void Gatherer::AvoidCollide()
     //if (pTarget==pTh) continue;  // Okay to collide with target
     if (pTh==pShip) continue;  // Won't collide with yourself
 
-    dsec = pShip->DetectCollisionCourse(*pTh);
+    // Use legacy collision detection to preserve ChromeFunk's behavior
+    dsec = LegacyDetectCollisionCourse(*pTh);
     if (dsec==NO_COLLIDE) continue;  // No collision pending
     if (dsec>15.0) continue;  // Collision won't happen for a while
 
@@ -279,11 +340,13 @@ void Gatherer::AvoidCollide()
     // we need to take evasive action
 
     // First, though, are we already accelerating anyway?
+    // NOTE: Use GetJettison() convenience methods instead of GetOrder(O_JETTISON) directly
+    // for better type safety and readability
     if (pShip->GetOrder(O_THRUST)!=0.0
 	|| pShip->GetJettison(VINYL)!=0.0
 	|| pShip->GetJettison(URANIUM)!=0.0) continue;
-    // We're ejecting something, so we'll probably move out
-    // of the way anyway
+    // We're either thrusting or ejecting something, so we'll probably move out
+    // of the way anyway due to change of trajectory
 
     // Nope, we need to dodge an impact
     // Do we have enough time to get away?
@@ -297,6 +360,8 @@ void Gatherer::AvoidCollide()
       return;  // We already know we need to move.
     }
     else {   // No time to get out of the way
+      // NOTE: In this simple client we shoot at anything we'll collide with -
+      // including friendly ships or our own station!
       pTarget = pTh;
       Shooter::Decide();  // Let's just shoot it
       return;  // That's all we can handle for this turn
@@ -309,9 +374,10 @@ void Gatherer::AvoidCollide()
 
 void Gatherer::Decide()
 {
+  // Context switching: Handle station departure with temporary brain
   if (pShip->IsDocked()) {
-    new Voyager(this);  // Voyager will take command until we
-    return;   // have left the station
+    new Voyager(this);  // Switch to departure context temporarily
+    return;   // Voyager will handle departure, then restore this brain
   } 
 
   CTeam *pmyTeam = pShip->GetTeam();
@@ -333,6 +399,8 @@ void Gatherer::Decide()
 
   if (pShip->GetAmount(S_FUEL)<5.0   // Fuel is dangerously low!!!
       && pShip->GetAmount(S_CARGO)>5.0) {  // Cargo's weighing us down
+    // NOTE: Use SetJettison() convenience method instead of SetOrder(O_JETTISON, ...) directly
+    // for better type safety and readability
     pShip->SetJettison(VINYL,5.0);
     // Eject cargo so we can maneuver more easily
   }

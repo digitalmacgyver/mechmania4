@@ -17,10 +17,15 @@ CClient::CClient (int port, char *hostname, bool bObserv)
   umyIndex=(UINT)-1;
   aTms=NULL;
 
+  pmyWorld = NULL;
+  /*
+  // LEGACY CODE: We used to initiate pmyWorld here, but it is almost
+  // immediately overwritten with the world from the server, so we skip that now.
   pmyWorld = new CWorld(0);
   pmyWorld->CreateAsteroids(VINYL,5,40.0);
   pmyWorld->CreateAsteroids(URANIUM,5,40.0);
   pmyWorld->PhysicsModel(0.0);  // Add new asteroids to world
+  */
 
   pmyNet = new CClientNet(hostname,port);
   if (IsOpen()==0) return;  // Connection failed

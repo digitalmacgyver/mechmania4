@@ -6,6 +6,7 @@
 
 #include "Traj.h"
 #include "Coord.h"
+#include <cassert>
 
 /////////////////////////////////////////////
 // Construction/Destruction
@@ -54,9 +55,17 @@ void CTraj::Normalize()
   if (theta> PI) theta = fmod(theta+PI, PI2)-PI;
 
   if (theta<-(PI+0.0001) || theta>(PI+0.0001)) {
-    // printf ("MM4 ENGINE ERROR: CTraj::Normalize() gave result %f(%f)\n",theta,rho);
-    rho=0.0;
-    theta=0.0;
+    assert(false && "CTraj::Normalize() failed to normalize theta properly");
+
+    // Recovery: clamp to the nearest valid boundary
+    if (theta < -PI) {
+      theta = -PI;
+    } else if (theta > PI) {
+      theta = PI;
+    }
+
+    // Log the recovery for debugging
+    printf("WARNING: CTraj::Normalize() recovery executed. Clamped theta to %f\n", theta);
   }
 }
 
@@ -124,10 +133,29 @@ CTraj& CTraj::operator-= (const CTraj& OthTraj)
 CTraj& CTraj::operator- ()
 {
   theta+=PI;
-  if (theta>PI) theta-=PI2;
+  Normalize();
   return *this;
 }
 
+// HISTORICAL NOTE: These equality operators have been commented out due to
+// several logical problems in their implementation:
+//
+// 1. PI vs -PI Issue: The operators use numerical equality (theta != OthTraj.theta)
+//    but PI and -PI represent the same logical direction (straight left).
+//    This means CTraj(5.0, PI) == CTraj(5.0, -PI) should be TRUE logically,
+//    but these operators return FALSE due to numerical difference.
+//
+// 2. operator!= Logic Error: The implementation is backwards:
+//    "if (OthTraj==*this) return FALSE;" should be "return !(*this == OthTraj);"
+//    The current logic returns FALSE when objects ARE equal, which is wrong.
+//
+// 3. Unused in Codebase: These operators are never actually used anywhere
+//    in the codebase, suggesting they were implemented but never needed.
+//
+// These operators are preserved for historical interest but commented out to
+// prevent unexpected behavior if someone tries to use them in the future.
+
+/*
 bool CTraj::operator== (const CTraj& OthTraj) const
 {
   if (rho!=OthTraj.rho) return false;
@@ -140,6 +168,7 @@ bool CTraj::operator!= (const CTraj& OthTraj) const
   if (OthTraj==*this) return false;
   return true;
 }
+*/
 
 ///////////////////////////////////////////////
 // Friend functions

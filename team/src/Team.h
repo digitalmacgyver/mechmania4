@@ -48,12 +48,15 @@ class CTeam : public CSendable
   UINT SetTeamNumber(UINT newTN);       // Returns old
   char *SetName(const char *strname);      // Returns ptr to Name
   void Reset();                // Resets orders and text
-  
+
+  // Brain management for strategic context switching
+  // Teams use these to assign appropriate tactical behaviors to ships
   CBrain* GetBrain();             // Returns current CBrain object
   CBrain* SetBrain(CBrain* pBr);  // Returns old CBrain object
 
-  virtual void Init() = 0;
-  virtual void Turn() = 0;
+  // Strategic AI methods
+  virtual void Init() = 0;        // Team initialization and setup
+  virtual void Turn() = 0;        // Strategic decision making and brain assignment
   static CTeam *CreateTeam( void );
 
   unsigned GetSerInitSize() const;

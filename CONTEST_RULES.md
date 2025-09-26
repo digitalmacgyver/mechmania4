@@ -1,12 +1,12 @@
 # MechMania IV: The Vinyl Frontier - Contest Rules
 
 ## Game Overview
-MechMania IV is a 2D space resource collection and combat game where two teams compete to collect vinyl (the primary resource) while managing fuel and avoiding or engaging in combat. The contest runs for 400 seconds of simulated time.
+MechMania IV is a 2D space resource collection and combat game where two teams compete to collect vinyl (the primary resource) while managing fuel and avoiding or engaging in combat. The contest runs for 300 seconds of simulated time.
 
 ## Playing Field
 
 ### World Dimensions
-- **Size:** 1024 × 1024 units (from -512 to 512 on both X and Y axes)
+- **Size:** 1024 × 1024 units (from [-512, 512) on both X and Y axes)
 - **Topology:** Toroidal (edges wrap around) - objects leaving one edge appear on the opposite edge
 - **Coordinate System:** Continuous floating-point coordinates
 
@@ -15,8 +15,6 @@ MechMania IV is a 2D space resource collection and combat game where two teams c
 - **Station Placement:**
   - Team 0: (-256, -256) - bottom-left quadrant
   - Team 1: (256, 256) - top-right quadrant
-  - Team 2: (-256, 256) - top-left quadrant
-  - Team 3: (256, -256) - bottom-right quadrant
 - **Asteroids:** Randomly distributed vinyl and uranium asteroids of varying sizes
 
 ## Ships
@@ -27,8 +25,9 @@ At initialization, each team can allocate their ships' capacity between fuel and
 - **Default Split:** 30 tons fuel, 30 tons cargo
 - **Customizable:** Teams can adjust the fuel/cargo ratio at game start
 - **Shield Capacity:** 8000 units (effectively unlimited)
-- **Mass:** 10 tons (empty ship)
+- **Mass:** 10 tons (empty ship) + current fuel + current vinyl cargo
 - **Maximum Speed:** 30 units/second
+- **Size:** A radius 12 circle
 
 ### Ship Capabilities
 Ships can perform the following actions each turn:
@@ -41,7 +40,7 @@ Ships can perform the following actions each turn:
 ## Resources
 
 ### Vinyl (Primary Resource)
-- **Color:** Yellow asteroids
+- **Color:** Purple asteroids
 - **Collection:** Ships collect vinyl by colliding with vinyl asteroids
 - **Storage:** Stored in ship's cargo hold
 - **Scoring:** Deposited at your station to score points
@@ -65,6 +64,7 @@ Ships can perform the following actions each turn:
 - **Fuel Cost:** 1 ton of fuel rotates a 10-ton ship 6 full circles (12π radians)
 - **Formula:** Fuel = |rotation| × ship_mass / (6 × 2π × empty_mass)
 - **While Docked:** No fuel consumed for rotation
+- **No Angular Momentum:** After each turn order to a desired heading a ship does not continue to rotate
 
 ### Physics
 - **Momentum:** Ships maintain velocity when not thrusting (Newtonian physics)
@@ -74,17 +74,17 @@ Ships can perform the following actions each turn:
 ## Combat System
 
 ### Lasers
-- **Range:** Variable (set by ship)
-- **Fuel Cost:** 1 ton per 50 miles of beam length
+- **Range:** Variable (set by ship) up to 512 units long
+- **Fuel Cost:** 1 ton per 50 units of beam length
 - **Formula:** Fuel = beam_length / 50
-- **Damage:** beam_length / 1000 shield units
+- **Damage:** 30*( L - D ) / 1000 shield units where L is the length of the fired beam and D is the distance to the target.
 - **Restrictions:** Cannot fire while docked
 - **Targeting:** Hits first object in line of sight
 
 ### Laser Effects on Different Objects
 - **Enemy Ships:** Damages shields, destroys ship if shields depleted
-- **Asteroids:** Breaks large asteroids into smaller pieces
-- **Stations:** Reduces stored vinyl (1 ton vinyl lost per 1000 miles of beam)
+- **Asteroids:** Breaks large asteroids into smaller pieces if at least 1000 damage is done (otherwise no effect)
+- **Stations:** Reduces stored vinyl (1 ton vinyl lost per 1000 points of damage)
 - **Friendly Fire:** Can damage your own ships/station
 
 ### Shields
@@ -93,7 +93,7 @@ Ships can perform the following actions each turn:
 - **Maximum:** 8000 units (effectively unlimited)
 - **Damage Sources:**
   - Laser hits: beam_length / 1000 shield damage
-  - Collisions: relative_momentum / 1000 shield damage
+  - Collisions: relative_velocity*mass_of_collided_object / 1000 shield damage
 - **Destruction:** Ship destroyed when shields reach negative value
 
 ## Collisions
@@ -104,7 +104,8 @@ Ships can perform the following actions each turn:
   - Vinyl → Added to cargo hold
   - Asteroid destroyed
 - **Large Asteroids (doesn't fit):**
-  - Ship takes collision damage (relative_momentum / 1000)
+  - Ship takes collision damage (relative_velocity*asteroid_mass / 1000)
+  - Asteroid destroyed and either 3 smaller asteroids are created, or the asteroid is reduced to useless space dust if the resulting size would be too small
   - Both objects bounce apart
 
 ### Ship-Ship Collisions
@@ -120,11 +121,11 @@ Ships can perform the following actions each turn:
 - **Fuel Tank:** NOT refilled - remains at pre-docking level
 - **Shield Recharge:** Manual (use shield charge order with actual fuel from tank)
 - **Protection:** Immune to damage while docked
+- **Orientation:** You can change your heading while docked (costs no fuel)
 - **Departure:** Thrust to leave station (costs no fuel while still docked)
 
 #### Enemy Station
-- **Damage:** Ship takes collision damage
-- **No Benefits:** Cannot dock or refuel
+- **Same as your station:** THIS MEANS YOU CAN GIVE VINYL TO THE ENEMY STATION!
 
 ### Station-Asteroid Collisions
 - **Damage:** Station takes minor damage to vinyl stores
@@ -134,21 +135,19 @@ Ships can perform the following actions each turn:
 
 ### Order System
 - **Simultaneous:** All orders can be issued in same turn
-- **Priority:** Shield → Turn → Thrust → Laser → Jettison
-- **Execution:** Physics happens before combat each turn
+- **Compatibility:** Shield and Lasers can be used every turn. Only one of Jettison, Turn, or Thrust may be used per turn.
+- **Execution:** Physics motion happens before combat each turn
 
 ### Order Limits
 - **Shield:** Limited by available fuel
-- **Laser:** Limited by fuel and cannot fire while docked
+- **Laser:** Limited by fuel (Beam length/50 fuel cost), maximum beam length is 512, and cannot fire while docked
 - **Thrust:** ±30 units/second change (limited by fuel)
-- **Turn:** ±2π radians per second (limited by fuel)
+- **Turn:** ±2π radians (limited by fuel). Note - you turn to the desired heading and stop - ships don't continue to spin after turning.
 - **Jettison:** Limited by cargo/fuel carried
 
 ### Jettison Mechanics
-- **Purpose:** Create new asteroids from ship resources
-- **Positive Value:** Jettisons uranium (from fuel tank)
-- **Negative Value:** Jettisons vinyl (from cargo hold)
-- **Minimum:** Must jettison at least 0.01 tons
+- **Purpose:** Create new asteroids from ship resources, lightens ship to reduce fuel costs of maneuvering, prevent docking at enemy station with Vinyl, ??throw rocks at enemy ships??
+- **Minimum:** Must jettison at least 3 tons, specifying a lower amount will have no effect
 - **Result:** Creates new asteroid at ship location
 
 ## Information Available to Teams
@@ -171,12 +170,12 @@ Teams do NOT know:
 ### Communication
 - Teams can print text messages visible to observers
 - Messages displayed in observer console
-- Maximum 2048 characters per message buffer
+- Maximum 512 characters per message buffer
 
 ## Victory Conditions
 
 ### Game Duration
-- **Length:** 400 seconds of simulated time
+- **Length:** 300 seconds of simulated time
 - **Time Step:** Variable (typically 1 second per simulation cycle)
 
 ### Scoring
@@ -206,22 +205,22 @@ Teams do NOT know:
 - Shield maintenance requires fuel investment
 
 ### Asteroid Management
-- Large asteroids can be broken into smaller pieces with lasers
+- Large asteroids can be broken into smaller pieces with lasers (or crashing into them with ships)
 - Small pieces easier to collect but require more trips
 - Uranium asteroids provide fuel but don't score points
 - Can jettison resources to create obstacles/distractions
 
 ### Station Strategy
 - Regular returns to base required to deposit vinyl
-- Docking provides free fuel for departure thrust
+- Docking provides free rotation and departure thrust
 - Stations are vulnerable to laser attacks
-- Can camp enemy station to prevent scoring
 
 ## Technical Notes
 
 ### Turn Sequence
 1. Teams submit orders
 2. Physics simulation (movement, collisions)
+   * Internally handled in five, 0.2 second tics, per 1 second game turn
 3. Combat resolution (lasers, damage)
 4. Resource collection
 5. Score updates
@@ -231,7 +230,7 @@ Teams do NOT know:
 - Origin (0,0) at world center
 - Positive X to the right
 - Positive Y upward
-- Angles in radians (0 = east, π/2 = north)
+- Angles in radians (0 = east,πPI/2 = north)
 
 ### Units
 - Distance: miles

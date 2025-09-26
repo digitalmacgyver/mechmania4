@@ -150,6 +150,27 @@ void CWorld::LaserModel ()
   CTraj LasTraj, TarVel, TmpTraj;
   double dfuel,dLasPwr, dLasRng;
 
+  /*
+   * Laser delivery model:
+   * ---------------------
+   * Lasers are not persistent world objects. Instead, each turn we
+   * synthesize a temporary CThing (LasThing) with kind GENTHING and
+   * deliver it directly to the chosen target via Collide(). The
+   * synthesized "laser thing" is placed one world-unit in front of the
+   * target, along the beam direction, and its mass encodes the
+   * remaining beam power at that point:
+   *
+   *   LasThing.mass = 30 * (L - D)
+   *
+   * where L is the requested beam length (clamped earlier), and D is
+   * the distance from the shooter to a point one unit short of the
+   * target along the beam line. By positioning just before the target
+   * and using (L - D), the target's HandleCollision() sees the
+   * remaining beam power when the beam reaches it, not the initial
+   * requested length. Targets can then use the laser "mass" to decide
+   * effects (e.g., asteroids break if mass >= 1000.0).
+   */
+
   for (nteam=0; nteam<GetNumTeams(); nteam++) {
     pTeam = GetTeam(nteam);
     if (pTeam==NULL) continue;
@@ -159,6 +180,7 @@ void CWorld::LaserModel ()
       dLasPwr = pShip->GetOrder(O_LASER);
       if (dLasPwr<=0.0) continue;
 
+      // Compute the nominal end-of-beam position from shooter
       LasPos = pShip->GetPos();
       LasTraj = CTraj(dLasPwr,pShip->GetOrient());
       LasPos += LasTraj.ConvertToCoord();
@@ -169,13 +191,17 @@ void CWorld::LaserModel ()
       if (dLasRng>dLasPwr) pTarget=NULL;
       if (pTarget!=NULL) {
 	TmpPos=pTarget->GetPos();
+	// Move impact point to one unit in front of the target along the
+	// beam. This ensures we measure remaining length (L - D) at impact.
 	TmpTraj = pShip->GetPos().VectTo(TmpPos);
 	TmpTraj.rho=1.0;
 	TmpPos -= (CCoord)TmpTraj;
 	LasThing.SetPos(TmpPos);
 
+	// Remaining beam power at impact: mass = 30 * (L - D)
 	dLasRng = TmpPos.DistTo(pShip->GetPos());
 	LasThing.SetMass(30.0*(dLasPwr-dLasRng));
+	// Give the laser thing a small velocity bias based on target motion
 	TarVel = pTarget->GetVelocity();
 	TarVel.rho += 1.0;
 	LasThing.SetVel(TarVel);
@@ -206,6 +232,7 @@ void CWorld::LaserModel ()
 	}
 	printf("\n");
 
+	// Deliver the synthesized laser impact to the target
 	pTarget->Collide(&LasThing, this);
       }
 

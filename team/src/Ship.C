@@ -133,10 +133,12 @@ double CShip::SetCapacity(ShipStat st, double val)
 
 CBrain* CShip::SetBrain(CBrain* pBr)
 {
+  // Context switching: Replace current tactical behavior with new one
+  // This enables dynamic AI behavior changes based on strategic context
   CBrain *pBrTmp = GetBrain();
   pBrain = pBr;
-  if (pBrain!=NULL) pBrain->pShip = this;
-  return pBrTmp;
+  if (pBrain!=NULL) pBrain->pShip = this;  // Link brain to this ship
+  return pBrTmp;  // Return previous brain for cleanup/restoration
 }
 
 ////////////////////////////////////////////
@@ -152,10 +154,11 @@ void CShip::ResetOrders()
 // SetOrder method used for computing fuel consumed for an order
 double CShip::SetOrder(OrderKind ord, double value)
 {
+  // NOTE: Use SetJettison() and GetJettison() helper functions instead of
+  // calling SetOrder(O_JETTISON, ...) directly for better type safety and readability
   double valtmp, fuelcon, maxfuel;
   CTraj AccVec;
   UINT oit;
-  AsteroidKind AsMat;
 
   maxfuel=GetAmount(S_FUEL);
   if (IsDocked()==true) maxfuel=GetCapacity(S_FUEL);
@@ -211,6 +214,8 @@ double CShip::SetOrder(OrderKind ord, double value)
       if (fuelcon>maxfuel && IsDocked()==false) {
 	fuelcon = maxfuel;
 	valtmp = fuelcon*6.0*maxspeed*mass/GetMass();
+	// If our original requested thrust was negative, make our clamped value
+	// negative as well.
 	if (value<=0.0) value=-valtmp;
 	else value=valtmp;
       }
@@ -237,33 +242,106 @@ double CShip::SetOrder(OrderKind ord, double value)
       adOrders[(UINT)O_TURN] = value;
       return fuelcon;
 
-    case O_JETTISON:  // "value" is tonnage: positive for fuel, neg for cargo
-      if (fabs(value)<minmass) {
-	value=0.0;
-	adOrders[(UINT)O_JETTISON]=0.0;
-	return 0.0;  // Jettisonning costs no fuel
+    case O_JETTISON: { // "value" is tonnage: positive for fuel, neg for cargo
+      // NOTE: Use SetJettison() and GetJettison() helper functions instead of
+      // calling SetOrder(O_JETTISON, ...) directly for better type safety
+      double requestedAmount = fabs(value);
+
+      // 1. Minimum mass threshold check
+      if (requestedAmount < minmass) {
+          adOrders[(UINT)O_JETTISON] = 0.0;
+          return 0.0;
       }
-   
+
+      // 2. Cancel conflicting orders
       adOrders[(UINT)O_THRUST] = 0.0;
       adOrders[(UINT)O_TURN] = 0.0;
-   
-      AsMat=URANIUM;
-      if (value<=0.0) AsMat=VINYL;
-      oit = (UINT)AstToStat(AsMat);
 
-      maxfuel=GetAmount((ShipStat)oit);  // Not necessarily fuel
-      if (maxfuel<value) value=maxfuel;
-      adOrders[(UINT)O_JETTISON] = value;
+      // 3. Determine material and inventory stat
+      ShipStat inventoryStat;
+      bool isFuel = (value > 0.0);
 
-      if (AsMat==URANIUM) return value;  // We're spitting out this much fuel
-      else return 0.0;       // Jettisonning itself takes no fuel
+      if (isFuel) {
+          inventoryStat = S_FUEL; // Uranium
+      } else {
+          inventoryStat = S_CARGO; // Vinyl
+      }
 
+      // 4. Check available inventory and clamp the amount
+      double availableAmount = GetAmount(inventoryStat);
+      double actualAmount = requestedAmount;
+      if (requestedAmount > availableAmount) {
+          actualAmount = availableAmount;
+      }
+
+      // 5. Update the order, restoring the sign
+      if (isFuel) {
+          adOrders[(UINT)O_JETTISON] = actualAmount;
+          return actualAmount;
+      } else {
+          adOrders[(UINT)O_JETTISON] = -actualAmount;
+          return 0.0;
+      }
+    }
+
+    /*
+    // LEGACY CODE: This is the legacy implementation of O_JETTISON, which is
+    // replaced above. In addition to being confusing due to using the sign to
+    // determine the type of material jettisoned (- for vinyl, + for uranium),
+    // there is a bug where it does not clamp vinyl jettison to the amount of
+    // vinyl we have. E.g. if we have a command to jettison 10 vinyl and have
+    // only 5 then:
+    //  * value will be -10
+    //  * maxfuel=GetAmount((ShipStat)oit); will be 5
+    //  * if (maxfuel<value) is then if (5<-10) which is false, so we don't
+    //    clamp the order to -5, and go ahead and add an O_JETTISON of -10.
+
+    if (fabs(value)<minmass) {
+        value=0.0;
+        adOrders[(UINT)O_JETTISON]=0.0;
+        return 0.0;  // Jettisoning costs no fuel
+    }
+
+    adOrders[(UINT)O_THRUST] = 0.0;
+    adOrders[(UINT)O_TURN] = 0.0;
+
+    AsMat=URANIUM;
+    if (value<=0.0) AsMat=VINYL;
+    oit = (UINT)AstToStat(AsMat);
+
+    maxfuel=GetAmount((ShipStat)oit);  // Not necessarily fuel
+    if (maxfuel<value) value=maxfuel;
+    adOrders[(UINT)O_JETTISON] = value;
+
+    if (AsMat==URANIUM) return value;  // We're spitting out this much fuel
+    else return 0.0;       // Jettisoning itself takes no fuel
+    */
+
+    // LEGACY: Combined fuel calculation for O_SHIELD, O_LASER, and O_THRUST
+    // orders (never used) This was intended as a "how much fuel will all my
+    // orders take" convenience function but was never implemented or used
+    // anywhere in the codebase.
+    //
+    // Issues with current implementation:
+    // - Recursive SetOrder calls may have unintended side effects
+    // - No clear interface or documentation for O_ALL_ORDERS usage
+    // - Fuel calculation logic is unclear and potentially incorrect
+    //
+    // To make this useful, it would need:
+    // - Clear documentation of intended behavior
+    // - Non-recursive fuel calculation logic
+    // - Proper handling of fuel conflicts between orders
+    // - Better interface design for fuel budgeting
+    /*
     default:
       valtmp=0.0;
       for (oit=(UINT)O_SHIELD; oit<=(UINT)O_THRUST; oit++)
          valtmp += SetOrder((OrderKind)oit,GetOrder((OrderKind)oit));
       return valtmp;
+    */
   }
+
+  return 0.0;  // Should never reach here, but prevents compiler warning
 }
 
 void CShip::SetJettison(AsteroidKind Mat, double amt)
@@ -546,6 +624,8 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     if (pEat!=NULL && !(*pEat==*this)) return;
     // Already taken by another ship
 
+    // Update ship velocity with conservation of linear momentum for a perfectly
+    // inelastic collision, clamped by maxspeed.
     CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
     double othmass = pOthThing->GetMass();
     double masstot = GetMass() + othmass;
@@ -568,6 +648,8 @@ void CShip::HandleCollision (CThing* pOthThing, CWorld *pWorld)
     pmyTeam=pTmpTm;
   }
 
+  // Apply a separation impulse to a ship to bump it clear of other ships or
+  // asteroid bits that may have been created as a result of collision.
   double dang = pOthThing->GetPos().AngleTo(GetPos());
   double dsmov = pOthThing->GetSize() + 3.0;
   CTraj MovVec(dsmov,dang);
@@ -603,6 +685,7 @@ void CShip::HandleJettison()
   CCoord AstPos(Pos);
   CTraj AstVel(Vel);
 
+  // Place the asteroid at a distance from the ship to avoid overlap.
   CTraj MovVec(Vel);
   double totsize = GetSize() + pAst->GetSize();
   MovVec.rho = totsize * 1.15;

@@ -27,7 +27,8 @@ set(COMMON_SOURCES
     ${SRC_DIR}/Ship.C
     ${SRC_DIR}/World.C
     ${SRC_DIR}/Team.C
-    ${SRC_DIR}/Parser.C
+    ${SRC_DIR}/ArgumentParser.C
+    ${SRC_DIR}/ParserModern.C
 )
 
 # Network sources

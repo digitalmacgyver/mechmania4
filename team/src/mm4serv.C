@@ -1,5 +1,5 @@
 #include "Server.h"
-#include "Parser.h"
+#include "ParserModern.h"
 #include "World.h"
 #include "Team.h"
 #include "Station.h"
@@ -7,10 +7,14 @@
 #include <sys/types.h>
 #include <ctime>
 
+// Global parser instance for feature flag access
+CParser* g_pParser = nullptr;
+
 int main(int argc, char *argv[])
 {
   srand(time(NULL));
   CParser PCmdLn(argc,argv);
+  g_pParser = &PCmdLn;  // Set global parser instance
 
   if (PCmdLn.needhelp==1) {
     printf ("mm4serv [-pport] [-Tnumteams]\n");

@@ -11,8 +11,12 @@
 #include "stdafx.h"
 #include "Sendable.h"
 
-const double fWXMin=-512.0,fWYMin=-512.0,
-  fWXMax=512.0,fWYMax=512.0;
+const double fWXMin = -512.0;
+const double fWYMin = -512.0;
+const double fWXMax =  512.0;
+const double fWYMax =  512.0;
+const double kWorldSizeX = fWXMax - fWXMin;
+const double kWorldSizeY = fWYMax - fWYMin;
 
 class CTraj;
 

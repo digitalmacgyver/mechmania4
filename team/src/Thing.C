@@ -8,6 +8,8 @@
 #include "Traj.h"
 #include "Thing.h"
 #include "World.h"
+#include "ParserModern.h"
+#include <cmath>  // For sqrt()
 #include "Team.h"
 
 /////////////////////////////////////////////
@@ -209,6 +211,8 @@ bool CThing::IsFacing (const CThing& OthThing) const
 {
   if (*this==OthThing) return false;  // Won't laser-fire yourself
 
+  // Work in relative coordinate system where 'this' object is at origin (0,0)
+  // cOrg = this object's position in relative coords, cOth = other object's relative position
   CCoord cOrg(0.0,0.0), cOth(OthThing.GetPos()-GetPos());
   if (cOrg==cOth) return true;
 
@@ -225,8 +229,26 @@ bool CThing::IsFacing (const CThing& OthThing) const
   return false;
 }
 
+// Global parser instance - will be set by main programs
+extern CParser* g_pParser;
+
 double CThing::DetectCollisionCourse(const CThing& OthThing) const
 {
+  // Use ArgumentParser to determine which collision detection to use
+  // Default to new behavior unless explicitly set to old
+  if (g_pParser && !g_pParser->UseNewFeature("collision-detection")) {
+    return DetectCollisionCourseOld(OthThing);
+  }
+  return DetectCollisionCourseNew(OthThing);
+}
+
+double CThing::DetectCollisionCourseOld(const CThing& OthThing) const
+{
+  // LEGACY COLLISION DETECTION (retained for backward compatibility)
+  // This uses an approximation that projects along relative velocity direction
+  // for a distance equal to current separation. Works in some cases but fails
+  // for perpendicular approaches and complex trajectories.
+
   if (OthThing==*this) return NO_COLLIDE;
 
   CTraj VRel = RelativeVelocity(OthThing);  // Direction of vector
@@ -242,10 +264,105 @@ double CThing::DetectCollisionCourse(const CThing& OthThing) const
 
   double flyby = CHit.DistTo(CCoord(0.0,0.0));
   if (flyby>flyred) return NO_COLLIDE;
-  
+
   // Pending collision
   double hittime = (dist-flyred) / VRel.rho;
   return hittime;
+}
+
+double CThing::DetectCollisionCourseNew(const CThing& OthThing) const
+{
+  // Robust collision detection using the Quadratic Formula approach.
+  // We analyze the motion in a relative frame of reference where 'this' object
+  // is stationary at the origin, and 'OthThing' moves relative to it.
+
+  // NOTE ON OVERALL APPROACH BELOW:
+  // Optimization: We operate on and compare squared distances (e.g. PMagSq < RSq)
+  // instead of actual distances (sqrt(PMagSq) < R). This is much faster because
+  // sqrt() is expensive. The result is mathematically identical since distances
+  // are always positive.
+
+  if (OthThing==*this) return NO_COLLIDE;
+
+  // 1. Setup Relative Vectors in Cartesian Coordinates.
+
+  // P: Relative Position (Vector from 'this' to 'OthThing').
+  // CCoord operator- correctly handles toroidal wrap-around, providing the shortest path vector.
+  CCoord RelPos = OthThing.GetPos() - GetPos();
+  double Px = RelPos.fX;
+  double Py = RelPos.fY;
+
+  // V: Relative Velocity (Velocity of 'OthThing' minus Velocity of 'this').
+  // We convert the result (CTraj) to Cartesian coordinates (CCoord) for the vector math.
+  CTraj VRel_Traj = OthThing.GetVelocity() - GetVelocity();
+  CCoord VRel = VRel_Traj.ConvertToCoord();
+  double Vx = VRel.fX;
+  double Vy = VRel.fY;
+
+  // R: Collision Radius (Sum of the radii of both objects).
+  double R = GetSize() + OthThing.GetSize();
+  double RSq = R * R;
+
+  // 2. Check for immediate overlap.
+  // PMagSq is the current distance squared.
+  double PMagSq = Px*Px + Py*Py;
+  if (PMagSq < RSq) {
+    return 0.0; // Already impacting
+  }
+
+  // 3. Setup the Quadratic Equation.
+  // We want to find the time 't' (TTC) when the distance squared equals R^2.
+  // |P + V*t|^2 = R^2
+  // Expanding and rearranging into the standard form At^2 + Bt + C = 0:
+
+  // A = V.V (Squared magnitude of relative velocity)
+  double A = Vx*Vx + Vy*Vy;
+
+  // B = 2 * (P.V) (Twice the dot product of relative position and velocity)
+  double PdotV = Px*Vx + Py*Vy;
+  double B = 2.0 * PdotV;
+
+  // C = P.P - R^2 (Squared magnitude of position minus squared collision radius)
+  double C = PMagSq - RSq;
+
+  // 4. Analyze coefficients for early exits.
+
+  // Check for Zero Relative Velocity (Fixes Flaw 1: Division by zero/Incorrect Theta usage)
+  // If A is near zero, the relative velocity is zero.
+  // Since we already checked for overlap (C > 0), they will not collide.
+  const double EPSILON = 1e-9;
+  if (A < EPSILON) {
+      return NO_COLLIDE;
+  }
+
+  // Check if objects are receding after a collision in the past (Fixes Flaw 2: CPA in the past)
+  // PdotV indicates the rate of closure. If PdotV >= 0, the distance is increasing
+  // or constant (moving apart or parallel).
+  if (PdotV >= 0.0) {
+      return NO_COLLIDE;
+  }
+
+  // 5. Calculate the Discriminant.
+  // D = B^2 - 4AC.
+  // If D < 0, the equation has no real solutions; the trajectories never intersect.
+  double Discriminant = B*B - 4.0*A*C;
+
+  if (Discriminant < 0.0) {
+      return NO_COLLIDE;
+  }
+
+  // 6. Calculate the Time to Impact (TTC) (Fixes Flaw 3: Incorrect TTC calculation).
+  // A collision will occur. We want the smallest positive root of the equation:
+  // t = (-B +/- sqrt(D)) / 2A
+  // Since A > 0 and B < 0 (approaching), the smallest positive root is found using subtraction:
+  double TTC = (-B - sqrt(Discriminant)) / (2.0 * A);
+
+  // Final guard against floating point precision issues near the boundary.
+  if (TTC < 0.0) {
+      return 0.0;
+  }
+
+  return TTC;
 }
 
 ////////////////////////////////////////////////

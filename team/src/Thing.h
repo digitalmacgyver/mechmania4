@@ -71,6 +71,8 @@ class CThing : public CSendable
   bool Overlaps(const CThing& OthThing) const;
 
   double DetectCollisionCourse(const CThing& OthThing) const;
+  double DetectCollisionCourseOld(const CThing& OthThing) const;  // Legacy collision detection
+  double DetectCollisionCourseNew(const CThing& OthThing) const;  // Quadratic formula approach
   CCoord PredictPosition(double dt=1.0) const;
   CTraj RelativeVelocity(const CThing& OthThing) const;
   CTraj RelativeMomentum(const CThing& OthThing) const;

@@ -206,7 +206,13 @@ void CTeam::Init()
 
 void CTeam::Turn()
 {
-
+  // Strategic AI implementation
+  // Teams should analyze game state and assign appropriate brains to ships
+  // Example strategic decisions:
+  // - Early game: Focus on resource gathering
+  // - Late game: Balance resources and combat
+  // - Low fuel: Prioritize fuel collection
+  // - Enemy nearby: Switch to combat behaviors
 }
 
 /////////////////////////////////////////////////////////////////

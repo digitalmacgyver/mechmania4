@@ -41,6 +41,8 @@ class CShip : public CThing
   double SetAmount(ShipStat st, double val);             // Returns new amt
   double SetCapacity(ShipStat st, double val);           // Returns new capacity
 
+  // Brain management for tactical AI context switching
+  // Ships can dynamically switch between different behavioral contexts
   CBrain* GetBrain();             // Returns current CBrain object
   CBrain* SetBrain(CBrain* pBr);  // Returns old CBrain object
 
@@ -57,6 +59,8 @@ class CShip : public CThing
   AsteroidKind StatToAst(ShipStat ShStat) const;
 
   void ResetOrders();
+  // NOTE: Use SetJettison() and GetJettison() helper functions instead of
+  // calling SetOrder(O_JETTISON, ...) directly for better type safety and readability
   double GetOrder(OrderKind Ord) const;        // Returns value of order
   double SetOrder(OrderKind Ord, double value);  // Returns fuel consumed for order
   void SetJettison(AsteroidKind Mat, double amt);

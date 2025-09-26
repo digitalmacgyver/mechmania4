@@ -137,8 +137,10 @@ void CServer::IntroduceWorld(int conn)
 {
   char buf[4];   // Larger than probably needed
 
-  buf[0] = GetNumTeams();
-  buf[1] = aTms[0]->GetShipCount();
+  // Treats these numbers as 8 bit numbers - this works as long as they are 255
+  // or less.
+  buf[0] = (char) GetNumTeams();
+  buf[1] = (char) aTms[0]->GetShipCount();
   
   pmyNet->SendPkt(conn,buf,2);
   return;
@@ -393,6 +395,44 @@ double CServer::Simulation()
     SendWorld(ObsConn);
     return GetTime();
   }
+
+  // Use an integer step counter so the number of physics ticks is immune to
+  // floating-point accumulation error from "t += tstep" comparisons. In older
+  // builds the final iteration could be skipped if rounding nudged t past maxt.
+  const double maxt = 1.0;
+  const double tstep = 0.2;
+
+  // This block retains the desired behavior of always running the loop at least
+  // once, even if tstep >= maxt.
+  int stepCount = 0;
+  if (maxt > 0.0 && tstep > 0.0) {
+    stepCount = static_cast<int>(maxt / tstep);
+    if (static_cast<double>(stepCount) * tstep < maxt) {
+      stepCount++;
+    }
+    if (stepCount <= 0) {
+      stepCount = 1;
+    }
+  }
+
+  for (int step = 0; step < stepCount; ++step) {
+    pmyWorld->PhysicsModel(tstep);
+    if (step == stepCount - 1) {
+      pmyWorld->LaserModel();
+    }
+
+    WaitForObserver();
+    SendWorld(ObsConn);
+
+    for (UINT tm = 0; tm < nTms; tm++) {
+      aTms[tm]->MsgText[0] = 0;
+    }
+  }
+
+  return GetTime();
+
+  /*
+  // Legacy floating-point loop retained for historical reference:
   double t, maxt=1.0, tstep=0.2;
   UINT tm;
   for (t=0.0; t<maxt; t+=tstep) {
@@ -410,6 +450,7 @@ double CServer::Simulation()
   }
 
   return GetTime();
+  */
 }
 
 ///////////////////////////////////

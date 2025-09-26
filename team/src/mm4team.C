@@ -4,11 +4,15 @@
  */
 
 #include "Client.h"
-#include "Parser.h"
- 
+#include "ParserModern.h"
+
+// Global parser instance for feature flag access
+CParser* g_pParser = nullptr;
+
 int main(int argc, char *argv[])
 {
   CParser PCmdLn(argc,argv);
+  g_pParser = &PCmdLn;  // Set global parser instance
   if (PCmdLn.needhelp==1) {
     printf ("mm4team -pport -hhostname\n");
     printf ("  port defaults to 2323\n  hostname defaults to localhost\n");

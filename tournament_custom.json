@@ -1,0 +1,16 @@
+{
+  "description": "MechMania IV Custom Tournament Configuration - Mix of old and new",
+  "options": {
+    "port": 3000,
+    "hostname": "gameserver.local",
+    "gfxreg": "graphics.reg",
+    "numteams": 8,
+    "graphics": true,
+    "reconnect": true
+  },
+  "features": {
+    "collision-detection": "new",
+    "elastic-collisions": "old",
+    "conserve-momentum": "new"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "description": "MechMania IV Competitive Tournament Configuration",
+  "profile": "competitive",
+  "options": {
+    "port": 2323,
+    "hostname": "localhost",
+    "gfxreg": "graphics.reg",
+    "numteams": 4,
+    "graphics": true,
+    "reconnect": true
+  },
+  "features": {
+    "collision-detection": "new",
+    "elastic-collisions": "new",
+    "conserve-momentum": "new"
+  }
+}

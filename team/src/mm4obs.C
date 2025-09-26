@@ -7,11 +7,15 @@
 
 #include "Client.h"
 #include "Observer.h"
-#include "Parser.h" 
+#include "ParserModern.h"
+
+// Global parser instance for feature flag access
+CParser* g_pParser = nullptr;
 
 int main(int argc, char *argv[])
 {
   CParser PCmdLn(argc,argv);
+  g_pParser = &PCmdLn;  // Set global parser instance
   if (PCmdLn.needhelp==1) {
     printf ("mm4obs [-R] [-G] [-pport] [-hhostname] [-ggfxreg]\n");
     printf ("  -R:  Attempt reconnect after server disconnect\n");

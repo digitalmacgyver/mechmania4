@@ -12,14 +12,17 @@
 //////////////////////////////////////
 // Main class: Chrome Funkadelic team
 
+// ChromeFunk: Example implementation of strategic context switching
+// This team demonstrates the Brain system with basic tactical behaviors
 class ChromeFunk : public CTeam
 {
  public:
   ChromeFunk();
   ~ChromeFunk();
 
-  void Init();
-  void Turn();
+  // Strategic AI: Analyzes game state and assigns appropriate brains
+  void Init();   // Initialize ships with default Gatherer brains
+  void Turn();   // Execute tactical AI for each ship's current brain
 };
 
 /////////////////////////////////////
@@ -27,57 +30,68 @@ class ChromeFunk : public CTeam
 
 //-----------------------------
 
+// Voyager: Temporary tactical context for station departure
+// Demonstrates dynamic context switching - replaces current brain temporarily
 class Voyager : public CBrain
-// A short-lived class to depart from base
 {
  public:
-  CBrain *pLastBrain;
+  CBrain *pLastBrain;  // Store previous brain for restoration
 
   Voyager(CBrain* pLB=NULL);
   ~Voyager();
 
-  void Decide();
+  void Decide();  // Handle station departure, then restore previous brain
 };
 
 //-----------------------------
 
+// Stalker: Tactical context for pursuing and intercepting targets
+// Focused behavior for navigation and target tracking
 class Stalker : public CBrain
 {
  public:
-  CThing *pTarget;
+  CThing *pTarget;  // Current target to pursue
 
   Stalker() { pTarget=NULL; }
   ~Stalker() { }
 
-  void Decide();
+  void Decide();  // Navigate toward target using interception logic
+
+  // Legacy collision detection preserving original ChromeFunk behavior
+  // Uses the old engine's incorrect closest approach calculation that ChromeFunk's
+  // AI logic was designed around. The rest of ChromeFunk's behavior depends on
+  // this specific collision detection behavior.
+  double LegacyDetectCollisionCourse(const CThing& OthThing) const;
 };
 
 //----------------------------
 
+// Shooter: Tactical context for combat and laser engagement
+// Inherits Stalker's navigation abilities and adds combat logic
 class Shooter : public Stalker
-// Shooter will exhibit ability to Stalk
 {
  public:
   Shooter() { }
   ~Shooter() { }
 
-  void Decide();
+  void Decide();  // Engage targets with lasers when in range
 };
 
 //-----------------------------
 
+// Gatherer: Default tactical context for resource collection
+// Combines navigation (Stalker), combat (Shooter), and resource management
+// This is the primary brain for ChromeFunk's ships
 class Gatherer : public Shooter
-// Gatherer will exhibit both Stalker 
-// and Shooter personalities
 {
  public:
   Gatherer();
   ~Gatherer();
 
-  void Decide();
+  void Decide();  // Main resource collection logic with context switching
 
-  UINT SelectTarget();
-  void AvoidCollide();
+  UINT SelectTarget();  // Choose best resource target
+  void AvoidCollide();  // Collision avoidance logic
 };
 
 #endif  // _CHROME_FUNKADELIC_
