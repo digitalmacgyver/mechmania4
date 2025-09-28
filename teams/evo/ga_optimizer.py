@@ -60,7 +60,7 @@ DEFAULT_OPPONENT_EXEC = os.path.join(BUILD_DIR, "mm4team")
 GRAPHICS_REG_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "../../team/src/graphics.reg"))
 
 TEAM_NAME = "EvoAI"
-GAME_TIMEOUT = 240 # Increased timeout slightly (4 minutes)
+GAME_TIMEOUT = 240 # 4 minutes
 
 # --- Helper Functions ---
 
@@ -87,22 +87,28 @@ def save_parameters(params, filename):
     try:
         with open(filename, 'w') as f:
             for i, key in enumerate(PARAM_KEYS):
+                # Ensure we save the clamped value
                 f.write(f"{key} {params[i]}\n")
     except IOError as e:
         print(f"Warning: Could not save parameters to {filename}: {e}")
 
-def log_history(filename, generation, fitness, params):
+# UPDATED: Includes comprehensive metrics and logs clamped parameters
+def log_history(filename, generation, stats, clamped_params):
+    """Logs detailed statistics for the generation."""
     try:
         with open(filename, 'a') as f:
-            f.write(f"Gen {generation}, Fitness {fitness:.2f}, Params: ")
-            param_strings = [f"{PARAM_KEYS[i]}: {params[i]:.4f}" for i in range(NUM_PARAMS)]
+            # Format: Gen X, GenBest: Y.YY, AvgFit: A.AA, StdDev: S.SS, BestFit: B.BB, Params: ...
+            f.write(f"Gen {generation}, GenBest: {stats['gen_best']:.2f}, AvgFit: {stats['avg']:.2f}, StdDev: {stats['std']:.2f}, BestFit: {stats['overall_best']:.2f}, Params: ")
+            # Log the clamped parameters
+            param_strings = [f"{PARAM_KEYS[i]}: {clamped_params[i]:.4f}" for i in range(NUM_PARAMS)]
             f.write(", ".join(param_strings) + "\n")
     except IOError as e:
          print(f"Warning: Could not write to history log {filename}: {e}")
 
 
 def parse_score(server_output, team_name):
-    """Parses the final score from the mm4serv stdout."""
+    """Parses the final score (vinyl returned to station) from the mm4serv stdout."""
+    # This metric is correct as the server reports the official score.
     pattern = re.escape(team_name) + r":\s*([\d\.]+)\s*vinyl"
     # Find all matches (P1 will be the first match in the server output)
     matches = re.findall(pattern, server_output)
@@ -123,14 +129,16 @@ def terminate_process_group(process):
                 process.terminate()
             else:
                 # Use process groups for reliable cleanup.
-                pgid = os.getpgid(process.pid)
-                os.killpg(pgid, signal.SIGTERM)
-                # Wait briefly for graceful termination
-                try:
-                    process.wait(timeout=0.5)
-                except subprocess.TimeoutExpired:
-                    # If it didn't terminate (unstable simulation), force kill
-                    os.killpg(pgid, signal.SIGKILL)
+                # Check if process is still running before attempting to kill
+                if process.poll() is None:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                    # Wait briefly for graceful termination
+                    try:
+                        process.wait(timeout=0.5)
+                    except subprocess.TimeoutExpired:
+                        # If it didn't terminate (unstable simulation), force kill
+                        os.killpg(pgid, signal.SIGKILL)
         except (ProcessLookupError, OSError):
             pass # Process might already be dead
 
@@ -155,9 +163,15 @@ def check_executables(config):
 def prepare_parameters(params):
     """Clamps parameters and enforces constraints."""
     clamped_params = []
+    # Ensure params is treated correctly if it's a list or numpy array
+    if not isinstance(params, np.ndarray):
+        params = np.array(params)
+
     for i, key in enumerate(PARAM_KEYS):
         min_val, max_val = PARAMETERS[key]
-        clamped_params.append(np.clip(params[i], min_val, max_val))
+        # Use np.clip on the individual element
+        clamped_val = np.clip(params[i], min_val, max_val)
+        clamped_params.append(clamped_val)
     
     # Constraint: FUEL_TARGET must be > FUEL_LOW
     try:
@@ -166,6 +180,7 @@ def prepare_parameters(params):
         if clamped_params[fuel_target_idx] <= clamped_params[fuel_low_idx]:
             clamped_params[fuel_target_idx] = clamped_params[fuel_low_idx] + 1.0
             max_val = PARAMETERS["THRESHOLD_FUEL_TARGET"][1]
+            # Re-clip the target if the adjustment exceeded the max range
             clamped_params[fuel_target_idx] = min(clamped_params[fuel_target_idx], max_val)
     except ValueError:
         pass
@@ -179,8 +194,10 @@ def save_checkpoint(filename, state):
         temp_filename = filename + ".tmp_save"
         with open(temp_filename, 'wb') as f:
             pickle.dump(state, f)
-        shutil.move(temp_filename, filename)
-        print(f"Checkpoint saved: {filename}")
+        # Ensure the move operation is robust
+        if os.path.exists(temp_filename):
+             shutil.move(temp_filename, filename)
+             print(f"Checkpoint saved: {filename}")
     except Exception as e:
         print(f"Error saving checkpoint {filename}: {e}")
 
@@ -294,10 +311,12 @@ def run_single_networked_game(config, filenames, param_file_active):
         return 0.0
     finally:
         # 7. Cleanup (Crucial for stability)
-        if server_process and sys.platform != "win32":
-             terminate_process_group(server_process)
-        else:
-            for p in processes:
+        # Terminate the server group first (which should kill clients on Unix)
+        terminate_process_group(server_process)
+        
+        # Cleanup remaining processes (especially important on Windows)
+        if sys.platform == "win32":
+             for p in processes:
                 terminate_process_group(p)
         
         # Final wait to ensure processes are dead
@@ -307,14 +326,14 @@ def run_single_networked_game(config, filenames, param_file_active):
             except (subprocess.TimeoutExpired, AttributeError):
                 pass
 
+# UPDATED: Returns clamped parameters
 def worker_evaluate_individual(individual_index, params, config, filenames):
     """Evaluates an individual's fitness. Executed in a worker process."""
     
-    # 1. Prepare Parameters
+    # 1. Prepare Parameters (Clamping happens here)
     clamped_params = prepare_parameters(params)
 
-    # Define a unique active parameter file for this worker using its process ID
-    # This ensures no conflicts between concurrent workers.
+    # Define a unique active parameter file for this worker
     PARAM_FILE_ACTIVE = f"{filenames['active_prefix']}_worker{os.getpid()}.tmp"
 
     # Save the active parameters
@@ -337,8 +356,8 @@ def worker_evaluate_individual(individual_index, params, config, filenames):
                 pass
 
     avg_score = np.mean(scores) if scores else 0.0
-    # Return the score and the count of games successfully run
-    return avg_score, games_run
+    # Return the score, games run, AND the clamped parameters used
+    return avg_score, games_run, clamped_params
 
 
 # --- Genetic Algorithm Operations (Standard GA logic) ---
@@ -405,6 +424,7 @@ def mutation(population, config):
     for i in range(num_elites, config.population_size):
         for j in range(NUM_PARAMS):
             if np.random.rand() < MUTATION_RATE:
+                # Mutation explores outside bounds; clamping happens during evaluation.
                 min_val, max_val = PARAMETERS[PARAM_KEYS[j]]
                 range_val = max_val - min_val
                 noise = np.random.normal(0, MUTATION_STRENGTH * range_val)
@@ -452,7 +472,6 @@ def genetic_algorithm(config):
         check_executables(config)
         
         # Clean up previous logs/temps/checkpoints for this specific PID
-        # Clean active files based on the prefix
         for filename in os.listdir('.'):
             if filename.startswith(FILENAMES['active_prefix']):
                 try:
@@ -472,20 +491,51 @@ def genetic_algorithm(config):
             print("Error: Population size must be greater than 0.")
             return None, None, config, FILENAMES
         
-        best_params_overall = population[0].copy()
-        
-        # Initialize the "Best" parameter file
-        print(f"Initializing {FILENAMES['param_file_best']} with starting parameters.")
-        initial_best_clamped = prepare_parameters(best_params_overall)
-        save_parameters(initial_best_clamped, FILENAMES['param_file_best'])
+        # --- SEEDING LOGIC (Q1 Implementation) ---
+        if config.seed:
+            if os.path.exists(config.seed):
+                print(f"Seeding initial 'Best' parameters from: {config.seed}")
+                shutil.copy(config.seed, FILENAMES['param_file_best'])
+                # Attempt to load the seed file to initialize best_params_overall internally
+                try:
+                    # A functional way to load the key-value pairs back into an array in the correct order
+                    seed_params_dict = {}
+                    with open(config.seed, 'r') as f:
+                        for line in f:
+                            parts = line.strip().split()
+                            if len(parts) == 2:
+                                seed_params_dict[parts[0]] = float(parts[1])
+                    
+                    seed_data = [seed_params_dict[key] for key in PARAM_KEYS if key in seed_params_dict]
+                    
+                    if len(seed_data) == NUM_PARAMS:
+                        best_params_overall = np.array(seed_data)
+                        # We don't know the fitness of the seed yet, so best_fitness_overall remains -inf
+                    else:
+                         raise ValueError("Seed file parameter mismatch.")
+                except Exception as e:
+                    print(f"Warning: Could not load seed file correctly ({e}). Falling back to random initialization.")
+                    best_params_overall = population[0].copy()
+                    initial_best_clamped = prepare_parameters(best_params_overall)
+                    save_parameters(initial_best_clamped, FILENAMES['param_file_best'])
+
+            else:
+                print(f"Warning: Seed file not found: {config.seed}. Initializing randomly.")
+                best_params_overall = population[0].copy()
+                initial_best_clamped = prepare_parameters(best_params_overall)
+                save_parameters(initial_best_clamped, FILENAMES['param_file_best'])
+        else:
+            print(f"Initializing {FILENAMES['param_file_best']} with random parameters.")
+            best_params_overall = population[0].copy()
+            initial_best_clamped = prepare_parameters(best_params_overall)
+            save_parameters(initial_best_clamped, FILENAMES['param_file_best'])
+
 
     # Calculate total games
     TOTAL_GAMES = config.num_generations * config.population_size * config.games_per_eval
     
     # Determine the number of workers
     num_workers = config.jobs
-    
-    # Cap the number of workers by the population size
     if num_workers > config.population_size:
         print(f"Note: Reducing parallel jobs from {num_workers} to match population size {config.population_size}.")
         num_workers = config.population_size
@@ -504,6 +554,8 @@ def genetic_algorithm(config):
             
             # Evaluation (Parallel)
             fitness = np.zeros(config.population_size)
+            # Store clamped parameters for logging (Q2 Implementation)
+            clamped_params_gen = [None] * config.population_size
             futures_to_index = {}
             
             print(f"--- Generation {generation+1}/{config.num_generations} ---")
@@ -515,14 +567,16 @@ def genetic_algorithm(config):
                 future = executor.submit(worker_evaluate_individual, i, population[i], config, FILENAMES)
                 futures_to_index[future] = i
 
-            # Collect results as they complete (for progress tracking)
+            # Collect results as they complete
             for future in concurrent.futures.as_completed(futures_to_index):
                 index = futures_to_index[future]
                 try:
                     # Set a generous timeout for results collection
                     timeout_val = (GAME_TIMEOUT * config.games_per_eval) + 60
-                    avg_score, games_run = future.result(timeout=timeout_val)
+                    # Collect the score, games run, AND clamped parameters
+                    avg_score, games_run, clamped_params = future.result(timeout=timeout_val)
                     fitness[index] = avg_score
+                    clamped_params_gen[index] = clamped_params
                     GAMES_COMPLETED += games_run
                     
                     # Progress update
@@ -531,10 +585,12 @@ def genetic_algorithm(config):
                 except concurrent.futures.TimeoutError:
                     print(f"  Warning: Individual {index+1} timed out during result collection. Assigning score 0.")
                     fitness[index] = 0.0
+                    clamped_params_gen[index] = prepare_parameters(population[index]) # Fallback
                     future.cancel()
                 except Exception as e:
                     print(f"  Error: Individual {index+1} raised an exception: {e}. Assigning score 0.")
                     fitness[index] = 0.0
+                    clamped_params_gen[index] = prepare_parameters(population[index]) # Fallback
 
             print("Generation evaluation complete.")
             
@@ -551,24 +607,36 @@ def genetic_algorithm(config):
             gen_best_idx = np.argmax(fitness)
             gen_best_fitness = fitness[gen_best_idx]
             gen_avg_fitness = np.mean(fitness)
+            gen_std_fitness = np.std(fitness)
+            
+            # Get the clamped parameters used by the best individual
+            gen_best_params_clamped = clamped_params_gen[gen_best_idx]
 
             # Track overall best
             if gen_best_fitness > best_fitness_overall:
                 best_fitness_overall = gen_best_fitness
-                best_params_overall = population[gen_best_idx].copy()
+                # Update overall best using the clamped parameters
+                best_params_overall = gen_best_params_clamped
                 print(f"  *** New overall best fitness: {best_fitness_overall:.2f} ***")
                 
-                # Save the best parameters
-                best_params_clamped = prepare_parameters(best_params_overall)
-                save_parameters(best_params_clamped, FILENAMES['param_file_best'])
+                # Save the best parameters (already clamped)
+                save_parameters(best_params_overall, FILENAMES['param_file_best'])
 
                 if config.mode == 'pvb':
                     print("  Updated 'Best' parameters for opponent.")
 
-            log_history(FILENAMES['history_log'], generation + 1, gen_best_fitness, population[gen_best_idx])
+            # Log history using the clamped parameters and enhanced metrics
+            stats = {
+                'gen_best': gen_best_fitness,
+                'avg': gen_avg_fitness,
+                'std': gen_std_fitness,
+                'overall_best': best_fitness_overall
+            }
+            log_history(FILENAMES['history_log'], generation + 1, stats, gen_best_params_clamped)
 
             # Evolution (Prepare for next generation)
             if generation < config.num_generations - 1:
+                # Note: Evolution operates on the raw (potentially unclamped) population parameters
                 population = selection(population, fitness, config)
                 if population.size == 0:
                     print("Error: Population extinguished. Stopping optimization.")
@@ -579,7 +647,9 @@ def genetic_algorithm(config):
             
             duration = time.time() - start_time
             print(f"Generation {generation+1} Summary:")
-            print(f"  Time: {duration:.2f}s | Best: {gen_best_fitness:.2f} | Avg: {gen_avg_fitness:.2f}\n")
+            # Updated console summary
+            print(f"  Time: {duration:.2f}s | GenBest: {gen_best_fitness:.2f} | AvgFit: {gen_avg_fitness:.2f} | StdDev: {gen_std_fitness:.2f} | BestFit: {best_fitness_overall:.2f}\n")
+
 
             # Save Checkpoint
             checkpoint_state = {
@@ -618,9 +688,12 @@ def parse_arguments():
     parser.add_argument('-j', '--jobs', type=int, default=default_jobs,
                         help=f"Number of parallel jobs (workers) to run. Default: {default_jobs} (CPU count).")
 
-    # Resume functionality
+    # Resume and Seeding (UPDATED)
     parser.add_argument('--resume', type=str, default=None, metavar="FILE.pkl",
                         help="Resume optimization from a specified checkpoint file.")
+    parser.add_argument('--seed', type=str, default=None, metavar="FILE.txt",
+                        help="Seed the initial 'Best' parameters from a file (useful for iterative PvB).")
+
 
     # Training Mode
     parser.add_argument('--mode', type=str, choices=['opponent', 'pvb'], default='opponent',
@@ -648,9 +721,12 @@ def parse_arguments():
 
     args = parser.parse_args()
     
-    # Ensure jobs is at least 1
+    # Validation
     if args.jobs < 1:
         args.jobs = 1
+
+    if args.resume and args.seed:
+        parser.error("--resume and --seed cannot be used together.")
         
     return args
 
@@ -659,10 +735,8 @@ if __name__ == '__main__':
     CONFIG = parse_arguments()
     
     # Set the multiprocessing start method to 'fork' if available (Unix/Linux)
-    # This is generally preferred for this type of application over 'spawn' for stability and efficiency.
     if sys.platform != "win32":
         try:
-            # Check if multiprocessing context is available and set method
             if multiprocessing.get_start_method(allow_none=True) != 'fork':
                 multiprocessing.set_start_method('fork', force=True)
         except (RuntimeError, AttributeError, ValueError):

@@ -11,6 +11,7 @@
 
 #include "Asteroid.h"
 #include "Thing.h"
+#include <memory>
 
 class CTeam;
 class CBrain;
@@ -29,6 +30,23 @@ enum OrderKind {
 enum ShipStat { S_CARGO, S_FUEL, S_SHIELD, S_ALL_STATS };
 
 class CShip : public CThing {
+ public:
+  // Nested strategy interface for velocity/acceleration processing
+  // Public so implementations can inherit from it
+  class VelocityStrategy {
+  public:
+    virtual ~VelocityStrategy() = default;
+    virtual double processThrustOrder(CShip* ship, OrderKind ord, double value) = 0;
+    virtual void processThrustDrift(CShip* ship, double thrustamt, double dt) = 0;
+  };
+
+ private:
+  // Strategy instance
+  mutable std::unique_ptr<VelocityStrategy> velocityStrategy;
+
+  // Initialize velocity strategy based on configuration
+  void InitializeVelocityStrategy() const;
+
  public:
   CShip(CCoord StPos, CTeam* pteam = NULL, UINT ShNum = 0);
   virtual ~CShip();
@@ -85,6 +103,22 @@ class CShip : public CThing {
 
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
   virtual void HandleJettison();
+
+ public:
+  // Helper methods for velocity strategies to access protected members
+  // These allow strategies to manipulate ship state without direct member access
+  void ApplyVelocityChange(const CTraj& newVel) { Vel = newVel; }
+  void ApplyPositionChange(const CCoord& newPos) { Pos = newPos; }
+  void SetDockFlag(bool docked) { bDockFlag = docked; }
+  void SetImageSet(UINT imgSet) { uImgSet = imgSet; }
+  double GetDockDistance() const { return dDockDist; }
+  double GetBaseMass() const { return mass; }
+  void SetThrustOrder(double value) { adOrders[(UINT)O_THRUST] = value; }
+  void ClearTurnJettisonOrders() {
+    adOrders[(UINT)O_TURN] = 0.0;
+    adOrders[(UINT)O_JETTISON] = 0.0;
+  }
+
 };
 
 #endif  // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF

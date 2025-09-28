@@ -14,6 +14,7 @@
 #include "Sendable.h"
 #include "Traj.h"
 #include "stdafx.h"
+#include <memory>
 
 const double minmass = 3.0, minsize = 1.0, maxspeed = 30.0, NO_COLLIDE = -1.0,
              NO_DAMAGE = -123.45;
@@ -29,6 +30,13 @@ enum ThingKind { GENTHING, ASTEROID, STATION, SHIP };
 
 class CThing : public CSendable {
  public:
+  // Nested strategy interface for collision detection
+  // Can access private members of CThing
+  class CollisionStrategy {
+  public:
+    virtual ~CollisionStrategy() = default;
+    virtual double detectCollision(const CThing* self, const CThing& other) const = 0;
+  };
   CThing(double fx0 = 0.0, double fy0 = 0.0);
   CThing(const CThing& OthThing);
   virtual ~CThing();
@@ -71,10 +79,6 @@ class CThing : public CSendable {
   bool Overlaps(const CThing& OthThing) const;
 
   double DetectCollisionCourse(const CThing& OthThing) const;
-  double DetectCollisionCourseOld(
-      const CThing& OthThing) const;  // Legacy collision detection
-  double DetectCollisionCourseNew(
-      const CThing& OthThing) const;  // Quadratic formula approach
   CCoord PredictPosition(double dt = 1.0) const;
   CTraj RelativeVelocity(const CThing& OthThing) const;
   CTraj RelativeMomentum(const CThing& OthThing) const;
@@ -110,6 +114,12 @@ class CThing : public CSendable {
 
  private:
   UINT ulIDCookie;
+
+  // Strategy for collision detection - mutable to allow lazy initialization in const method
+  mutable std::unique_ptr<CollisionStrategy> collisionStrategy;
+
+  // Initialize collision strategy based on configuration
+  void InitializeCollisionStrategy() const;
 };
 
 #endif  // !_THING_H_SFEFLKJEFLJESNF

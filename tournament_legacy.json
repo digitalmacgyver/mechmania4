@@ -10,8 +10,7 @@
     "reconnect": false
   },
   "features": {
-    "collision-detection": "old",
-    "elastic-collisions": "old",
-    "conserve-momentum": "old"
+    "legacy-collision-detection": true,
+    "legacy-velocity-limits": true
   }
 }

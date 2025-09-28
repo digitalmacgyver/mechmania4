@@ -1,0 +1,1092 @@
+# This is a scratchpad of everything I'm considering for this
+#  project. Please ignore.
+
+-- Next prompt --
+
+I'm working on developing a coding contest game which simulates a simple 2d navigation of ships in a toroidal world of size [-512,512) in both X and Y dimensions.
+
+
+
+A requirement of the game design is that there be a maximum speed of 30.0 units per second, which is enforced at various points in the rule engine.
+
+The game features ships which are intercepting targets, much as described above, and in fact also in game requirements is that ships can either turn or change their velocity on a given turn but not both.
+
+What I am struggling with is coming up with "fun" and "intuitive" physics for players to create their own AI brains for the ships under these constraints.
+
+In particular, when a ship is traveling at the maximum speed, any attempted change in velocity along a 180 degree arc which is 90 degrees to either side of their direction of motion is disallowed, as it would increase their velocity over maximum speed.
+
+In practice competitors find this confusing, as in the "real world" if you are going, say, dead East and then apply a change in velocity to the North East you'd expect some displacement to the north.
+
+Can you recommend a fun, dynamic, and intuitive way to balance these requirements for a simulated game engine? E.g. retain a maximum speed, but still give teams some benefit of moving towards their desired target or trajectory when they issue delta_v orders which would exceed maximum speed?
+
+Consider if there are any conventional approaches to this which have already been solved and documented.
+
+On balance, prefer "realistic" physics in solutions (e.g. one solution would just be to allow users to teleport to any location within maxspeed distance once per second, but that eliminates the physics of drift and momentum that make the game challenging and fun in terms of collisions and emergent game situations)
+
+==================================
+
+Try to understand the below, several issues:
+
+1. Rather than trying to understand gold leader ship turns, I've
+inverted the approach. Since the game engine physics is bonkers bad
+and I'm going to fix it, I'm going to fix the game engine firt, and
+then worry about re-writing groonew with the new engine behavior.
+
+The actual fix will be something like:
+* Thrust v_ordered is limited to magnitude 30.
+* Your new velocity is the projection of the beam along: v_curr + v_ordered of length up to maxspeed.
+  * Note - this can change your _heading_ without changing your orientation.
+
+  * Things to note:
+    * You will pay for all the thrust requested even it it does
+      nothing much or nothing at all. Example: You are going straight
+      right at 30, you request a thrust straight right of 30. You pay
+      for 30 thrust, your velocity doesn't change at all.
+
+    * You will pay an _additional_ penalty for any "free braking" or
+      energy burnoff the system granted you as a result of your thrust
+      vector. Example: You are going straight left at 30 with an
+      orientation of straight up. You issue a thrust of 30. Your final
+      position is (sqrt(30), sqrt(30) and your final velcoity is TBD -
+      you got TBD units of "Free braking" and will pay for that as well.
+
+  * In practice this means 
+
+
+
+
+Major fix: Handle how the Ship.c order processing does 2 and 3 which
+are going to completely fuck up our orders.
+  * Also - think about if we should code around this, or if we should fix the engine or both?
+    * My inclination is we need to do both:
+      * We don't want to submit plans that will get truncated, because then our driving will be bad
+
+      * But the engine should have reasonable behavior when the final
+        rho is too high, and I'm not sure deducting v from it is the good
+        answer - need to think about the physics and what would be
+        "expected"
+	* RIght now if you're going straight right at 30, and you
+          accelerate right at 30, I think you end up stopped? That
+          makes no damn sense.  
+	* And if you're going straight right at 30, and you accelerate
+          left at 60, you end up going left at 30 - so you're allowed
+          to acceleaarte 60 just in the opposite direction.
+       * Finally, if you're going staight right at 30, and you
+         accelerate left at 90, you end up going -60!!! (which is clamped in drift, but still...)
+
+For fixing the game engine, there are several options, none of which are really appealing:
+
+Option 1: Add v and accel, then truncate the resulting length to 30.
+Problem: Allows you to reach positions from your current heading which
+would otherwise require two game turns, one to rotate and one to
+thurst. This could be exploilted and we don't want to add strategic
+advantage to this kind of engine corner case.
+
+Option 2: Reduce accel until v+accel's magnitutde is 30 or less.
+Problem: This creates a 180 degree arc of thrust where no thrust is
+permitted.
+
+Option 3: Return 0 if the resulting v+accel would be >= 30 and cancel
+the order.  Problem: May break legacy team behavior quite badly. Also
+it's counterintuitive that you can't thrust if your facing a certain
+direction. (Well - it may be counterintuitive, but for real physics
+and the speed of light additional thrust doesn't do anything....)
+
+Option 3a: Consider solutions which automatically apply some amount of
+counter thrust to keep the total velocity <= 30 instead of just
+cancelling orders. Geometricslly this may reduce to case 1 or 2 and/or
+otherwise be confusing / bad. Example: Moving to the right at +30, try
+to thrust to the right +30, we charge you for 30 fuel and then thurst
+left 15 and right 15 for no change.
+
+Option 4: Leave engine behavior alone - but describe / understand
+geometrically what it is doing - note - this may be the same as 1 or
+2.
+
+POSSIBLE INTERPRETATION OF CODE AS IS??: It's Unintuitive: The purpose
+of the code is hard to understand. It seems to be calculating what the
+player's thrust command should have been to achieve the clamped
+velocity, which is not the same as simply applying the clamped
+velocity.
+
+CHATGPT SAYS:
+
+Why this happens (the unavoidable triangle)
+
+There’s a fundamental “pick two” triangle:
+
+1. Enforce a hard end‑of‑tick speed cap 
+
+2. Allow perpendicular thrust at  (steer while maxed‑out).
+
+3. No energy sink (no implicit braking/drag when players don’t command it).
+
+You can have any two, but not all three:
+
+If you enforce (1) and (2), you must have (some) energy sink to avoid overspeed: that’s Option A’s projection (or explicit drag), which looks like “free braking.”
+
+If you enforce (1) and (3) (no sink), then at  any perpendicular push must be zero (or trimmed to zero), because That is the frustrating “no thrust sideways at top speed” behavior you want to avoid.
+
+If you allow (2) and (3) and drop the hard cap (1), you’ll overspeed—which violates your rules.
+
+So: to steer at and keep a hard cap, you must accept some energy removal mechanism (projection or drag). The real design question is how to make that fair, tunable, and intuitive.
+
+
+
+
+POSSIBLE ENGINE FIXES:
+
+You can keep a **hard top speed** and still make “turning while maxed‑out” feel natural by changing *how you limit velocity*. Below are three battle‑tested approaches from games/robotics. Each lets a ship moving due east at 30 still gain some **northward displacement** when the pilot “burns NE,” without violating $v_{\max}=30$.
+
+---
+
+## Option A — **Project (clip) the velocity to the speed circle**
+
+**Idea:** Apply the player’s requested $\Delta v$ normally, then **project** the resulting velocity onto the feasible set $\{\,\mathbf{v}:\|\mathbf{v}\|\le v_{\max}\,\}$.
+This preserves as much of the *direction* of the command as possible while enforcing the cap.
+
+**Update (per tick $\Delta t$)**
+
+```text
+v_desired = v + clampAccel(a_cmd, a_max) * Δt        // or v_desired = v + Δv_cmd
+if ||v_desired|| <= v_max:
+    v ← v_desired
+else:
+    v ← (v_desired / ||v_desired||) * v_max          // projection onto circle
+x ← x + v * Δt
+```
+
+**Why it feels right:** If you’re already at 30 east and you “thrust NE,” the result is **30 at a slightly more NE heading**. Players see the ship “lean” toward the target, not stall with a rejected order.
+
+**Where it’s used:** This is the standard “truncate to maxSpeed” pattern in **steering behaviors** (seek, arrive, pursue). See Craig Reynolds’ seminal work and many derivations/tutorials used in games. ([Red3D][1])
+
+---
+
+## Option B — **Decompose into tangential vs. normal (sideways) acceleration**
+
+**Idea:** In physics, acceleration **perpendicular** to the current velocity changes **direction** but not **speed** (instantaneously). Let players always get the full sideways component while clamping only the forward/back component so total speed stays $\le v_{\max}$.
+
+**Update**
+
+```text
+v_mag = ||v||
+if v_mag > 0:
+    v_hat = v / v_mag
+else:
+    v_hat = normalize(any reasonable heading)
+
+Δv   = clamp(Δv_cmd, Δv_max)               // or a_cmd * Δt
+Δv‖  = dot(Δv, v_hat) * v_hat               // tangential to v
+Δv⊥  = Δv - Δv‖                             // perpendicular to v
+
+// keep as much of Δv⊥ as possible; limit Δv‖ so ||v + Δv⊥ + Δv‖|| ≤ v_max
+u     = v + Δv⊥
+room  = max(0, v_max - ||u||)               // how much parallel we can add without breaking the cap
+Δv‖   = clamp_to_length(Δv‖, room)
+
+v ← u + Δv‖
+x ← x + v * Δt
+```
+
+At top speed, **pure sideways inputs rotate the velocity vector** (change heading) while keeping speed ~30. This matches players’ intuition that “banking” doesn’t make you go faster, it just turns you.
+
+You can further impose a **lateral‑acceleration cap** so turning tightens at low speed and widens at high speed: with max lateral accel $a_{\perp,\max}$, the **minimum turn radius** is $R_{\min}=v^2/a_{\perp,\max}$ and heading rate $\dot\theta=a_\perp/v$. This is physically grounded (centripetal acceleration $a_c=v^2/R$). ([Lumen Learning][2])
+
+> If you prefer to express this as a *turn‑rate* rule, set $\dot\theta_{\max}=a_{\perp,\max}/v$, which reproduces the same $R_{\min}$. This is essentially the “bounded‑curvature vehicle” used in Dubins‑style models. ([Wikipedia][3])
+
+---
+
+## Option C — **Thrust + drag with a terminal speed (continuous feel)**
+
+**Idea:** Give ships thrust $a_{\text{max}}$ in their facing direction and add **quadratic drag** $-k \|\mathbf{v}\|\mathbf{v}$. Pick $k$ so the **terminal speed** with full thrust is your cap: $a_{\text{max}} = k\,v_{\max}^2 \Rightarrow k=a_{\text{max}}/v_{\max}^2$.
+
+**Update (semi‑implicit Euler)**
+
+```text
+// optional: TURN action adjusts facing by ≤ ω_max*Δt; BURN action applies thrust
+a_thrust = a_max * facing_hat * throttle ∈ [0, a_max]
+a_drag   = -k * ||v|| * v
+a        = a_thrust + a_drag
+
+v ← v + a * Δt
+x ← x + v * Δt
+```
+
+* At low speed, thrust wins → you accelerate.
+* Near 30, drag cancels added thrust → **speed saturates** but you can still change **direction** by thrusting sideways.
+* It’s intuitive, continuous, and “feels like space with drag,” and it avoids hard rejections.
+
+Use a **fixed/semifixed timestep** (e.g., 60 Hz physics) for stability. Semi‑implicit Euler is cheap and the usual choice in games. ([Gaffer On Games][4])
+Quadratic drag and terminal speed are standard physics (drag $\propto v^2$; terminal $v_t$ when thrust balances drag). ([Lumen Learning][5])
+
+---
+
+## Which one should you ship?
+
+* **Fastest to implement:** **Option A (projection)** — one line after you compute the desired velocity. It gives exactly the UX you want (“burn NE at top speed rotates me NE at the same speed”). It’s also what most *steering behaviors* libraries do under the hood. ([Red3D][1])
+* **Most “physically legible”:** **Option B (tangent/normal)** — explains itself in patch notes: *“side thrust always turns you; forward/back thrust is capped by top speed; turning radius grows with speed.”* The $R_{\min}=v^2/a_{\perp,\max}$ formula is easy to surface in docs. ([Lumen Learning][2])
+* **Most dynamic feel:** **Option C (thrust+drag)** — beautiful for emergent play and avoids edge‑case discontinuities; just tune $a_{\text{max}}$, $k$, and $\omega_{\max}$.
+
+---
+
+## Fitting your “turn OR change velocity” rule
+
+If you keep the rule literally:
+
+* **TURN:** change facing by up to $\omega_{\max}\Delta t$. Don’t touch speed directly.
+* **BURN:** apply thrust along **current facing** (Option C), or apply a **$\Delta v$ along facing** then **project** (Option A). The TURN step gives players the heading they want; the BURN step then accelerates (or rotates the velocity via sideways thrust plus projection/drag).
+
+If you want a tiny quality‑of‑life boost without breaking the rule, use **two half‑steps** per tick: TURN on the half‑step, then BURN (or vice‑versa). The net is still “one turn, one burn,” but players get smoother control.
+
+---
+
+## Intercept guidance (optional candy for competitors)
+
+If ships are meant to intercept each other, you can recommend/ship sample AIs that use **steering behaviors** (seek/arrive/pursuit) or a simple **Proportional Navigation** law for closing targets; both integrate nicely with any of the three update rules above. ([Red3D][1])
+
+---
+
+## TL;DR
+
+* Don’t *reject* sideways inputs at top speed — **saturate** them.
+* **Projection to the speed circle** (A) is the simplest, most intuitive fix.
+* For more realism, **split sideways vs. forward components** (B) and cap only what increases speed.
+* Or adopt **thrust + drag** (C) to make 30 u/s a terminal speed that you can’t exceed yet can still **steer** at.
+
+If you want, I can give you a drop‑in C++ update function for each option (with tunable constants $v_{\max}$, $a_{\max}$, $\omega_{\max}$, $k$) and a tiny test harness that runs on your $[-512,512)$ torus.
+
+[1]: https://www.red3d.com/cwr/steer/gdc99/?utm_source=chatgpt.com "Steering Behaviors For Autonomous Characters"
+[2]: https://courses.lumenlearning.com/suny-physics/chapter/6-2-centripetal-acceleration/?utm_source=chatgpt.com "Centripetal Acceleration | Physics"
+[3]: https://en.wikipedia.org/wiki/Dubins_path?utm_source=chatgpt.com "Dubins path"
+[4]: https://gafferongames.com/post/fix_your_timestep/?utm_source=chatgpt.com "Fix Your Timestep!"
+[5]: https://courses.lumenlearning.com/suny-osuniversityphysics/chapter/6-4-drag-force-and-terminal-speed/?utm_source=chatgpt.com "6.4 Drag Force and Terminal Speed | University Physics ..."
+
+==== CHAT 
+
+
+--
+
+============== SHOULD I CONCEIVE OF THE SYSTEM AS REEDS-SHEP VEHICLES? (IF WE ADOPT TURNING RADIUS PHYSICS, YES THEY BECOME THAT ========
+
+A bounded-curvature vehicle is a mathematical model for vehicles that cannot turn sharper than a certain minimum turning radius. It's one of the fundamental models in robotics and path planning.
+Core Concept
+The vehicle can:
+
+Move forward/backward at any speed up to vmax
+Cannot turn arbitrarily sharply - has a minimum turning radius Rmin
+Must follow smooth, continuous paths (no instant 90° turns)
+
+Think of it like a car - you can't turn the steering wheel infinitely far, so at any given speed, there's a tightest circle you can drive.
+Mathematical Definition
+For a path γ(t) the vehicle follows:
+
+Curvature: κ = |dθ/ds| ≤ κmax = 1/Rmin
+Where θ is heading angle and s is arc length
+This means: turning rate ≤ speed / Rmin
+
+Dubins Vehicle (Most Common Type)
+Named after Lester Dubins (1957), this model assumes:
+
+Constant forward speed
+Bounded turning radius
+Optimal paths consist of only:
+
+S: Straight lines
+L: Left turns at maximum curvature
+R: Right turns at maximum curvature
+
+
+
+Dubins' Result: The shortest path between any two positions+orientations is one of only 6 types:
+
+LSL, RSR, LSR, RSL, RLR, LRL
+
+Advanced: Reeds-Shepp Vehicle
+Like Dubins but can reverse:
+
+Adds backward segments
+48 types of optimal paths instead of 6
+Used for parking, tight maneuvering
+
+
+==============
+
+
+
+I definitely need to consider toroidal approaches in perfect
+nagivation - getting shortest distance doesn't give shortest time to
+intercept - ESPECIALLY with a max speed.
+
+Consider the 1d case where ships are conceptually on a circle of
+circumference L:
+
+Dshort <= L/2
+Dlong >= L/2
+Best time to intecept short = Dshort / (maxspeed - vtarget)
+Best time to intercept long = Dlong / (maxspeed - vtarget)
+
+Ignoring some unit confusion above with speed and velocity, the basic
+idea is its very easy for the best time to intercept being along the
+long path, if the target is moving away from you at close to maxspeed
+- even if you pay a 1 turn penalty for turning around and drifting.
+
+TODO: Formally solve this / come up with a formula / logic to pick
+direction.
+
+
+
+Minor fix: * The 5 1/5th turns thing is going to cause some trouble
+too but that should be a fine detail and our gross 1 turn planning
+should hold up well-ish.
+
+NOTE: This is not the engine, this is the Ship.C deciding what order
+to send to the server for physics resolution!
+
+Ship Processing a thrust order with rho != 0 (thrust amount) and theta
+(ship current heading), and v (current ship velocity):
+
+1. final_vel = (rho, theta) + v
+2. If final_vel.rho > 30, final_vel.rho = 30.
+3. final_vel -= v
+4. rho1 = final_vel.rho and set sign of rho1 to match rho.
+5. Clamp based on fuel requirements.
+6. Then we pass that order to the server.
+
+Conceptually then we drift for 1 second, but in reality
+
+The server runs PhysicsModel 5 times with dt = 0.2
+This in turn calls each Thing's Drift method with dt = 0.2 five times.
+Note: Shields are set in the first of these 5 ticks.
+
+CShip has a Drift model for our ship with current velocity v, theta,
+and rho (and ingoring side effects like spending fuel)
+
+1. if v.rho > 30, v.rho = 30.0.
+2. accel = (rho, theta) , this might be normalized by CTraj constructor
+3. v += (Accel * dt) , this might be normalized by CTraj * or += operators
+4. if v.rho > 30, v.rho = 30.0.
+5. Special cases for docked items that we're ignoring for now.
+
+For our case, it seems extremely likely that what is messing us ip is
+step 2 and 3 in ship processing.
+
+For instance, assume: rho = 30, theta = Pi/2, v = ( 30, 0 ).
+E.g. we're traveling straight right, and we want to thrust straight up.
+
+Step 1: final_vel = ( 30, Pi/2 ) + ( 30, 0 ) = ( 42.4264, 0.785398 )
+Step 2: final_vel = ( 30, 0.785389 )
+Step 3: final_vel = ( 22.961, 1.9635 )
+
+a: ( 30, 0 )
+b: ( 30, Pi/2 )
+ab: ( 42.4264, 0.785398 )
+abClamped: ( 30, 0.785389 )
+finalRho: ( 22.961, 1.9635 )
+
+
+Simulating this in our engine, we get the below, so we were trying to
+go on a heading of 0.785398 and we ended up on a heading of 0.685986
+
+v: 30, 0
+rho: 30
+theta: 1.5708
+final_vel: 42.4264, 0.785398
+final_vel_clamped: 30, 0.785398
+final_vel_result: 22.961, 1.9635
+engine step 0 - v before clamping: 30.3494, 0.151894
+engine step 0 - v clamped: 30, 0.151894
+engine step 1 - v before clamping: 31.0287, 0.298716
+engine step 1 - v clamped: 30, 0.298716
+engine step 2 - v before clamping: 31.6572, 0.4378
+engine step 2 - v clamped: 30, 0.4378
+engine step 3 - v before clamping: 32.2164, 0.56726
+engine step 3 - v clamped: 30, 0.56726
+engine step 4 - v before clamping: 32.6977, 0.685986
+engine step 4 - v clamped: 30, 0.685986
+
+
+
+
+3. We launch from base, and if the asteroids vel() is to be believed it never changed trajectory. Why did we take this sequence of actions:
+
+t1: turn (expected)
+t2: thrust (expected)
+t3: turn (why?)
+t4: thrust (why?)
+t5: thrust (why?)
+
+Turns 4-6 look extremely interesting to me - we are thrusting ever harder but it's not changing our velocity. Maybe _we_ are capping to 30 somwhere?
+
+
+4. The announcer says we took 2.2 damage from hitting the asteroid at 6 seconds, however we should have captured that one I think (maybe a uranium was right in front of a vinyl?!?) - check code - do asteroid collisions cause damage when we capture them?
+
+
+t=1.0	Gold Leader:
+	Collision in 0.0 turns with station 'Tatooine'
+	→ Following vinyl asteroid:
+	  Ship:	pos(-256.0,-256.0)	vel(0.0,0.00)	orient 0.00
+	  Asteroid:	pos(-15.2,-17.8)	vel(23.4,-2.27)	orient 1.00	mass 40.0
+	  Plan:	turns=7.0	order=turn	mag=0.70
+t=2.0	Gold Leader:
+	Collision in 0.0 turns with station 'Tatooine'
+	→ Following vinyl asteroid:
+	  Ship:	pos(-256.0,-256.0)	vel(0.0,0.00)	orient 0.70
+	  Asteroid:	pos(-30.3,-35.7)	vel(23.4,-2.27)	orient 2.00	mass 40.0
+	  Plan:	turns=6.0	order=thrust	mag=29.34
+t=3.0	Gold Leader:
+	Collision in 3.7 turns with asteroid vinyl 40.0 tons
+	Collision in 7.9 turns with asteroid vinyl 40.0 tons
+	Collision in 3.5 turns with asteroid uranium 40.0 tons
+	→ Following vinyl asteroid:
+	  Ship:	pos(-202.5,-211.0)	vel(30.0,0.70)	orient 0.70
+	  Asteroid:	pos(-45.5,-53.5)	vel(23.4,-2.27)	orient 3.00	mass 40.0
+	  Plan:	turns=4.0	order=turn	mag=0.40
+t=4.0	Gold Leader:
+	Collision in 2.7 turns with asteroid vinyl 40.0 tons
+	→ Following vinyl asteroid:
+	  Ship:	pos(-179.6,-191.7)	vel(30.0,0.70)	orient 1.10
+	  Asteroid:	pos(-60.7,-71.3)	vel(23.4,-2.27)	orient -2.28	mass 40.0
+	  Plan:	turns=3.0	order=thrust	mag=3.36
+t=5.0	Gold Leader:
+	Collision in 1.7 turns with asteroid vinyl 40.0 tons
+	→ Following vinyl asteroid:
+	  Ship:	pos(-156.6,-172.4)	vel(30.0,0.70)	orient 1.10
+	  Asteroid:	pos(-75.8,-89.1)	vel(23.4,-2.27)	orient -1.28	mass 40.0
+	  Plan:	turns=2.0	order=thrust	mag=5.03
+t=6.0	Gold Leader:
+	Collision in 0.7 turns with asteroid vinyl 40.0 tons
+	→ Following vinyl asteroid:
+	  Ship:	pos(-133.7,-153.1)	vel(30.0,0.70)	orient 1.10
+	  Asteroid:	pos(-91.0,-107.0)	vel(23.4,-2.27)	orient -0.28	mass 40.0
+	  Plan:	turns=1.0	order=thrust	mag=10.04
+t=7.0	Gold Leader:
+	Collision in 48.8 turns with station 'Tatooine'
+	Collision in 57.8 turns with ship 'Aluminum Falc'
+	Collision in 57.8 turns with ship 'Red 5'
+	Collision in 57.8 turns with ship 'Echo 3'
+	Collision in 0.6 turns with asteroid vinyl 40.0 tons
+	→ Following vinyl asteroid:
+	  Ship:	pos(-134.4,-150.5)	vel(2.5,-2.31)	orient 1.10
+	  Asteroid:	pos(-106.2,-124.8)	vel(23.4,-2.27)	orient 0.72	mass 40.0
+	  Plan:	turns=2.0	order=turn	mag=-2.47
+t=8.0	Gold Leader:
+	Collision in 5.7 turns with station 'Tatooine'
+	Collision in 6.8 turns with ship 'Aluminum Falc'
+	Collision in 6.8 turns with ship 'Red 5'
+	Collision in 6.8 turns with ship 'Echo 3'
+	→ Returning to base (cargo=40.0)
+t=9.0	Gold Leader:
+	Collision in 4.7 turns with station 'Tatooine'
+	Collision in 5.8 turns with ship 'Aluminum Falc'
+	Collision in 5.8 turns with ship 'Red 5'
+	Collision in 5.8 turns with ship 'Echo 3'
+	→ Returning to base (cargo=40.0)
+t=10.0	Gold Leader:
+	Collision in 2.1 turns with station 'Tatooine'
+	→ Returning to base (cargo=40.0)
+t=11.0	Gold Leader:
+	Collision in 1.0 turns with station 'Tatooine'
+	→ Returning to base (cargo=40.0)
+
+
+
+
+===============================
+
+DumbThing.C/.h and ReturnToBase.C/.h are not used.
+
+========================== GAME PHYSICS AND CONSTANTS QUICK REFERENCE ====================
+
+Asteroid radius: 3+1.6*sqrt(mass)
+Ship radius: 12
+Station radius:
+
+Maxspeed = 30
+Game world is 2-D toroid with x, y are in [-512,512)
+Items have an orientation, which is in [-PI, PI] with 0 to the right / eastward.
+
+Asteroid mass:
+ * >= minmass = 3.0
+ * Typically either 40 (our games creation size), or 40/3 (after first break) or 40/9 (after second break). Other sizes are possible due to ships jettisoning different amounts
+
+Ship mass:
+ * Empty mass = 40
+ * Total mass = 40 + fuel tons on board + vinyl tons on board
+
+Items take damage by colliding with masses:
+Ships colliding with laser: Remaining laser mass / 1000 damage
+Ships colliding with ship or asteroid: Magnitude of relative velocity between ship and the other thing * mass of the other thing / 1000
+
+Lasers are modeled as colliding masses for damage purposes.
+  * Max beam length: 512
+  * Beam fuel cost: 1 ton of fuel per 50 units of length
+  * Beam collision mass: 30 * (L - D) where L is the total beam length, and D is the distance along the beam before collision
+    * (internally this is handled by replacing beam strikes with temporary beam objects that originate 1 unit away from the center of the target along the mean line)
+
+################# END GAME PHYSICS AND CONSTANTS QUICK REFERENCE ######################
+
+========================== FEATURES TO ADD ============================================
+
+* Perfect navigation in Groogroo/MattMatt:
+  * Phase 1 - understand what we're doing and fix any bugs
+  * Phase 2 - fixes related to 0.2 micro tics between game turns.
+  * Handle undocking - the undocking procedure I think gives us a kick
+    in position, so our model for where we'll be on turn 1 after
+    undocking is wrong with our thurst.
+  * Handle negative thrusting and lesser rotations. At least for now
+    we don't care what direction we are facing so we should check if
+    it's faster to rotate less and then negative thrust.
+
+* Deep thoughts for future perfect navigation:
+  1. Our current approach assumes if you can't reach destination D with
+  one rotation and one thurst in T turns you can't reach it at all in
+  T turns.
+    * This isn't necessarily true - maybe try proving this.
+
+2. I'm not sure our movement approach takes the best advantege of the
+toroidal world - especially under velocity max conditions. If an
+asteroid is going straight right at 29, and we're going straight right
+at 30, and we're 20 units behind it we'll catch it in 20
+turns. However if we turned around and go at 30 striahgt left we'd get
+there in 1024/59 = 17 turns.
+  * Try to better understand how our system will resolve things like
+    this.
+
+1. DEEP THINK ON OPTIMAL PATHING IN 2D:
+https://docs.google.com/document/d/1_AvkE_JgxQ920-TOI9HCcrU0C_781qOoa-mtjaHXHnM/edit?tab=t.0
+
+* Improve Groonew collision detection in determine_orders - we predict
+  where thing X will be in N turns, but we could also check if thing X
+  is going to collide with something before N turns, and if so not
+  bother trying to intercept it at a place it won't likely to be in
+  those turns.
+
+* Improve Groonew collision handling. As it is it iterates over the
+  world and locks orders and maybe breaks if it detects certain
+  scenarios - but really we want to consider all collisions ordered
+  from soonest to latest or something like that. The current logic
+  nondeterministically identifies one of the things we're colliding
+  with soon and plans based on that - we can do better.
+
+* Game fix of collision eat bug - colliding with an asteroid you can
+  eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
+
+* We do change momentum when capturing an asteroid, but this is OK - see if we conserve momentum or not - we should correctly conserve momentum. (This is a physics fix if we need to make one).
+
+* Engine bug - You can "double spend" fuel by putting it into shields
+  and thrusting if your result of both operations would be zero or
+  negative? Looks like it - CShip::Drift.
+
+* Either an engine enhancement to change this, or make a TEAMS/RULES
+  readme update that clarifies while docking thrust and turn is free,
+  it's gated by your max fuel capacity - so ships with 0 fuel can't
+  take off or turn even in base.
+
+* Game option to prevent docking at enemy bases (set at start time of either the server or observer) (counts as collision with asteroid for damage?)
+
+* Game option to create uranium and vinyl equal to fuel and vinyl carried when a ship is blown up.
+
+* Game option to prevent asteroid dust due to collision - if a collision happens and you can't pick up and it would result in too small due to break, no break.
+
+* Configure number and size of initial asteroids.
+
+* Make team groonew and hack on that leaving orignal groogroo in place
+(take groogroo3 contents and make it mattmatt I guess).
+
+1. Add comments throughout on orders:
+  * Thrust, Turn, Jettison are mutually exclusive
+  * Fire lasers and raise shields be done in any combination with one of the above.
+
+1. Navigation enhancements: Shortest distance doesn't necessarily mean
+fastest time to intercept, and/or cheapest cost. Consider the case
+where presently it is only marginally better to go left than right in
+terms of distance, however we currently have a large velocity to the
+right - we might get there in the same number of turns going right, at
+a much reduced cost.
+  * Think deep thoughts about magic bag, whereby we want to know for N turns among all possible paths which ones get to the item with the least cost (also possible in the future consider which ones woudl generate the least collisions).
+    * Alternatively, add all the paths to the magic bag and magic bag can have multiple things for any target with (path1, nturns, cost), (path2, nturns, cost) ,etc. etc.
+      * could weight colisions with our station highly as we get free acceleration?
+      * Could consider alternate paths in all cases of: go to station and then launch?
+
+Engine enhancements:
+  * Physically costed rotation based on assumption of linear accel and decel to change angle X and end up at a dead stop? (Normalized to physicall acceleration costs?)
+  * Momentum handling on jettison
+  * Review momentum handling on laser strike
+  * Momentum handling on collision
+  * asteroid mass correctly correlates with volume? Or I guess we're in 2d so area is OK?
+  * Our ship collision logic deals damage to us based on our relative velocity with the thing we collide, and that things mass, our mass doesn't matter. Is this a "momentum swap" or normal physical / collision type? If not maybe adjust it.
+
+1. Brain enhancements - we can call SetOrder to get the fuel cost of
+an order, and then ResetOrders to clear it out (I think) rather than
+figuring the fuel costs independenty on our own.
+
+1. For Codex branch, check if Team Ares is using toroidal logic,
+suggest it to use the relevant thing/ship primatives which do that
+correctly.
+
+3. For Orig branch, make a new branch of changes, keep it separate
+from our legacy branch.
+
+-- NOTES --
+
+What is the inheritance hierarchy for our project:
+
+Asteroid, Laser, Ship, Station IS A Thing
+
+CTeam HAS A:
+  * CWorld (pmyWorld)
+  * CBrain (pBrain)
+  * Array of CShips (apShips)
+  * CStation (pStation)
+
+Player teams IS A CTeam
+
+Thing is base class for Asteroid, Ship, Station, and Laser
+
+CShips have:
+  * Ship physics:
+    * A ships mass is 40 + its fuel + its vinyl
+  * Costs and limits (other than default fuel limits)
+    * Shield increase 1:1 with fuel spent
+    * Lasers cost the value to be fired / 50
+    * Thrusting costs the magnitude of the new velocity after the acceleration is applied * current ship mass (see above) / 6*maxspeed*empty_ship_mass = 6*30*40 = 7200. (New velocity vector limited by maxspeed)
+      * Thrusting out of a docked position is free, however may be gated based off max fuel size
+    * Turning costs the O_TURN provided |value| * ship mass / 12*PI*empty ship mass = 480*Pi - turning SETS THE SHIPS ROTATION TO THE O_TURN AMOUNT IN RADIANS PER SECOND.
+    * Jettison costs nothing for vinyl, and the amount jettisoned for fuel.
+  * Members: myNum, bDockFlag, dDockDist, dLaserDist, pBrain, arrays of: adOrders, adStatCur, atStatMax
+  * Methods (among others like establish capacities):
+    * Drift - handles order proceeeing on the ships turn:
+      * 1st Jettisons stuff, if any
+      * 2nd updates sields, if any
+      * Then turns, if any
+      * Then thrusts, if any
+      * Then updates position
+    * AsteroidFits
+    * LaserTarget (Purportedly what laserbeam will hit if fired) - does so only if the ship is facing along the shortest straight line path - which is not a catastrophe given our 512 length max laser, but is inconsisntent in that it will report targets that can't be reached (due to short requested laser length or fuel constraints) on the shortest path as we face, but not any (definitionally unreachable due to max beam length) tarets on the longer paths that we face.
+      * This logic may in fact be the reason for the 512 max beam length (also a 1024 or larger beam will hit yourself if it hits nothing else)
+    * GetLaserBeamDistance (purportedly the distance the beam will traverse)
+    * AngleToIntercept - Seems to correctly compute the angle we need to turn to _FACE_ another target next turn taking both our velocites into account, and assuming they stay the same - but this will not do correct vector math I think.
+    * AstToStat
+    * StatToAst
+    * Reset/Get/Set Orders, and special SetJettison/GetJettison
+    * HandleCoollision
+    * HandleJettison
+  
+CThings have:
+  * Members kind, mass, size, orient, velocity, team, alive, image, name, worldindex, world.
+  * Methods:
+    * Drift
+    * Collide
+    * Overlaps
+    * GetMomentum (return velocity*mass)
+    * DetectCollisionCourse <- fundamentally broken, I changed it (it was using flyby logic which wasn't figuring the closest point of approach - it was more or less estimating if these things would collide if 
+    * PredictPosition <- only predicts position, not how we'll be facing
+    * RelativeVelocity <- other.velocity - our.velocity
+    * RelativeMomentum <- RelativeVelocity * other.mass
+    * IsFacing <- True if overlap (buggy due to FP stuff), otherwise establishes a coordinate system with our ship at the origin, and then draws a line on our facing out to DistTo(Other) distance and sees if that point is within the radius of the other object.
+    * HandleCollision (virtual)
+
+Physics Engine:
+
+The server's game loop:
+while (time < 300.0) { Simulation(); BroadcastWorld(); ReceiveTeamOrders(); }
+
+The team client's game loop:
+while (connected) { ReceivedWorld(); DoTurn(); }
+  * the Client's DoTurn() gets data
+    * calls Team::Reset()
+      * The Team::Reset() method calls ResetOrder() on each ship.
+    * calls Team::Turn()
+      * This method does nothing by default, teams provide their own
+        implementation.
+    * then sends info back to the server.
+
+SO WE DO ALL OF THIS:
+The server's Simulation() does:
+  1. The world's PhysicsModel() with a small tstep (0.2) 5 times.
+  2. After the 5th call, when 1 second has elapsed, it calls the world's LaserModel() which handles laser collision, adding new and killing dead things.
+
+At each step the PhysicsModel does:
+  1. For each thing their Drift(dt) method which is 0.2 in our example
+  2. CollisionEvaluation()
+  3. AddNewThings()
+  4. KillDeadThings()
+
+In the Drift step above:
+  1. CShip::Drift:
+     * clamps to maxspeed
+     * Does orders in this sequence: Jettison, Shields, Turn, Thrust (which in turn will change Vel if a thrust occurs, and change omega of a turn occurs)
+     * Changes position and orientation by Vel*dt and omega*dt
+     * Sets omega and dLaserDist to zero
+  2. Asteroids just do the default CThing behavior of move/rotate dt.
+== THEN WE GET NEW ORDERS AND REPEAT ===
+
+
+Coordinates:
+
+CTraj has a rho (magnitude) and theta (direction):
+  * Can ConvertToCort and be created FromCord:
+    * Convert to cord makes x = rho*cos(theta) and y follows sin - so "convert to cord" gives you the coordinate this vector points to from the origin.
+    * FromCoord also assumes the coordinates are relative to the origin and computes the vector.
+  * Normalize() - Keeps -PI < theta < PI and rho  > 0
+Notes:
+  * Defines const doubles for PI and PI2.
+
+CCord has an x and a y position, and methods:
+  * cc.DistTo( occ ) Shortest distance taking toroidal geometry into account
+  * cc.AngleTo( occ ) Proper heading for shortest distance taking toroidal geometry into account
+  * cc.VectTo( occ ) returns a CTraj object with a vector to the other point
+  * cc.Normalize() for putting coordinates into the game field
+Notes:
+  * Coord.h defines the playing field boundary as -512 to 512 with const doubles fW[X|Y][Max|Min]
+
+=== SERVER / CLIENT LOGIC ===
+
+  Client-Server Architecture
+
+  1. Team Binary Compilation: Each team (like ChromeFunk) is compiled into the mm4team binary. The key is that
+   CTeam::CreateTeam() in ChromeFunk.C:10 returns a ChromeFunk instance, linking the team's AI logic into the
+  binary.
+  2. World State Management:
+    - Server maintains authoritative world state (all ships, asteroids, stations)
+    - Client receives complete world snapshots via ReceiveWorld() which calls pmyWorld->SerialUnpack()
+  (Client.C:166)
+    - The initial world creation in Client.C constructor is just placeholder - immediately replaced when
+  MeetWorld() connects to server
+  3. Game Loop Flow:
+  Client (mm4team.C:28-29):
+  1. ReceiveWorld() - Get full world state from server
+  2. DoTurn() - Execute team AI and send orders back
+  4. Team Logic Execution (Client.C:204-217):
+    - DoTurn() calls pTm->Turn() which executes ChromeFunk's strategic AI
+    - ChromeFunk::Turn() iterates through ships calling pSh->GetBrain()->Decide()
+    - Each brain's Decide() sets ship orders (thrust, turn, fire, etc.)
+    - Orders are packed via SerialPack() and sent to server
+  5. State Synchronization:
+    - From Server: Full world state including all ship positions/velocities/cargo/shields
+    - To Server: Only ship orders (thrust amount, turn amount, fire commands)
+    - Server simulates physics and combat, then broadcasts updated world state
+
+  The team AI (ChromeFunk) never directly modifies world state - it only reads state and generates orders. The
+   server is authoritative for all physics and game state changes.
+
+  One Time Team Initialization Protocol
+
+  When a team client connects (Client.C:129-135), it:
+
+  1. Calls Init() - Team sets names and capacities (ChromeFunk.C:36-56):
+    - Team name: "Chrome Funkadelic"
+    - Station name: "HeartLand"
+    - Ship names: "SS TurnTable", "Bell Bottoms", etc.
+    - Ship capacities: 45.0 fuel, 15.0 cargo
+  2. Packs initialization data via SerPackInitData() (Team.C:243-272) which sends:
+    - Team number
+    - Team name
+    - Station name
+    - For each ship:
+        - Cargo capacity
+      - Fuel capacity
+      - Ship name
+  3. Server receives and unpacks this data using SerUnpackInitData() (Team.C:274-307), which:
+    - Sets all the names on server-side objects
+    - Configures ship capacities
+    - Initializes fuel to max capacity and shields to 15.0
+
+  This is a one-time handshake during connection. After this, the server knows all team/ship/station names and
+   ship capacities, allowing it to:
+  - Enforce cargo limits during pickup operations
+  - Track fuel consumption based on configured capacity
+  - Display correct names in observer views
+  - Manage team-specific station operations
+
+  The team binary configures these values in Init(), but they're immediately transmitted to and stored by the
+  server, which becomes the authoritative source for all game mechanics involving these properties.
+
+==== ChromeFunk Brain Approach ====
+
+The CBrain hierarchy in ChromeFunk demonstrates a context-switching AI pattern using
+  temporary brain replacements. Here's the design:
+
+  Brain Hierarchy
+
+  CBrain (base class)
+  ├── Voyager    - Station departure specialist (temporary)
+  ├── Stalker    - Navigation/interception
+  ├── Shooter    - Combat (inherits from Stalker)
+  └── Gatherer   - Resource collection (inherits from Shooter)
+
+  The Brain-Swapping Pattern
+
+  The key insight is in Voyager (lines 43-54, 56-81):
+
+  1. Temporary replacement: Voyager stores the previous brain (pLastBrain) and installs itself
+  2. Self-deletion: Once undocked, Voyager deletes itself, automatically restoring the previous
+   brain via its destructor
+  3. Example flow: Gatherer → Voyager → Gatherer
+
+  This happens in Gatherer::Decide() at line 343:
+  if (pShip->IsDocked()) {
+      new Voyager(this);  // Creates Voyager, which replaces Gatherer temporarily
+      return;             // Voyager handles departure, then restores Gatherer
+  }
+
+  Requirements That Led to This Design
+
+  This implementation suggests these requirements:
+
+  1. Specialized behaviors: Different tasks need completely different decision logic (docking
+  vs combat vs gathering)
+  2. State preservation: Ships need to return to their previous behavior after temporary tasks
+  3. Clean transitions: No complex state machines or if/else chains cluttering the main logic
+  4. Reusable components: Shooter extends Stalker, Gatherer extends Shooter - building
+  complexity through inheritance
+  5. Self-managing contexts: Behaviors know when they're done and clean up after themselves
+
+  The pattern allows ships to have a "stack" of behaviors - push a temporary brain for special
+  situations (like undocking), then pop back to the previous behavior automatically. It's
+  elegant for handling context switches without losing the ship's primary mission.
+  
+QUESTIONS:
+
+Q. Our CONTEST_RULES.md says stations take minor vinyl stores damage from asteroid collisions - is this true?
+
+Q. Our CONTEST_RULES.md says "Teams do NOT know:
+- Enemy ships' fuel levels
+- Enemy ships' cargo contents
+- Enemy ships' shield levels" Is that true?
+
+Q. Our CONTEST_RULES says there are tie breakers - are there?
+
+Q. Physics engine: drift is called every 0.2 ticks, it looks to me like ship.Drift doesn't clear O_TURN and O_THURST orders when drifing and generally does the right stuff in terms of multiplying displacement and orientation changes by dt=0.2; however: Does the code in SetJettison do this propertly? Or are we getting ~5x the accelerated kick of out Set Jettison as we should?
+
+Q. For perfect navigation - be aware of game tick times, we put in an order to thrust at heading Foo for amount D and position p0 but we'll really be thrusting for D/5 at p00, p02, p04, p06, p08, and p10 (figure out the border post error herre, we'll only thrust 4 times but is it from our initial spot or what.
+
+Q. Kobayashi Maru: What if our Ship class overloads the Drift() operator? Can we cheat that way?
+
+Q. Based on DeepThink's answer to Q1 in our doc fuel and other logic implicitly assume dt=1.0, but if the simulation is run with other values velocity and clamping and fuel calculations may be incorrect. How does this interact with our world being run at 0.2 ticks and then laser blasts on the 1s?
+  * As cleanup, should we generalize this to tick size and make that a global constant or something?
+
+Q. Based on DeepThink's answer to Q2, the acceleration logic may be flawed, allowing for a final ship velicoty which exceeds maxspeed (I suspect this would quickly be clamped elsewhere, but... (we could add a log message if this ever happens somewhere)). Check the facts on this.
+
+Q. Based on DeepThik's answer to Q3, it claims my two scenarios result in different costs. get to ground truth on that with a hello world type example.
+
+Q. Based on DeepThink's answer to Q4, which is basically "this simple simulation models fuel cost linearly with the angle turned" - think deep throughts about how you might handle this differently. Our rotational inertia is set to 0 at the end of each turn, so to turn theta, we accelerate linearly to 2theta in 1/2 a second and then decelerate, or something like that. What would that cost in reality given our ship mass etc. This would be an add on in our "more realistic physics" package.
+
+Q. Based on DeepThink's answer to Q6/Q7, it agrees dDockDist is kind of stupid, and can create either a walk-out launch wherre we get 5 away each time, or even an infinite loop where we launch with negative velocity.
+  Maybe add diagnostic / warning code when we go throug launch cycles? e.g. server announce of each launch and dock and see if we get spammy notices?
+  Think deep throughts about:
+  * A. What is this even trying to do?
+  * B. WOuld it be better to just entirely replace it with a minimum launch distinace of server_radius + ship_radius + fudge factor?
+      * Or at least make the launch distance the max of B and what it actually does?
+
+Q8. Question 8: LaserTarget and Toroidal Geometry
+Your interpretation is correct. CShip::LaserTarget relies on IsFacing, which uses CCoord subtraction to find the shortest path vector across the torus.
+In your example (Ship at -400 facing East, Target at 400), the shortest path is West. IsFacing returns FALSE. The ship cannot target the "long way around."
+This is consistent in practice because the laser range is capped at 512 units (half the world size).
+Subtle Bug (The Antipode): There is an edge case bug when the target is exactly halfway across the world (distance 512). At this point, there are multiple equally valid shortest paths (e.g., East and West). CCoord normalization arbitrarily chooses one. If the ship is facing the target along one shortest path, but CCoord normalization chooses the opposite path, IsFacing will return FALSE, preventing the laser from firing despite correct alignment. 
+
+Q. Is there a bug in PAsteroid::HandleCollision where it sets pThEat even if the colliding ship can't fit it, and then no other ship can eat it because that is set and ships look at that value when running their HandleCollision method?
+  * NO - because non-eaten asteroids are then immidiately destroyed by collision - this just ensures no asteroid is eaten twice in the same turn.
+
+Q. Is there a race condition / issue where an asteroid that can't fit can be blown up multiple times by ships that collide with it on the same turn?
+
+Q. How are ties broken / resolved in CShip::HandleCollision for asteroids around like 571 with eating checks? For instance does team1 always get the asteroid if both team1 and team2 are present?
+
+Q. Boil down / read about the insane and confusing laser mechanics of distance, fuel cost, damage, etc.
+     - And also check if there is some kind of "coservation of energy" problem here (not really, just in game resource terms), e.g. how much fuel does it take to make a laser that does 1 unit of damage to a ship, which costs 1 fuel to shield against?
+
+  Q. Check if Ship::AngleToIntercept differs from Groogroo's angle turning - it seems like it makes the wrong angle to intercept in that it finds the angle you'd need to be at in 1 turn to be flying towards the target, but if your velocity isn't zero that won't be quite right.
+  
+  Q. Is there a bug in LaserTarget?
+     * We check if we are IsFacing, but we compare distance with DistTo which uses toroidal aware distance, and may not be the distance in the direction we're facing.
+     * Also, the interface here seems confusing - if mindist > dlaspwr then we're not actually going to hit anything - we are just aiming at something too far away - so when that happens do we want to know that, or do we want to get that we're not aiming at anything.
+  * AS PHRASED TO GTP-T HIGH: Is there a subtle bug in CShip::LaserTarget whereby both IsFacing and DistTo use toroid aware geometry, and so will report that a Ship is facing a target only if it is facing it along the shortest path to the target?
+  E.g. if a ship is at (-400, 0) and is oriented with theta = 0 (facing rightward), and an asteroid is at (400, 0), won’t LaserTarget return false for that ship?
+
+Now - it just so happens in our implementation that the maximum laser distance is 512 units, so in practice this might not matter much - however the logic for LaserTarget considers the case where a laser can’t reach the target and reports that yes, it is facing that target when it believes IsFacing is true - so at the least this seems inconsistent.
+===END GTP-5 QUERY===
+
+=== GTP ANSWER ===
+Short answer: Yes, that subtlety is real.
+
+What happens
+
+- Toroid-shortest facing: CThing::IsFacing uses the shortest-wrap vector (CCoord::AngleTo/VectTo). So a ship at (-400, 0) facing θ=0
+with a target at (400, 0) is deemed “not facing” (shortest vector is left, x = −224), and LaserTarget will ignore it. If the ship
+faces θ=π, IsFacing returns true and the target can be selected.
+- Range mismatch: CShip::LaserTarget picks the nearest facing target even if it’s out of range; it only clamps dLaserDist for UI. It
+does not null the target when mindist > laser power.
+- Flawed range check later: World::LaserModel then “validates” range using DistTo(ship, LasPos), but LasPos was constructed as ship +
+(L, orient). DistTo there is the shortest toroidal distance and will be ≤ L by construction, so the range check almost never rejects.
+If the true shortest distance to the target D > L, the code still proceeds and computes laser “mass” as 30*(L − D), which can be
+negative.
+
+Impact
+
+- Your example (800 along the long way) is unreachable anyway because max laser length is clamped to 512, so ignoring it is
+consistent with range. But the inconsistency remains: LaserTarget says “facing” based on shortest-path alignment, not on whether the
+forward ray can reach the target; and out‑of‑range targets can slip through to LaserModel, producing negative laser mass.
+- Side effect: Stations subtract cargo by mass/1000. A negative mass would increase station cargo. That’s a real bug path when
+mindist > L but IsFacing is true.
+
+Minimal fixes (pick one)
+
+- Enforce range in target selection: In CShip::LaserTarget, skip targets with DistTo > current laser power (retain dLaserDist for
+UI).
+- Correct the range check: In CWorld::LaserModel, replace the DistTo(ship, LasPos) check with an along-ray test. Compute dir =
+unit(GetOrient()); for candidate target center c (consider 9 toroidal images c + (iW, jH)), project r = (c − ship) onto dir: t =
+dot(r, dir), d_perp = |cross(r, dir)|. Require 0 ≤ t ≤ L and d_perp ≤ target.size; pick the smallest t. If none hit, treat as out
+of range.
+
+If you’d like, I can patch LaserTarget to filter by range (simple, low risk), or implement the proper ray-cast (robust and consistent
+with wrap-around).
+
+=== LETS SEE WHAT GOOGS SAYS ===
+
+  Q. Question 6: What does the default mode of the switch statement on (ord) in SetOrder do? It looks like maybe it allows you to pass in O_ALL_ORDERS and get the combined fuel for the: shield, laser, and thrust operations on the assumption that they all don’t exhaust each others fuel (which they might in reality).
+
+What do you think the purpose of this is? Is it used anywhere?
+
+  Q. The undocking logic wiht dDockDist seems a big mess - both the bad Cursor AI and Codex say it has something to do with recording the center to center distance from prior docking and sending the ship out on that trajectory or something (maybe so ships can dock -> launch without taking a game turn to rotate and if so they head out the way they came in? This seems to open the door to accidental redocking on low velockty exits. Shouldn't all initial velocities for docked ships be radially out from the center of the station, and at an initial position of at least station radius + ship radius + epison?
+
+  Q. It seems when you're docked your maxfuel is treasted as your ship's fuel - however I think it should rather be unlimited. If your ship has 0 fuel capacity you should still be able to turn and launch, perhaps. <-- Where did I get this question from - it seems the actual O_THRUST command doesn't charge you any fuel - if so then you definitely shouldn't be gated by your fuel tank.
+
+  Q. The max laser power in Ship.C's SetOrder seems somewhat arbitrary, and forces laser combat to be close up predominantly (can't shoot at targets at extreme range without rotating to take the closer shot through boundaries, can't pump lots of damage into far ranging targets).
+
+  Q. Caan yhou reconfigure ship capacity after start? At any time? While docked? If so, should we add a game mode to cc_claude where you can't?
+
+  Q. If station radius is 30, or in general if ship+station radius > x, how does launching handle not immediately collidign / redocking?
+
+  Q. Double check that Coord DistTo and AngleTo produce proper toroidal measures with some test cases and a hello_world style program that just runs these functions.
+
+  Q. How accurate is the physics simulation:
+     * Conservetion of energy on collision / thrus
+     * Conservation of momentum on collision / thrust
+  
+  Q. Is there a bug in CThing.Drift where we clamp velcoity to maxspeed that it can be a large negative value?
+
+  Q. CTraj::Rotate noramlizes - does this reduce the cost? what if someone wants to do a spinarooney and puts in a rotate of 1000*PI?
+
+  Q. General nagivation / logic quersions - what happens near edges -
+    if we're pursuing something and it is going to be at 513, which is
+    -511, do we follow it straight or turn around - does vector
+    operations suddenly say it is PI behind us instead of 0 ahead if
+    we were heading to it dead on?
+
+  Q. Team based pBrain and GetBrain do nothing??!?
+
+  Q. Can you mess with other team stuff in your team? Kill their ships, set their messages? Or is the overall loop: server maintans world, sends world copies to teams, teams issue orders, server updates world based on orders, repeat. (Can you issue orders on other teams ships? that the server will do)?
+
+  Q. Can you mess with your own stuff, e.g. just teleport by setting
+    your position, change max velocity for your team, etc.?
+
+  Q. Big cheats - can you get around fuel limits by:
+    * Directly setting order array stuff and skipping SetOrder validation?
+    * Staging orders whose mutual demands exceed what is available (e.g. a thrust and a shield and a laser blast all using max fuel)
+      * Check the World.C laser logic where dLasPwr is gotten from GetOrder, but the fuel adjustment happenns based on SetOrder
+
+  Q. What is going on in the laser shooting code around line 171-181 in
+  World.c, why are we adding a distance of 1 of the targets velocity
+  onto the lasThing? Is this an effort to impart momentum due to the
+  blast, needed to hit the target? To get the damage correct?
+  Something else?
+    * It seems like this code should be changed and there should be a
+  "nudge" in movement away from the laser, perhaps proportional to
+  damage taken or whatever.
+
+  Q. The logic around adding new things to the world based on MAX_THINGS is wrong/broken I think. It ends up not mattering because we are at nowhere near the world limits for the simulation, but for instrance on line 198 we check and bail if numNewThings>=MAX_THINGS; maybe this is a sentinel value check with numNewTHings being interpreted as a UINT with value -1 or something? ACTUALLY - MAYBE THIS IS OK - ITS JUST WEIRDLY CONTROLLED WITH A numNewThings COUNTER?!?
+
+  Q. What is CWorld::SetTeam for? It seems like it's stripping out ships and stations of the other team? And then adding in the ones for the new team? Why bother with all this?
+
+  Q. What is CWorld::CollisionEvaluation doing - these variable names suck - why are there two Collide calls on 311/312 with pTItr&pTTM and the inverse. Fix the dangling unbracketed conditional URes++ on line 313 controlled by prior if.
+   * The static apTTmTh is way to cute - either make a better data structure or just accept the N^2 iteration, this is madness as is.
+
+
+== CHANGES / ENHANCEMENTS ==
+
+==1==
+
+In Ship.c, line 592 what is going on with the pointer checks against NULL and the explicit NULL assignment of a data member. The
+▌ comment claims it prevents an infinite recursive call.
+▌
+▌ How does this prevent an infinite recursive call, and is there a better/more standard/less confusing way of managin this situation?
+
+• I’m exploring how temporarily nullifying a ship’s team pointer inside HandleCollision in Ship.C prevents infinite recursion when
+  two ships collide by blocking symmetrical calls. This clever hack tricks the other ship’s collision check into skipping mutual
+  collision handling. Still, I’m thinking it might be cleaner to avoid mutating team pointers and instead use flags or specialized
+  one-time collision handlers to prevent recursive calls and ensure safer, more maintainable collision logic.
+
+> - For ship-vs-ship hits, CWorld::CollisionEvaluation already calls both orders: shipA->Collide(shipB) and shipB->Collide(shipA).
+  When shipA reaches CShip::HandleCollision, the block at Ship.C:590 runs only if the other ship reports GetTeam()!=NULL.
+  - Without the temporary pmyTeam=NULL, shipA would call shipB->Collide(shipA), and inside shipB the same block would run (because
+  shipA->GetTeam() is still non-null). That would in turn call shipA->Collide(shipB) again, producing an infinite ping‑pong.
+  - Clearing pmyTeam before the call means that, when shipB inspects shipA->GetTeam(), it now sees NULL and skips its reciprocal
+  call; the guard is purely there to break the recursion. The pointer is restored afterward so other logic still sees the real team.
+
+  More conventional ways to handle this would avoid mutating game state just to create a guard:
+
+  - Add a per-ship reentrancy flag (e.g., bool processingCollision) that short‑circuits if already set.
+  - Let CWorld::CollisionEvaluation call a dedicated symmetric helper once per pair (e.g., HandleShipShipCollision(shipA, shipB))
+  instead of bouncing through Collide twice.
+  - Pass an explicit parameter or use an overload so the second invocation knows it’s the mirrored call.
+
+  Any of those would be clearer than toggling the team pointer, which is easy to misread (and risky if future logic ever observes the
+  NULL mid-call).
+
+==end1==
+
+===2===
+
+Add a rule that you can't set jettison orders while docked / you get
+back a zero in planning - since you can't jettison while docked why
+set the order.
+
+====
+
+===3===
+
+Ship.C HandleJettison : Conserve momentum in ship ejecting an asteroid - as it is the asteroid leaves with our velocity, and we slow down some (which doesn't conserve momentum), and als owe just place the asteroid out a bit to avoid collisiono - that part is fine (Alghout maybe it hsould be placed more 3+ship radius or something rather than 3!?!?
+
+==== END FUTURE ====
+
+
+  -- RESERVED FOR CURSOR / self learning --
+
+Optimization A: "auction" off best moves and don't duplicate two ships going at the same target - winner is the one who can get there first, tie break on lowest cost.
+
+Optimization B: Will the engine calculate cost of our thursts? If so can we just use that in our thust entity thing?
+
+Optimization C: If there is no or little vinyl left in the world, return to base like for reals my guy if you have vinyl.
+
+Optimization D: If there is no or little vinyl and you're flying around, gobble up uranium - add it to your shields - this is a resource to deny other teams.
+
+Optimization E: If there is no or little vinyl left, and the enemy base has some, go shoot it, if an enemy ship has some, go shoot it.
+
+Optimization F: Combine D and E, fill up tank, go shoot enemy, fill up tank, etc.
+
+Do we avoid thrusting fast to save fuel? Is there an optimization
+about thrusting from base for free?
+
+Does it ever make sense to shoot a asteroid to break it up (other than
+perhaps action econmy of getting to smaller chunks a tick earlier?)
+how much fuel does it take to break it up, versus how much shield do
+you lose and how much fuel to restore shield?
+
+Functional things I want to understand:
+
+Details on the ship API, what can ship/thing/etc. actually do.
+
+How does the thrust work - and how is it costed? Is it applied instantly or over a turn, etc.
+
+How does our n_turns_vector / n_turns thing actually work?
+
+If we're moving to the right at 1 unit/sec and we want to be at -5 in 5 seconds, then we need to change our velocity to -1 this turn, or -6/5 next turn, a change of -2 or -11/5, not a change of -5 (or -6) / 5?
+
+How much shields do you need? what is the max damage due to a single collision?
+
+How do lasers work, if you put X fuel in how much damage do you to do something N away?
+
+How do collisions and carried over momentum work?
+
+How does the torroidal stuff work?
+

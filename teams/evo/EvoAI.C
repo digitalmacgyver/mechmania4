@@ -407,7 +407,7 @@ bool HarvesterBrain::AvoidCollisions() {
         CThing* pTh = pWorld->GetThing(index);
         if (!pTh || pTh == pShip || !pTh->IsAlive() || pTh == pTarget_) continue;
 
-        double ttc = pShip->DetectCollisionCourseNew(*pTh);
+        double ttc = pShip->DetectCollisionCourse(*pTh);
 
         if (ttc != NO_COLLIDE && ttc < cache_.NAV_AVOIDANCE_HORIZON && ttc < min_ttc) {
             min_ttc = ttc;

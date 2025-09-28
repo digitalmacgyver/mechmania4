@@ -9,8 +9,6 @@
     "reconnect": true
   },
   "features": {
-    "collision-detection": "new",
-    "elastic-collisions": "old",
-    "conserve-momentum": "new"
+    "legacy-collision-detection": false
   }
 }

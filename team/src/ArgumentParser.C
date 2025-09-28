@@ -20,8 +20,7 @@ void ArgumentParser::InitializeFeatures() {
 
   // Physics features
   features["collision-detection"] = true;  // New collision detection is default
-  features["elastic-collisions"] = false;  // Old behavior is default
-  features["conserve-momentum"] = false;   // Old behavior is default
+  features["velocity-limits"] = true;      // New velocity/acceleration limits is default
 
   // Announcer features
   features["announcer-velocity-clamping"] = false;  // Disabled by default
@@ -53,13 +52,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "help", "Show help");
 
     // Feature flags
-    options.add_options("Features")("old-collision-detection",
-                                    "Use old collision detection")(
-        "new-collision-detection", "Use new collision detection (default)")(
-        "old-elastic-collisions", "Use old elastic collisions (default)")(
-        "new-elastic-collisions", "Use new elastic collisions")(
-        "old-conserve-momentum", "Use old momentum conservation (default)")(
-        "new-conserve-momentum", "Use new momentum conservation")(
+    options.add_options("Features")("legacy-collision-detection",
+                                    "Use legacy collision detection")(
+        "legacy-velocity-limits", "Use legacy velocity and acceleration limits")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -105,23 +100,11 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     }
 
     // Process feature flags (command line overrides config)
-    if (result.count("old-collision-detection")) {
+    if (result.count("legacy-collision-detection")) {
       features["collision-detection"] = false;
     }
-    if (result.count("new-collision-detection")) {
-      features["collision-detection"] = true;
-    }
-    if (result.count("old-elastic-collisions")) {
-      features["elastic-collisions"] = false;
-    }
-    if (result.count("new-elastic-collisions")) {
-      features["elastic-collisions"] = true;
-    }
-    if (result.count("old-conserve-momentum")) {
-      features["conserve-momentum"] = false;
-    }
-    if (result.count("new-conserve-momentum")) {
-      features["conserve-momentum"] = true;
+    if (result.count("legacy-velocity-limits")) {
+      features["velocity-limits"] = false;
     }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
@@ -146,12 +129,10 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
 void ArgumentParser::ApplyBundle(const std::string& bundle) {
   if (bundle == "improved-physics") {
     features["collision-detection"] = true;
-    features["elastic-collisions"] = true;
-    features["conserve-momentum"] = true;
+    features["velocity-limits"] = true;
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
-    features["elastic-collisions"] = false;
-    features["conserve-momentum"] = false;
+    features["velocity-limits"] = false;
   }
 }
 
@@ -202,7 +183,7 @@ bool ArgumentParser::ParseConfigJson(const std::string& content) {
       inFeatures = false;
       inOptions = false;
     } else if (inFeatures && line.find(":") != std::string::npos) {
-      // Parse feature line: "feature-name": "new/old"
+      // Parse feature line: "feature-name": true/false
       size_t colonPos = line.find(":");
       std::string key = line.substr(0, colonPos);
       std::string value = line.substr(colonPos + 1);
@@ -215,7 +196,13 @@ bool ArgumentParser::ParseConfigJson(const std::string& content) {
       value.erase(std::remove(value.begin(), value.end(), ','), value.end());
 
       if (!key.empty() && !value.empty()) {
-        features[key] = (value == "new");
+        if (key == "legacy-collision-detection") {
+          features["collision-detection"] = !(value == "true");
+        } else if (key == "legacy-velocity-limits") {
+          features["velocity-limits"] = !(value == "true");
+        } else if (key == "announcer-velocity-clamping") {
+          features[key] = (value == "true");
+        }
       }
     } else if (inOptions && line.find(":") != std::string::npos) {
       // Parse option line
@@ -290,7 +277,16 @@ bool ArgumentParser::SaveConfig(const std::string& filename) const {
     if (!first) {
       file << ",\n";
     }
-    file << "    \"" << name << "\": \"" << (useNew ? "new" : "old") << "\"";
+    if (name == "collision-detection") {
+      // Convert to legacy-collision-detection boolean format
+      file << "    \"legacy-collision-detection\": " << (useNew ? "false" : "true");
+    } else if (name == "velocity-limits") {
+      // Convert to legacy-velocity-limits boolean format
+      file << "    \"legacy-velocity-limits\": " << (useNew ? "false" : "true");
+    } else {
+      // Other features use direct boolean format
+      file << "    \"" << name << "\": " << (useNew ? "true" : "false");
+    }
     first = false;
   }
   file << "\n  }\n";
