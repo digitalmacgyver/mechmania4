@@ -28,6 +28,12 @@ core.*
 .deps/
 teams/evo/venv/
 
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyc
+*$py.class
+
 # EvoAI team generated files
 teams/evo/EvoAI_params*.txt
 teams/evo/*.pkl
