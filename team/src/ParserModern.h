@@ -18,10 +18,17 @@ class CParser {
   // Original public interface maintained
   char hostname[128], gfxreg[128];
   int port, numteams, gfxflag, needhelp, retry, reconnect;
+  int verbose;  // Added for verbose output
 
   // New functionality - access to modern features
   bool UseNewFeature(const std::string& feature) const {
     return parser.UseNewFeature(feature);
+  }
+
+  bool IsTeamLoggingEnabled() const { return parser.enableTeamLogging; }
+  const std::string& GetTeamLogFile() const { return parser.teamLogFile; }
+  const std::string& GetTeamParamsFile() const {
+    return parser.teamParamsFile;
   }
 
   // Direct access to the modern parser if needed

@@ -1,10 +1,12 @@
-# Team Groogroo Strategy Guide
+# Team Groonew Strategy Guide
 
 ## Team Overview
-**Name:** "GrooGroo eat Groogroo!"
-**Team Number:** 13
-**Authors:** Zach, Arun, Matt (10/3/1998)
+**Name:** "Groonew!"
+**Team Number:** 14
+**Authors:** Matt (9/2025)
 **Philosophy:** "Groogroo don't eat Groogroo; Groogroo do."
+
+In this team we build on the original Team Groogroo's excellent navigation and resource collection, and then perhaps also add other strategies as well.
 
 ## Ship Configuration
 The team consists of 4 ships with biological-themed names:

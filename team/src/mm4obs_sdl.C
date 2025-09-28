@@ -4,6 +4,8 @@
  */
 
 #include <unistd.h>  // for sleep
+#include <cstdlib>   // for getenv
+#include <cstring>   // for strcmp
 
 #ifdef USE_SDL2
 #include <SDL2/SDL.h>  // for SDL_Delay
@@ -23,13 +25,24 @@ int main(int argc, char* argv[]) {
   CParser PCmdLn(argc, argv);
   g_pParser = &PCmdLn;  // Set global parser instance
   if (PCmdLn.needhelp == 1) {
-    printf("mm4obs [-R] [-G] [-pport] [-hhostname] [-ggfxreg]\n");
+    printf("mm4obs [-R] [-G] [--verbose] [-pport] [-hhostname] [-ggfxreg]\n");
     printf("  -R:  Attempt reconnect after server disconnect\n");
     printf("  -G:  Activate full graphics mode\n");
+    printf("  --verbose: Show game time progress\n");
     printf("  port defaults to 2323\n  hostname defaults to localhost\n");
     printf("  gfxreg defaults to graphics.reg\n");
     printf("MechMania IV: The Vinyl Frontier - SDL2 Edition\n");
     exit(1);
+  }
+
+  // Check if running in headless mode
+  bool headlessMode = false;
+  const char* sdlVideoDriver = getenv("SDL_VIDEODRIVER");
+  if (sdlVideoDriver && strcmp(sdlVideoDriver, "dummy") == 0) {
+    headlessMode = true;
+    if (PCmdLn.verbose) {
+      printf("Running in headless mode (SDL_VIDEODRIVER=dummy)\n");
+    }
   }
 
   printf("Initializing graphics...\n");
@@ -55,8 +68,8 @@ int main(int argc, char* argv[]) {
   // Connect to server (non-blocking approach)
   CClient* myClient = nullptr;
   bool connected = false;
-  Uint32 lastConnectAttempt = 0;
   const Uint32 reconnectDelay = 3000;  // 3 seconds in milliseconds
+  Uint32 lastReconnectAttempt = 0;
 
   // Initial connection attempt
   try {
@@ -67,17 +80,19 @@ int main(int argc, char* argv[]) {
     printf("Failed to connect to server. ");
     if (PCmdLn.reconnect) {
       printf("Will retry in 3 seconds...\n");
-      lastConnectAttempt = SDL_GetTicks();
+      lastReconnectAttempt = SDL_GetTicks();
     } else {
-      printf("Running in standalone mode.\n");
+      printf("Exiting. Run with -R to wait for reconnect.\n");
+      return 1;
     }
   }
 
   // Main loop - always responsive
   bool running = true;
-  Uint32 lastReconnectAttempt = 0;
 
   bool prevPaused = false;
+  double lastGameTime = -1.0;
+
   while (running) {
     Uint32 currentTime = SDL_GetTicks();
 
@@ -112,7 +127,8 @@ int main(int argc, char* argv[]) {
         printf("Will attempt reconnection...\n");
         lastReconnectAttempt = currentTime;
       } else {
-        printf("No reconnect flag, continuing in standalone mode\n");
+        printf("No reconnect flag, exiting observer.\n");
+        break;
       }
     }
 
@@ -127,6 +143,16 @@ int main(int argc, char* argv[]) {
         CWorld* world = myClient->GetWorld();
         if (world) {
           myObs.SetWorld(world);
+
+          // Verbose output: print game time
+          if (PCmdLn.verbose) {
+            double currentGameTime = world->GetGameTime();
+            if (currentGameTime != lastGameTime) {
+              printf("t=%.1f\n", currentGameTime);
+              fflush(stdout);
+              lastGameTime = currentGameTime;
+            }
+          }
         }
       }
     }
@@ -144,15 +170,28 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    // ALWAYS update and draw, even when disconnected
-    myObs.Update();
-    myObs.Draw();
+    // Update and draw based on mode
+    if (!headlessMode) {
+      // Normal graphics mode: update and draw
+      myObs.Update();
+      myObs.Draw();
 
-    // ALWAYS handle events (non-blocking)
-    running = myObs.HandleEvents();
+      // Handle events (keyboard, mouse, etc.)
+      running = myObs.HandleEvents();
+    } else {
+      // Headless mode: skip drawing entirely for maximum performance
+      // Don't need Update() either since we're just acknowledging frames
+      // Keep running unless we lose connection
+      running = connected || PCmdLn.reconnect;
+    }
 
-    // Small delay to prevent CPU spinning (16ms = ~60 FPS)
-    SDL_Delay(16);
+    if (headlessMode) {
+      // In headless mode, run as fast as possible without delay
+      // The ReceiveWorld() call will naturally block and wait for data
+    } else {
+      // Normal graphics mode: limit to ~60 FPS
+      SDL_Delay(16);
+    }
   }
 
   if (myClient) {

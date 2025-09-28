@@ -446,6 +446,8 @@ double CServer::Simulation() {
     for (UINT tm = 0; tm < nTms; tm++) {
       aTms[tm]->MsgText[0] = 0;
     }
+    // Clear announcer messages after each frame
+    pmyWorld->AnnouncerText[0] = 0;
   }
 
   return GetTime();

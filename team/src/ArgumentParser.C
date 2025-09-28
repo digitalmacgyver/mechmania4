@@ -23,6 +23,9 @@ void ArgumentParser::InitializeFeatures() {
   features["elastic-collisions"] = false;  // Old behavior is default
   features["conserve-momentum"] = false;   // Old behavior is default
 
+  // Announcer features
+  features["announcer-velocity-clamping"] = false;  // Disabled by default
+
   // Add more features as they are implemented
 }
 
@@ -42,6 +45,11 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
                                                    "Enable full graphics mode")(
         "R,reconnect", "Attempt reconnect after disconnect")(
         "config", "Configuration file", cxxopts::value<std::string>())(
+        "log", "Enable team logging")(
+        "log-file", "Path to team log file",
+         cxxopts::value<std::string>())(
+        "params", "Path to team parameter file",
+         cxxopts::value<std::string>())("verbose", "Enable verbose output")(
         "help", "Show help");
 
     // Feature flags
@@ -51,7 +59,8 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "old-elastic-collisions", "Use old elastic collisions (default)")(
         "new-elastic-collisions", "Use new elastic collisions")(
         "old-conserve-momentum", "Use old momentum conservation (default)")(
-        "new-conserve-momentum", "Use new momentum conservation");
+        "new-conserve-momentum", "Use new momentum conservation")(
+        "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
     options.add_options("Bundles")("improved-physics",
@@ -68,6 +77,18 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     gfxflag = result.count("graphics") > 0;
     reconnect = retry = result.count("reconnect") > 0;
     needhelp = result.count("help") > 0;
+
+    if (result.count("log")) {
+      enableTeamLogging = true;
+    }
+    if (result.count("log-file")) {
+      teamLogFile = result["log-file"].as<std::string>();
+    }
+    if (result.count("params")) {
+      teamParamsFile = result["params"].as<std::string>();
+    }
+
+    verbose = result.count("verbose") > 0;
 
     if (needhelp) {
       std::cout << options.help() << std::endl;
@@ -101,6 +122,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     }
     if (result.count("new-conserve-momentum")) {
       features["conserve-momentum"] = true;
+    }
+    if (result.count("announcer-velocity-clamping")) {
+      features["announcer-velocity-clamping"] = true;
     }
 
     // Process bundles

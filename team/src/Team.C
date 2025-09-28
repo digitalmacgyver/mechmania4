@@ -16,6 +16,7 @@ CTeam::CTeam(UINT TNum, CWorld* pworld) {
   pmyWorld = pworld;
   TeamNum = TNum;
   uImgSet = 0;
+  memset(MsgText, 0, maxTextLen);  // Initialize message buffer to prevent garbled text
 }
 
 bool CTeam::Create(UINT numSh, UINT uCrd) {
@@ -23,19 +24,21 @@ bool CTeam::Create(UINT numSh, UINT uCrd) {
   char namebuf[maxnamelen];
   UINT i = 0;
 
+  // COORDINATE SYSTEM: +Y points down on screen, so:
+  // fWYMin (-512) is top of screen, fWYMax (+512) is bottom of screen
   CCoord StPos;
   switch (uCrd) {
     case 0:
-      StPos = CCoord(fWXMin / 2.0, fWYMin / 2.0);
+      StPos = CCoord(fWXMin / 2.0, fWYMin / 2.0);  // Top-left (-256, -256)
       break;
     case 1:
-      StPos = CCoord(fWXMax / 2.0, fWYMax / 2.0);
+      StPos = CCoord(fWXMax / 2.0, fWYMax / 2.0);  // Bottom-right (256, 256)
       break;
     case 2:
-      StPos = CCoord(fWXMin / 2.0, fWYMax / 2.0);
+      StPos = CCoord(fWXMin / 2.0, fWYMax / 2.0);  // Bottom-left (-256, 256)
       break;
     case 3:
-      StPos = CCoord(fWXMax / 2.0, fWYMin / 2.0);
+      StPos = CCoord(fWXMax / 2.0, fWYMin / 2.0);  // Top-right (256, -256)
       break;
     default:
       StPos = CCoord(0.0, 0.0);

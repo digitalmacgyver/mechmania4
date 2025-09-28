@@ -7,6 +7,10 @@
 #include "Station.h"
 #include "Team.h"
 #include "Thing.h"
+#include "ParserModern.h"
+
+// External reference to global parser instance
+extern CParser* g_pParser;
 
 GetVinyl::GetVinyl() {}
 
@@ -18,6 +22,11 @@ void GetVinyl::Decide() {
   // can't fire and drive cause of alcohol breath
   CTeam *pmyTeam = pShip->GetTeam();
   CWorld *pmyWorld = pmyTeam->GetWorld();
+
+  // Verbose logging header
+  if (g_pParser && g_pParser->verbose) {
+    printf("t=%.1f\t%s:\n", pmyWorld->GetGameTime(), pShip->GetName());
+  }
 
   UINT shipnum = pShip->GetShipNumber();
   MagicBag *mbp = ((Groonew *)pmyTeam)->mb;
@@ -51,7 +60,28 @@ void GetVinyl::Decide() {
       continue;
     }
 
-    // Collision next turn
+    // Verbose collision logging - only for imminent collisions and when not docked
+    if (g_pParser && g_pParser->verbose && turns < 3.0 && !pShip->IsDocked()) {
+      printf("\tCollision in %.1f turns with ", turns);
+      if (kind == SHIP) {
+        printf("ship '%s'\n", ((CShip*)athing)->GetName());
+      } else if (kind == STATION) {
+        printf("station '%s'\n", ((CStation*)athing)->GetName());
+      } else if (kind == ASTEROID) {
+        CAsteroid* ast = (CAsteroid*)athing;
+        printf("asteroid %s %.1f tons\n",
+               (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",
+               ast->GetMass());
+      } else {
+        printf("object kind %d\n", kind);
+      }
+    }
+
+    // Collision next turn TODO: Improve this collision logic - we might collide
+    // with many things, we probably only want to worry about the first one -
+    // but as it is we'll lock orders and maybe break if we see a colllision out
+    // 3 turns and there is a later object we'd collide with first but we
+    // haven't evaluated it yet.
     if (turns < 2.0) {
       if (((kind == STATION) &&
            (((CStation *)athing)->GetTeam()->GetTeamNumber() !=
@@ -59,12 +89,19 @@ void GetVinyl::Decide() {
           (pShip->GetAmount(S_CARGO) > 0.01)) {
         // if its enemy base and we have vinyl
         printf("Jabba will not take kindly to this!\n");
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ Jettisoning %.1f vinyl near enemy station\n", cur_cargo);
+        }
         pShip->SetJettison(VINYL, cur_cargo);
         lock_orders = true;
       } else if (kind == ASTEROID) {
         if ((((CAsteroid *)athing)->GetMaterial() == URANIUM)) {
           if (athing->GetMass() <= max_fuel) {
             // uranium less than max fuel
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ Using shields to absorb %.1f uranium\n",
+                     athing->GetMass() - (max_fuel - cur_fuel));
+            }
             pShip->SetOrder(O_SHIELD,
                             athing->GetMass() - (max_fuel - cur_fuel));
             lock_orders = true;
@@ -106,6 +143,9 @@ void GetVinyl::Decide() {
         // if its enemy base and we have vinyl
         // turn away for jettison
         printf("Turning away from their base!\n");
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ Turning away from enemy station (π radians)\n");
+        }
         pShip->SetOrder(O_TURN, PI);  // should check where we are pointing
         lock_orders = true;
       } else if (kind == ASTEROID) {
@@ -157,6 +197,9 @@ void GetVinyl::Decide() {
         ((((Groonew *)pmyTeam)->vinyl_left < 0.01) &&
          (pShip->GetAmount(S_CARGO) > 0.01))) {
       // make the return to station better
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
+      }
       for (UINT j = 0; j < 50; j++) {
         FuelTraj ft = ((Groonew *)pmyTeam)
                           ->determine_orders(pmyTeam->GetStation(), j, pShip);
@@ -190,6 +233,34 @@ void GetVinyl::Decide() {
         }
       }
       if (best_e != NULL) {
+        if (g_pParser && g_pParser->verbose) {
+          CThing* target = best_e->thing;
+          CAsteroid* ast = (CAsteroid*)target;
+          printf("\t→ Following %s asteroid %u:\n",
+                 (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",
+                 target->GetWorldIndex());
+
+          // Ship state
+          CCoord ship_pos = pShip->GetPos();
+          CTraj ship_vel = pShip->GetVelocity();
+          double ship_orient = pShip->GetOrient();
+          printf("\t  Ship:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\n",
+                 ship_pos.fX, ship_pos.fY, ship_vel.rho, ship_vel.theta, ship_orient);
+
+          // Asteroid state
+          CCoord ast_pos = target->GetPos();
+          CTraj ast_vel = target->GetVelocity();
+          double ast_orient = target->GetOrient();
+          printf("\t  Asteroid:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\tmass %.1f\n",
+                 ast_pos.fX, ast_pos.fY, ast_vel.rho, ast_vel.theta, ast_orient, target->GetMass());
+
+          // Trajectory info
+          printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                 best_e->turns_total,
+                 ((best_e->fueltraj).order_kind == O_THRUST) ? "thrust" :
+                 ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other",
+                 (best_e->fueltraj).order_mag);
+        }
         pShip->SetOrder((best_e->fueltraj).order_kind,
                         (best_e->fueltraj).order_mag);
         // best_e->claimed_by_mech=1;

@@ -80,6 +80,12 @@ void CStation::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
         "%.2f)\n",
         GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown", dDmg, oldCargo,
         dCargo);
+    if (pWorld) {
+      char msg[256];
+      snprintf(msg, sizeof(msg), "%s hit by laser, %.1f vinyl lost",
+               GetName(), dDmg);
+      pWorld->AddAnnouncerMessage(msg);
+    }
   }
 }
 

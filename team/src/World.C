@@ -33,6 +33,7 @@ CWorld::CWorld(UINT nTm) {
 
   gametime = 0.0;  // Start the clock
   bGameOver = false;
+  memset(AnnouncerText, 0, maxAnnouncerTextLen);  // Initialize announcer buffer
 
   for (i = 0; i < MAX_THINGS; i++) {
     apThings[i] = NULL;
@@ -96,6 +97,21 @@ CTeam* CWorld::GetTeam(UINT nt) const {
 UINT CWorld::GetNumTeams() const { return numTeams; }
 
 double CWorld::GetGameTime() const { return gametime; }
+
+void CWorld::AddAnnouncerMessage(const char* message) {
+  if (message == NULL) return;
+
+  size_t currentLen = strlen(AnnouncerText);
+  size_t messageLen = strlen(message);
+
+  // Ensure we have space for the message plus a newline and null terminator
+  if (currentLen + messageLen + 2 < maxAnnouncerTextLen) {
+    if (currentLen > 0) {
+      strcat(AnnouncerText, "\n");  // Add newline between messages
+    }
+    strcat(AnnouncerText, message);
+  }
+}
 
 CThing* CWorld::GetThing(UINT index) const {
   if (index >= MAX_THINGS) {
@@ -513,6 +529,7 @@ unsigned CWorld::GetSerialSize() const {
   totsize += BufWrite(NULL, UFirstIndex);
   totsize += BufWrite(NULL, ULastIndex);
   totsize += BufWrite(NULL, gametime);
+  totsize += BufWrite(NULL, AnnouncerText, maxAnnouncerTextLen);
 
   UINT i, inext, sz, iTm, crc = 666, uTK = 0;
 
@@ -552,6 +569,7 @@ unsigned CWorld::SerialPack(char* buf, unsigned buflen) const {
   vpb += BufWrite(vpb, UFirstIndex);
   vpb += BufWrite(vpb, ULastIndex);
   vpb += BufWrite(vpb, gametime);
+  vpb += BufWrite(vpb, AnnouncerText, maxAnnouncerTextLen);
 
   UINT i, inext, sz, iTm, crc = 666, uTK;
   ThingKind TKind;
@@ -608,6 +626,7 @@ unsigned CWorld::SerialUnpack(char* buf, unsigned buflen) {
   vpb += BufRead(vpb, inext);
   vpb += BufRead(vpb, ilast);
   vpb += BufRead(vpb, gametime);
+  vpb += BufRead(vpb, AnnouncerText, maxAnnouncerTextLen);
 
   for (i = 0; i < numTeams; i++) {
     vpb += BufRead(vpb, auClock[i]);

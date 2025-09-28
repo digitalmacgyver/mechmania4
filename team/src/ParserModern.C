@@ -27,6 +27,7 @@ CParser::CParser(int argc, char** argv) {
   needhelp = parser.needhelp ? 1 : 0;
   retry = parser.retry ? 1 : 0;
   reconnect = parser.reconnect ? 1 : 0;
+  verbose = parser.verbose ? 1 : 0;
 }
 
 CParser::~CParser() {}
@@ -43,4 +44,5 @@ void CParser::SetDefaults() {
   needhelp = 0;
   retry = 0;
   reconnect = 0;
+  verbose = 0;
 }

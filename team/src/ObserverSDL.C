@@ -190,6 +190,9 @@ void ObserverSDL::Draw() {
         DrawTeamInfo(team, x, y);
       }
     }
+
+    // Draw announcer messages
+    DrawAnnouncerMessages();
   }
 
   DrawMessages();
@@ -706,6 +709,34 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
   }
 }
 
+void ObserverSDL::DrawAnnouncerMessages() {
+  // Display announcer messages in white (worldIndex = -1)
+  if (myWorld && strlen(myWorld->AnnouncerText) > 0) {
+    // Process announcer messages line by line
+    char* msg = myWorld->AnnouncerText;
+    char line[256];
+    int linePos = 0;
+
+    for (int i = 0; i < myWorld->maxAnnouncerTextLen && msg[i] != '\0'; i++) {
+      if (msg[i] == '\n' || linePos >= 255) {
+        line[linePos] = '\0';
+        if (linePos > 0) {
+          // Use worldIndex = -1 to display in white
+          AddMessage(line, -1);
+        }
+        linePos = 0;
+      } else {
+        line[linePos++] = msg[i];
+      }
+    }
+    // Add any remaining text
+    if (linePos > 0) {
+      line[linePos] = '\0';
+      AddMessage(line, -1);
+    }
+  }
+}
+
 void ObserverSDL::DrawMessages() {
   // No header; render newest messages at the bottom and fill upward
   int charWidth = 7, charHeight = 13;
@@ -756,6 +787,8 @@ void ObserverSDL::DrawMessages() {
     Color msgColor(200, 200, 200);
     if (msg.worldIndex >= 0) {
       msgColor = GetTeamColor(msg.worldIndex);
+    } else if (msg.worldIndex == -1) {
+      msgColor = Color(255, 255, 255);  // White for announcer messages
     }
 
     // Build timestamp string and measure its width

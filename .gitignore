@@ -26,6 +26,13 @@ core.*
 
 # Dependencies
 .deps/
+teams/evo/venv/
+
+# EvoAI team generated files
+teams/evo/EvoAI_params*.txt
+teams/evo/*.pkl
+teams/evo/*.tmp
+teams/evo/optimization*.log
 
 # CMake
 CMakeFiles/

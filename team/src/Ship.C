@@ -6,10 +6,13 @@
  */
 
 #include "Brain.h"
+#include "ParserModern.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
 #include "World.h"
+
+extern CParser* g_pParser;
 
 ///////////////////////////////////////////
 // Construction/Destruction
@@ -232,6 +235,10 @@ double CShip::SetOrder(OrderKind ord, double value) {
         value = AccVec.rho;
       }
 
+      // NOTE: The departure thrust of a ship is limited by its maximum fuel
+      // capacity, even though that thrust is free (will only be relevant for
+      // ships with very small fuel tanks).
+      //
       // 1 ton of fuel accelerates a naked ship from zero to 6.0*maxspeed
       fuelcon = fabs(value) * GetMass() / (6.0 * maxspeed * mass);
       if (fuelcon > maxfuel && IsDocked() == false) {
@@ -415,8 +422,22 @@ void CShip::Drift(double dt) {
 
   bIsColliding = NO_DAMAGE;
   bIsGettingShot = NO_DAMAGE;
+
+  // Check for velocity clamping before applying it
   if (Vel.rho > maxspeed) {
+    double originalSpeed = Vel.rho;
     Vel.rho = maxspeed;
+
+    // Announce when velocity gets clamped (if enabled)
+    if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
+      CWorld* pWorld = GetTeam()->GetWorld();
+      if (pWorld) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "%s velocity clamped %.1f -> %.1f",
+                 GetName(), originalSpeed, maxspeed);
+        pWorld->AddAnnouncerMessage(msg);
+      }
+    }
   }
   // From CThing::Drift
 
@@ -470,6 +491,7 @@ void CShip::Drift(double dt) {
 
   // Thrusting time
   if (thrustamt != 0.0) {
+    // fuelcons will be set to 0 by SetOrder if the ship is docked.
     fuelcons = SetOrder(O_THRUST, thrustamt);
     double oldFuel = GetAmount(S_FUEL);
     double newFuel = oldFuel - fuelcons;
@@ -484,7 +506,19 @@ void CShip::Drift(double dt) {
     CTraj Accel(thrustamt, GetOrient());
     Vel += (Accel * dt);
     if (Vel.rho > maxspeed) {
+      double originalSpeed = Vel.rho;
       Vel.rho = maxspeed;
+
+      // Announce when thrusting causes velocity clamping (if enabled)
+      if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
+        CWorld* pWorld = GetTeam()->GetWorld();
+        if (pWorld) {
+          char msg[256];
+          snprintf(msg, sizeof(msg), "%s thrust clamped %.1f -> %.1f",
+                   GetName(), originalSpeed, maxspeed);
+          pWorld->AddAnnouncerMessage(msg);
+        }
+      }
     }
 
     if (IsDocked() == true) {
@@ -577,6 +611,8 @@ CThing *CShip::LaserTarget() {
 }
 
 double CShip::AngleToIntercept(const CThing &OthThing, double dtime) {
+  // COORDINATE SYSTEM NOTE: In our display, +Y points downward on screen
+  // Angle orientation: 0 = right (+X), PI/2 = down (+Y), PI = left (-X), -PI/2 = up (-Y)
   CCoord myPos, hisPos;
   myPos = PredictPosition(dtime);
   hisPos = OthThing.PredictPosition(dtime);
@@ -644,6 +680,12 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
       if (pStation->GetTeam() == this->GetTeam()) {
         printf("[DELIVERY] Ship %s delivered %.2f vinyl to HOME base (%s)\n",
                GetName(), vinylDelivered, GetTeam()->GetName());
+        if (pWorld) {
+          char msg[256];
+          snprintf(msg, sizeof(msg), "%s delivered %.1f vinyl to %s",
+                   GetName(), vinylDelivered, pStation->GetName());
+          pWorld->AddAnnouncerMessage(msg);
+        }
       } else {
         printf(
             "[ENEMY DELIVERY] Ship %s delivered %.2f vinyl to ENEMY base (%s "
@@ -668,13 +710,33 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     if (dshield < 0.0) {
       printf("[DESTROYED] Ship %s (%s) destroyed by laser\n", GetName(),
              GetTeam() ? GetTeam()->GetName() : "Unknown");
+      if (pWorld) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "%s destroyed by laser", GetName());
+        pWorld->AddAnnouncerMessage(msg);
+      }
       KillThing();
     }
     return;
   }
 
-  dshield -= ((RelativeMomentum(*pOthThing).rho) / 1000.0);
+  double damage = (RelativeMomentum(*pOthThing).rho) / 1000.0;
+  dshield -= damage;
   SetAmount(S_SHIELD, dshield);
+
+  // Announce collision even if ship survives
+  if (pWorld && damage > 0.1) {  // Only announce significant collisions
+    char msg[256];
+    const char *targetName = "unknown";
+    if (pOthThing->GetKind() == SHIP) {
+      targetName = pOthThing->GetName();
+    } else if (pOthThing->GetKind() == ASTEROID) {
+      targetName = "asteroid";
+    }
+    snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
+             GetName(), targetName, damage);
+    pWorld->AddAnnouncerMessage(msg);
+  }
   if (dshield < 0.0) {
     const char *causeType = "unknown";
     if (pOthThing->GetKind() == SHIP) {
@@ -684,6 +746,12 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     }
     printf("[DESTROYED] Ship %s (%s) destroyed by %s\n", GetName(),
            GetTeam() ? GetTeam()->GetName() : "Unknown", causeType);
+    if (pWorld) {
+      char msg[256];
+      const char *shortCause = (pOthThing->GetKind() == SHIP) ? "ship" : "asteroid";
+      snprintf(msg, sizeof(msg), "%s destroyed by %s", GetName(), shortCause);
+      pWorld->AddAnnouncerMessage(msg);
+    }
     KillThing();
   }
 

@@ -17,8 +17,9 @@ int main(int argc, char* argv[]) {
   g_pParser = &PCmdLn;  // Set global parser instance
 
   if (PCmdLn.needhelp == 1) {
-    printf("mm4serv [-pport] [-Tnumteams]\n");
+    printf("mm4serv [-pport] [-Tnumteams] [--announcer-velocity-clamping]\n");
     printf("  port defaults to 2323\n  numteams defaults to 2\n");
+    printf("  --announcer-velocity-clamping enables velocity clamping announcements\n");
     printf("MechMania IV: The Vinyl Frontier   10/2/98\n");
     exit(1);
   }

@@ -62,6 +62,7 @@ class ObserverSDL {
   void DrawAsteroidSprite(CAsteroid* asteroid);
   void DrawThing(CThing* thing);
   void DrawTeamInfo(CTeam* team, int x, int y);
+  void DrawAnnouncerMessages();
   void DrawMessages();
   void DrawTimeDisplay();
   void DrawStarfield();

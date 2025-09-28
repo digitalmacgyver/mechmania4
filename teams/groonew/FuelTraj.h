@@ -7,7 +7,6 @@
 class FuelTraj {
  public:
   double fuel_used;
-  CTraj traj;
   OrderKind order_kind;
   double order_mag;
 };

@@ -93,9 +93,9 @@ class CThing : public CSendable {
 
  protected:
   ThingKind TKind;       // Identifier of kind of stuff
-  CCoord Pos;            // Current coordinates
+  CCoord Pos;            // Current coordinates (NOTE: +Y points down on screen)
   CTraj Vel;             // Current velocity
-  double orient, omega;  // Orientation in radians, rate of change of angle
+  double orient, omega;  // Orientation in radians (0=right, PI/2=down, PI=left, -PI/2=up), rate of change
   double mass, size;     // Mass and size
   bool DeadFlag;         // true means this guy's DEAD
   CTeam* pmyTeam;        // NULL for non-team objects (asteroids)

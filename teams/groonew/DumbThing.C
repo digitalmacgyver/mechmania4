@@ -17,5 +17,5 @@ void DumbThing::Decide() {
     flag++;
   }
 
-  sprintf(pmyTeam->MsgText, "Fuel Used: %g\n", fuel);
+  snprintf(pmyTeam->MsgText, maxTextLen, "Fuel Used: %g\n", fuel);
 }

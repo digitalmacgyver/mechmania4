@@ -146,6 +146,17 @@ add_executable(mm4team_groonew
 target_link_libraries(mm4team_groonew mm4_common pthread)
 target_include_directories(mm4team_groonew PRIVATE teams/groonew)
 
+# Evo team executable
+add_executable(mm4team_evo
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/evo/EvoAI.C
+)
+target_link_libraries(mm4team_evo mm4_common pthread)
+target_include_directories(mm4team_evo PRIVATE teams/evo)
+
 # Vortex team executable
 add_executable(mm4team_vortex
     ${SRC_DIR}/mm4team.C
@@ -156,6 +167,17 @@ add_executable(mm4team_vortex
 )
 target_link_libraries(mm4team_vortex mm4_common pthread)
 target_include_directories(mm4team_vortex PRIVATE teams/vortex)
+
+# NoOp team executable (does nothing - for testing)
+add_executable(mm4team_noop
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/noop/NoOp.C
+)
+target_link_libraries(mm4team_noop mm4_common pthread)
+target_include_directories(mm4team_noop PRIVATE teams/noop)
 
 # Observer executable (only if graphics enabled)
 if(BUILD_WITH_GRAPHICS)

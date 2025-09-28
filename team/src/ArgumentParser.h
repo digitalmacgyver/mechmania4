@@ -29,6 +29,14 @@ class ArgumentParser {
   bool retry = false;
   bool reconnect = false;
 
+  // Team-specific options
+  bool enableTeamLogging = false;
+  std::string teamLogFile;      // Empty = use team default
+  std::string teamParamsFile;   // Empty = use team default
+
+  // Observer options
+  bool verbose = false;          // Verbose output for observer
+
   // Config file
   std::string configFile;
 

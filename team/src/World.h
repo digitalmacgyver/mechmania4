@@ -6,6 +6,11 @@
  *   creation and deletion
  * For use with MechMania IV
  * Misha Voloshin 5/28/98
+ *
+ * COORDINATE SYSTEM:
+ * World coordinates range from (-512,-512) to (512,512)
+ * +Y direction points DOWNWARD on the display screen
+ * Angles: 0 = right (+X), PI/2 = down (+Y), PI = left (-X), -PI/2 = up (-Y)
  */
 
 #ifndef _WORLD_H_DSDFJSFLJKSEGFKLESF
@@ -31,6 +36,9 @@ class CWorld : public CSendable {
   CTeam* GetTeam(UINT nt) const;  // Returns ptr to team, NULL on error
   UINT GetNumTeams() const;       // Tells how many teams
   double GetGameTime() const;     // Tells elapsed game time
+
+  // Announcer system
+  void AddAnnouncerMessage(const char* message);
 
   UINT PhysicsModel(double dt = 1.0);  // Specify amt of time to pass
   void LaserModel();                   // Compute all laser firings
@@ -58,6 +66,10 @@ class CWorld : public CSendable {
   double* auClock;
 
   bool bGameOver;
+
+  // Announcer system - larger buffer to handle multiple events per turn
+  static const int maxAnnouncerTextLen = 2048;
+  char AnnouncerText[maxAnnouncerTextLen];
 
  protected:
   CThing* apThings[MAX_THINGS];

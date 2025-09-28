@@ -12,6 +12,9 @@
 // Factory function - tells the game to use our team class
 CTeam* CTeam::CreateTeam() { return new Groonew; }
 
+// TODO: Remove this
+static const bool DEBUG_MODE = true;
+
 //////////////////////////////////////////
 // Groonew class implementation
 
@@ -43,15 +46,14 @@ void Groonew::Init() {
   srand(time(NULL));
 
   // Set team identity
-  SetTeamNumber(13);                  // Lucky 13!
-  SetName("Groonew eat Groonew!");  // Team motto
-  GetStation()->SetName("Tree!");     // Base station name
+  SetTeamNumber(14);
+  SetName("Rogue Squadron");  
+  GetStation()->SetName("Tatooine");     // Base station name
 
-  // Biological/symbiotic naming theme for ships
-  GetShip(0)->SetName("Larvae");    // Young organism
-  GetShip(1)->SetName("Tree");      // Matches station name
-  GetShip(2)->SetName("Host");      // Symbiotic relationship
-  GetShip(3)->SetName("Symbiant");  // Symbiotic partner
+  GetShip(0)->SetName("Gold Leader");    
+  GetShip(1)->SetName("Aluminum Falcon");      
+  GetShip(2)->SetName("Red 5");
+  GetShip(3)->SetName("Echo 3");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
@@ -82,8 +84,16 @@ void Groonew::Turn() {
       continue;
     }
 
+    // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
+    if (DEBUG_MODE && strcmp(pSh->GetName(), "Gold Leader") != 0) {
+      // All the other ships do nothing, we let gold leader's brain decide.
+      pSh->ResetOrders();
+      continue;
+    }
+
     // GetVinyl::Decide() will access the MagicBag to choose targets
     brain->Decide();
+
   }
 
   // PHASE 3: Clean up - MagicBag is recreated fresh each turn
@@ -150,8 +160,7 @@ void Groonew::PopulateMagicBag() {
           entry->fueltraj = fueltraj;     // How to get there
           entry->total_fuel = fuel_cost;  // Fuel required (TODO: fix)
           entry->collision = collision;   // Obstacles (TODO: fix)
-          entry->claimed_by_mech =
-              0;  // TODO: Ship coordination not implemented
+          entry->claimed_by_mech = 0;  // TODO: Ship coordination not implemented
 
           // Add to this ship's list of possible targets
           mb->addEntry(ship_i, entry);
@@ -162,10 +171,37 @@ void Groonew::PopulateMagicBag() {
   }
 }
 
+//Helper functions.
+namespace {
+  // Returns true if the game engine will clamp us as a result sending a thrust
+  // order with rho for this ship.
+  bool is_speeding(CShip* ship, double rho, double maxspeed=30.0) {
+    return ((ship->GetVelocity() + CTraj(rho, ship->GetOrient())).rho > maxspeed);
+  }
+}
+
+// This will be the first thing we refine:
+// Step 0: As I'm checking the stuff below, I want to validate with hello world style code checks, for instance that VectTo does what I expect.
+// Step 0: CONSIDER USING A NEW SHIP, SETTING IT'S POSITION AND VELOCITY, AND USING DETECT COLLISION OR OTHER METHODS TO DO THE NON-POINT MASS ANALYSI
+//         MAYBE WE CAN USE DETECTCOLISIONCOURSE INSTEAD OF THETA <= 0.1
+// Step 1: Check and validate the logic below is correct and optimal for point masses and dt=1.
+//         * Account for max velocity - we'll get clamped to 30 so don't chase stuff we can't catch - if our resulting vel > 30 to get there in time t fail or limit to 30.
+//         * Double check engine behavior - it seems it allows us to acclerate to > 30, by going up to 30 in each dimension or soemthing - this will quickly get capped later but understand current behavior for that tick.
+//         * After making some fixes, it seems we're chasing things - is there an off by 1 error where we're 1 second behind? Or a failure to recognize when we're on maxspeed?
+//           IT'S PROBABLY A MAXSPEED ISSUE - NEED HELLO WORLD DIAGNOSIS OF TRYING TO CHASE SOMETHING JUST AHEAD OF US GOING AT MAXSPEED.
+//           IT MAY ALSO BE A FACING ISSUE - WHEN WE ARE CLOSE WE MAY NOT BE COMPLETELY DEAD ON BUT WE MAY WASTE TURNS DOING TINY MICRO ADJUSTMENTS INSTEAD OF THRUSTING.
+//           THE OLD LOGIC OF DIVIDING BY TIME INSTEAD OF (TIME-1) MAY HAVE MASKED THIS ISSUE BY OVERSHOOTING THE TARGET ON APPROACH.
+// Step 2: Adapt the logic given that the underlying simulation uses dt=0.2.
+// Step 3: Consider how to make our estimates fuel aware, and our order selections fuel aware.
+// Step 3: Consider how to prevent two ships going after the same target, and making the one who can get there best (e.g. fastest and with least fuel) the one who gets it.
+// Step 3: Consider how to make the logic toroid aware and relative velocity aware - e.g. ship at -200, asteroid at 200, ship going 30 left, asteroid going 30 right - if we do nothing we'll collide in ~624/60 = 11 turns. But if we chase it by turning to the right we'll never cath it.
+// Step 3: Consider how to adapt the logic for the actual size of our objects.
+// Step 4: Consider how to adapt logic to be collision aware.
 FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
-  FuelTraj fj;  // Will contain the optimal order and fuel cost
+  FuelTraj fj;  // Contains: fuel_used, order_kind, order_mag
 
   // Calculate where target will be in 'time' seconds
+  // TODO: This doesn't account for collisions.
   CCoord destination = thing->PredictPosition(time);
 
   // Get ship's current and next-turn positions
@@ -175,41 +211,51 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
   // STRATEGY 1: Try immediate thrust
   // Calculate thrust vector needed if we thrust right now
   CTraj dist_vec_now = us_now.VectTo(destination);  // Vector to target
-  CTraj final_vel_vec_now = dist_vec_now;
-  final_vel_vec_now.rho /= time;  // Velocity needed to reach target in time
-  CTraj vel_vec_now = ship->GetVelocity();                 // Current velocity
-  CTraj thrust_vec_now = final_vel_vec_now - vel_vec_now;  // Required change
+  CTraj vel_vec_now = dist_vec_now;
+  vel_vec_now.rho /= time;  // Velocity needed to reach target in time
+  CTraj thrust_vec_now = vel_vec_now - ship->GetVelocity();  // Required change
 
   // Adjust angle relative to ship's current orientation
   thrust_vec_now.theta = thrust_vec_now.theta - ship->GetOrient();
 
-  fj.traj = dist_vec_now;  // Store the trajectory vector
-
   // Check if we're already facing the right direction and thrust is reasonable
-  if ((fabs(thrust_vec_now.theta) < .1) && (thrust_vec_now.rho <= 30.0)) {
-    // We're aligned - thrust immediately
-    fj.order_kind = O_THRUST;
-    fj.order_mag = thrust_vec_now.rho;
-    fj.fuel_used = ship->SetOrder(O_THRUST, thrust_vec_now.rho);
+  // TODO: We sometimes rotate around in a circle for nearby flybys, rather than
+  // having a fixed arc of 0.1, we should try something more precise - perhaps
+  // we can use the laser systems facing logic to see if we'll just get it of we
+  // thrust (probablyu should limit that to 1 turn lookahead).
+  if (fabs(thrust_vec_now.theta) < .1) {
+    if (!is_speeding(ship, thrust_vec_now.rho)) { 
+      // We're aligned - thrust immediately
+      fj.order_kind = O_THRUST;
+      fj.order_mag = thrust_vec_now.rho;
+      fj.fuel_used = ship->SetOrder(O_THRUST, thrust_vec_now.rho);
+    } else {
+      // Can't reach target - thrust required exceeds maximum
+      fj.fuel_used = -1;  // Signal impossible trajectory
+    }
   } else {
     // STRATEGY 2: Turn now, thrust next turn
     // Calculate what we'll need if we spend this turn rotating
-    CTraj dist_vec_later = us_later.VectTo(destination);
-    CTraj final_vel_vec_later = dist_vec_later;
-    final_vel_vec_later.rho /= time;  // Required velocity from next position
-
-    // Our current velocity won't change if we only rotate
-    CTraj thrust_vec_later = final_vel_vec_later - vel_vec_now;
-    thrust_vec_later.theta = thrust_vec_later.theta - ship->GetOrient();
-
-    if (thrust_vec_later.rho > 30.0) {
-      // Can't reach target - thrust required exceeds maximum
+    if (time <= 1.0) {
       fj.fuel_used = -1;  // Signal impossible trajectory
     } else {
-      // Turn this frame to face target
-      fj.order_kind = O_TURN;
-      fj.order_mag = thrust_vec_later.theta;
-      fj.fuel_used = ship->SetOrder(O_TURN, thrust_vec_later.theta);
+      CTraj dist_vec_later = us_later.VectTo(destination);
+      CTraj vel_vec_later = dist_vec_later;
+      vel_vec_later.rho /= (time - 1.0);  // Required velocity from next position
+
+      // Our current velocity won't change if we only rotate
+      CTraj thrust_vec_later = vel_vec_later - ship->GetVelocity();
+      thrust_vec_later.theta = thrust_vec_later.theta - ship->GetOrient();
+
+      if (is_speeding(ship, thrust_vec_later.rho)) {
+        // Can't reach target - thrust required exceeds maximum
+        fj.fuel_used = -1;  // Signal impossible trajectory
+      } else {
+        // Turn this frame to face target
+        fj.order_kind = O_TURN;
+        fj.order_mag = thrust_vec_later.theta;
+        fj.fuel_used = ship->SetOrder(O_TURN, thrust_vec_later.theta);
+      }
     }
   }
   ship->ResetOrders();  // Clear orders (we're just calculating, not executing)
@@ -222,8 +268,13 @@ double Groonew::determine_probable_fuel_cost(CThing* thing, double time,
   // - Distance to target
   // - Ship mass (including cargo)
   // - Required velocity change
-  // - Turn angle required
-  // Currently returns hardcoded value
+  // - Turn angle required Currently returns hardcoded value We should
+  //   reconsider this - we can get the fuel costs for each order from SetOrder,
+  //   however the issue here is ourl magic bag planning may use two orders, a
+  //   rotation and a thrust. We should consider if the rotation cost is
+  //   typically trivial to just use thrust, or if we should be building up a
+  //   total fuel cost in the magic bag calculation where were working though
+  //   that stuff anyway.
   return (double)5.0;
 }
 

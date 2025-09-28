@@ -235,6 +235,15 @@ if (pShip->AsteroidFits(asteroid)) {
 
 ## Navigation and Physics
 
+### Coordinate System
+
+**Important:** The game uses a standard mathematical coordinate system where:
+- The world ranges from (-512, -512) to (512, 512)
+- **+Y points downward on the screen display**
+- +X points to the right
+- Angles are in radians, with 0 pointing right (+X direction)
+- Heading angles: 0 = right, PI/2 = down (+Y), PI = left, -PI/2 = up (-Y)
+
 ### Position and Distance
 
 ```cpp

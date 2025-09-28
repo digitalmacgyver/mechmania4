@@ -481,6 +481,11 @@ int Observer::plotWorld() {
   plotStatusWins(0, t1Canvas);
   plotStatusWins(1, t2Canvas);
 
+  // Display announcer messages in white
+  if (myWorld != NULL && strlen(myWorld->AnnouncerText) > 0) {
+    printMsg(myWorld->AnnouncerText, white);
+  }
+
   drawAll();
 
   //  cout << "Ob::WorldPlot complete" << endl;
