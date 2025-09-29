@@ -42,7 +42,7 @@ class CThing : public CSendable {
   CTraj GetMomentum() const;
   CTeam* GetTeam() const;
   bool IsAlive() const;
-  UINT GetImage() const;
+  unsigned int GetImage() const;
   void KillThing();
 
   const char* GetName() const;
@@ -61,9 +61,9 @@ class CThing : public CSendable {
   void SetVel(CTraj& CTnew) { Vel = CTnew; }
   void SetTeam(CTeam* pnewTeam) { pmyTeam = pnewTeam; }
 
-  UINT GetWorldIndex() const { return uWldIndex; }
+  unsigned int GetWorldIndex() const { return uWldIndex; }
   CWorld* GetWorld() const { return pmyWorld; }
-  void SetWorldIndex(UINT ind) { uWldIndex = ind; }
+  void SetWorldIndex(unsigned int ind) { uWldIndex = ind; }
   void SetWorld(CWorld* pWld) { pmyWorld = pWld; }
 
   virtual void Drift(double dt = 1.0);
@@ -97,15 +97,15 @@ class CThing : public CSendable {
   CTeam* pmyTeam;        // NULL for non-team objects (asteroids)
 
   char Name[maxnamelen];  // Name.  Duh :P
-  UINT uImgSet;           // Real image representation :)
+  unsigned int uImgSet;           // Real image representation :)
 
-  UINT uWldIndex;
+  unsigned int uWldIndex;
   CWorld* pmyWorld;
 
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
 
  private:
-  UINT ulIDCookie;
+  unsigned int ulIDCookie;
 
   // Collision detection implementations (Private)
   double DetectCollisionCourseOld(const CThing& OthThing) const; // Legacy

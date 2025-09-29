@@ -18,14 +18,14 @@
 //////////////////////////////////////////////////
 // Construction/Destruction
 
-CWorld::CWorld(UINT nTm) {
-  UINT i;
+CWorld::CWorld(unsigned int nTm) {
+  unsigned int i;
   numTeams = nTm;
 
   apTeams = new CTeam*[numTeams];
   atstamp = new double[numTeams];
   auClock = new double[numTeams];
-  for (i = 0; i < numTeams; i++) {
+  for (i = 0; i < numTeams; ++i) {
     apTeams[i] = NULL;
     atstamp[i] = 0.0;
     auClock[i] = 0.0;
@@ -35,23 +35,23 @@ CWorld::CWorld(UINT nTm) {
   bGameOver = false;
   memset(AnnouncerText, 0, maxAnnouncerTextLen);  // Initialize announcer buffer
 
-  for (i = 0; i < MAX_THINGS; i++) {
+  for (i = 0; i < MAX_THINGS; ++i) {
     apThings[i] = NULL;
     apTAddQueue[i] = NULL;
-    aUNextInd[i] = (UINT)-1;
-    aUPrevInd[i] = (UINT)-1;
+    aUNextInd[i] = (unsigned int)-1;
+    aUPrevInd[i] = (unsigned int)-1;
   }
 
-  UFirstIndex = (UINT)-1;
-  ULastIndex = (UINT)-1;
+  UFirstIndex = (unsigned int)-1;
+  ULastIndex = (unsigned int)-1;
   numNewThings = 0;
 }
 
 CWorld::~CWorld() {
   CThing* pTTmp;
-  UINT i;
+  unsigned int i;
 
-  for (i = 0; i < MAX_THINGS; i++) {
+  for (i = 0; i < MAX_THINGS; ++i) {
     pTTmp = GetThing(i);
     if (pTTmp == NULL) {
       continue;
@@ -70,7 +70,7 @@ CWorld* CWorld::CreateCopy() {
   CWorld* pWld;
   pWld = new CWorld(numTeams);
 
-  UINT acsz, sz = GetSerialSize();
+  unsigned int acsz, sz = GetSerialSize();
   char* buf = new char[sz];
 
   acsz = SerialPack(buf, sz);
@@ -87,14 +87,14 @@ CWorld* CWorld::CreateCopy() {
 //////////////////////////////////////////////////
 // Data access to internal members
 
-CTeam* CWorld::GetTeam(UINT nt) const {
+CTeam* CWorld::GetTeam(unsigned int nt) const {
   if (nt >= GetNumTeams()) {
     return NULL;
   }
   return apTeams[nt];
 }
 
-UINT CWorld::GetNumTeams() const { return numTeams; }
+unsigned int CWorld::GetNumTeams() const { return numTeams; }
 
 double CWorld::GetGameTime() const { return gametime; }
 
@@ -113,23 +113,23 @@ void CWorld::AddAnnouncerMessage(const char* message) {
   }
 }
 
-CThing* CWorld::GetThing(UINT index) const {
+CThing* CWorld::GetThing(unsigned int index) const {
   if (index >= MAX_THINGS) {
     return NULL;
   }
   return apThings[index];
 }
 
-UINT CWorld::GetNextIndex(UINT curindex) const {
+unsigned int CWorld::GetNextIndex(unsigned int curindex) const {
   if (curindex >= MAX_THINGS) {
-    return (UINT)-1;
+    return (unsigned int)-1;
   }
   return aUNextInd[curindex];
 }
 
-UINT CWorld::GetPrevIndex(UINT curindex) const {
+unsigned int CWorld::GetPrevIndex(unsigned int curindex) const {
   if (curindex >= MAX_THINGS) {
-    return (UINT)-1;
+    return (unsigned int)-1;
   }
   return aUPrevInd[curindex];
 }
@@ -137,11 +137,11 @@ UINT CWorld::GetPrevIndex(UINT curindex) const {
 /////////////////////////////////////////////////////
 // Explicit functions
 
-UINT CWorld::PhysicsModel(double dt) {
+unsigned int CWorld::PhysicsModel(double dt) {
   CThing* pThing;
-  UINT i;
+  unsigned int i;
 
-  for (i = UFirstIndex; i != (UINT)-1; i = GetNextIndex(i)) {
+  for (i = UFirstIndex; i != (unsigned int)-1; i = GetNextIndex(i)) {
     pThing = GetThing(i);
     pThing->Drift(dt);
   }
@@ -155,7 +155,7 @@ UINT CWorld::PhysicsModel(double dt) {
 }
 
 void CWorld::LaserModel() {
-  UINT nteam, nship;
+  unsigned int nteam, nship;
   CTeam* pTeam;
   CShip* pShip;
   CThing *pTarget, LasThing;
@@ -184,12 +184,12 @@ void CWorld::LaserModel() {
    * effects (e.g., asteroids break if mass >= 1000.0).
    */
 
-  for (nteam = 0; nteam < GetNumTeams(); nteam++) {
+  for (nteam = 0; nteam < GetNumTeams(); ++nteam) {
     pTeam = GetTeam(nteam);
     if (pTeam == NULL) {
       continue;
     }
-    for (nship = 0; nship < pTeam->GetShipCount(); nship++) {
+    for (nship = 0; nship < pTeam->GetShipCount(); ++nship) {
       pShip = pTeam->GetShip(nship);
       if (pShip == NULL) {
         continue;
@@ -279,17 +279,17 @@ void CWorld::AddThingToWorld(CThing* pNewThing) {
   numNewThings++;
 }
 
-void CWorld::CreateAsteroids(AsteroidKind mat, UINT numast, double mass) {
+void CWorld::CreateAsteroids(AsteroidKind mat, unsigned int numast, double mass) {
   CAsteroid* pAst;
-  UINT i;
+  unsigned int i;
 
-  for (i = 0; i < numast; i++) {
+  for (i = 0; i < numast; ++i) {
     pAst = new CAsteroid(mass, mat);
     AddThingToWorld(pAst);
   }
 }
 
-CTeam* CWorld::SetTeam(UINT n, CTeam* pTm) {
+CTeam* CWorld::SetTeam(unsigned int n, CTeam* pTm) {
   if (n >= GetNumTeams()) {
     return NULL;
   }
@@ -298,13 +298,13 @@ CTeam* CWorld::SetTeam(UINT n, CTeam* pTm) {
   CTeam* tmown;
   CThing* delth;
   ThingKind delkind;
-  UINT i, numsh;
+  unsigned int i, numsh;
 
   if (oldteam == pTm) {
     return oldteam;
   }
   if (oldteam != NULL) {
-    for (i = UFirstIndex; i != (UINT)-1; i = GetNextIndex(i)) {
+    for (i = UFirstIndex; i != (unsigned int)-1; i = GetNextIndex(i)) {
       delth = GetThing(i);
       delkind = delth->GetKind();
       if (delkind == SHIP || delkind == STATION) {
@@ -325,7 +325,7 @@ CTeam* CWorld::SetTeam(UINT n, CTeam* pTm) {
   pTm->SetWorldIndex(n);
   pTm->SetWorld(this);
   AddThingToWorld(pTm->GetStation());
-  for (numsh = 0; numsh < pTm->GetShipCount(); numsh++) {
+  for (numsh = 0; numsh < pTm->GetShipCount(); ++numsh) {
     AddThingToWorld(pTm->GetShip(numsh));
   }
 
@@ -335,12 +335,12 @@ CTeam* CWorld::SetTeam(UINT n, CTeam* pTm) {
 //////////////////////////////////////////////
 // Assistant Methods
 
-void CWorld::RemoveIndex(UINT index) {
+void CWorld::RemoveIndex(unsigned int index) {
   if (index >= MAX_THINGS) {
     return;
   }
 
-  UINT Prev, Next;
+  unsigned int Prev, Next;
   Prev = aUPrevInd[index];
   Next = aUNextInd[index];
 
@@ -352,8 +352,8 @@ void CWorld::RemoveIndex(UINT index) {
     aUPrevInd[Next] = Prev;
   }
 
-  aUPrevInd[index] = (UINT)-1;  // Reset his indices
-  aUNextInd[index] = (UINT)-1;
+  aUPrevInd[index] = (unsigned int)-1;  // Reset his indices
+  aUNextInd[index] = (unsigned int)-1;
 
   apThings[index] = NULL;  // And kiss 'im goodbye
 
@@ -365,15 +365,15 @@ void CWorld::RemoveIndex(UINT index) {
   }
 }
 
-UINT CWorld::CollisionEvaluation() {
+unsigned int CWorld::CollisionEvaluation() {
   CThing *pTItr, *pTTm;
-  UINT i, j, iteam, iship, numtmth, URes = 0;
+  unsigned int i, j, iteam, iship, numtmth, URes = 0;
   CTeam* pTeam;
   static CThing* apTTmTh[MAX_THINGS];  // List of team-controlled (i.e.
                                        // non-asteroid) objects static saves on
                                        // reallocation time btwn calls
   numtmth = 0;
-  for (iteam = 0; iteam < GetNumTeams(); iteam++) {
+  for (iteam = 0; iteam < GetNumTeams(); ++iteam) {
     pTeam = GetTeam(iteam);
     if (pTeam == NULL) {
       continue;
@@ -386,7 +386,7 @@ UINT CWorld::CollisionEvaluation() {
       continue;  // Ships invisible after game ends
     }
 
-    for (iship = 0; iship < pTeam->GetShipCount(); iship++) {
+    for (iship = 0; iship < pTeam->GetShipCount(); ++iship) {
       pTTm = pTeam->GetShip(iship);
       if (pTTm == NULL) {
         continue;
@@ -396,7 +396,7 @@ UINT CWorld::CollisionEvaluation() {
     }
   }
 
-  for (i = UFirstIndex; i != (UINT)-1; i = GetNextIndex(i)) {
+  for (i = UFirstIndex; i != (unsigned int)-1; i = GetNextIndex(i)) {
     pTItr = GetThing(i);
     if ((pTItr->IsAlive()) == false) {
       continue;
@@ -405,7 +405,7 @@ UINT CWorld::CollisionEvaluation() {
       continue;
     }
 
-    for (j = 0; j < numtmth; j++) {
+    for (j = 0; j < numtmth; ++j) {
       pTTm = apTTmTh[j];
       if (pTTm == NULL) {
         continue;
@@ -422,16 +422,16 @@ UINT CWorld::CollisionEvaluation() {
   return URes;
 }
 
-UINT CWorld::AddNewThings() {
-  UINT URes, UInd;
+unsigned int CWorld::AddNewThings() {
+  unsigned int URes, UInd;
 
   if (numNewThings == 0) {
     return 0;  // Duh.
   }
 
-  for (URes = 0; URes < numNewThings; URes++) {
+  for (URes = 0; URes < numNewThings; ++URes) {
     UInd = ULastIndex + 1;
-    if (ULastIndex == (UINT)-1) {
+    if (ULastIndex == (unsigned int)-1) {
       UInd = 0;  // Might as well make it explicit
     }
     if (URes >= MAX_THINGS) {
@@ -444,7 +444,7 @@ UINT CWorld::AddNewThings() {
 
     aUPrevInd[UInd] = ULastIndex;
 
-    if (ULastIndex == (UINT)-1) {
+    if (ULastIndex == (unsigned int)-1) {
       UFirstIndex = UInd;
     } else {
       aUNextInd[ULastIndex] = UInd;
@@ -457,13 +457,13 @@ UINT CWorld::AddNewThings() {
   return URes;
 }
 
-UINT CWorld::KillDeadThings() {
+unsigned int CWorld::KillDeadThings() {
   CThing* pTTry;
-  UINT URes = 0, index, ShNum;
+  unsigned int URes = 0, index, ShNum;
   CTeam* pTm;
   ThingKind KTry;
 
-  for (index = UFirstIndex; index != (UINT)-1; index = GetNextIndex(index)) {
+  for (index = UFirstIndex; index != (unsigned int)-1; index = GetNextIndex(index)) {
     pTTry = GetThing(index);
 
     if ((pTTry->IsAlive()) != true) {
@@ -488,17 +488,17 @@ UINT CWorld::KillDeadThings() {
 }
 
 void CWorld::ReLinkList() {
-  UINT i, ilast = (UINT)-1;
+  unsigned int i, ilast = (unsigned int)-1;
   CThing* pTh;
 
-  for (i = 0; i < MAX_THINGS; i++) {
+  for (i = 0; i < MAX_THINGS; ++i) {
     pTh = apThings[i];
     if (pTh == NULL) {
       continue;
     }
 
     aUPrevInd[i] = ilast;
-    if (ilast != (UINT)-1) {
+    if (ilast != (unsigned int)-1) {
       aUNextInd[ilast] = i;
     } else {
       UFirstIndex = i;
@@ -523,7 +523,7 @@ double CWorld::GetTimeStamp() {
 // Serialization routines
 
 unsigned CWorld::GetSerialSize() const {
-  UINT totsize = 0;
+  unsigned int totsize = 0;
   CThing* pTh;
 
   totsize += BufWrite(NULL, UFirstIndex);
@@ -531,15 +531,15 @@ unsigned CWorld::GetSerialSize() const {
   totsize += BufWrite(NULL, gametime);
   totsize += BufWrite(NULL, AnnouncerText, maxAnnouncerTextLen);
 
-  UINT i, inext, sz, iTm, crc = 666, uTK = 0;
+  unsigned int i, inext, sz, iTm, crc = 666, uTK = 0;
 
-  for (i = 0; i < numTeams; i++) {
+  for (i = 0; i < numTeams; ++i) {
     totsize += BufWrite(NULL, auClock[i]);
     totsize += GetTeam(i)->GetSerialSize();
   }
 
-  UINT tk = 0;
-  for (i = UFirstIndex; i != (UINT)-1; i = GetNextIndex(i)) {
+  unsigned int tk = 0;
+  for (i = UFirstIndex; i != (unsigned int)-1; i = GetNextIndex(i)) {
     pTh = GetThing(i);
     tk++;
     sz = pTh->GetSerialSize();
@@ -571,17 +571,17 @@ unsigned CWorld::SerialPack(char* buf, unsigned buflen) const {
   vpb += BufWrite(vpb, gametime);
   vpb += BufWrite(vpb, AnnouncerText, maxAnnouncerTextLen);
 
-  UINT i, inext, sz, iTm, crc = 666, uTK;
+  unsigned int i, inext, sz, iTm, crc = 666, uTK;
   ThingKind TKind;
   CTeam* ptTeam;
 
-  for (i = 0; i < numTeams; i++) {
+  for (i = 0; i < numTeams; ++i) {
     vpb += BufWrite(vpb, auClock[i]);
     vpb += GetTeam(i)->SerialPack(vpb, buflen - (vpb - buf));
   }
 
-  UINT tk = 0;
-  for (i = UFirstIndex; i != (UINT)-1; i = GetNextIndex(i)) {
+  unsigned int tk = 0;
+  for (i = UFirstIndex; i != (unsigned int)-1; i = GetNextIndex(i)) {
     pTh = GetThing(i);
     tk++;
     sz = pTh->GetSerialSize();
@@ -596,14 +596,14 @@ unsigned CWorld::SerialPack(char* buf, unsigned buflen) const {
       iTm |= (((CShip*)pTh)->GetShipNumber()) << 8;
     }
     if (TKind == ASTEROID) {
-      iTm = (UINT)((CAsteroid*)pTh)->GetMaterial();
+      iTm = (unsigned int)((CAsteroid*)pTh)->GetMaterial();
     }
 
     vpb += BufWrite(vpb, crc);
     vpb += BufWrite(vpb, inext);
     vpb += BufWrite(vpb, sz);
 
-    uTK = (UINT)TKind;
+    uTK = (unsigned int)TKind;
     vpb += BufWrite(vpb, uTK);
     vpb += BufWrite(vpb, iTm);
 
@@ -618,22 +618,22 @@ unsigned CWorld::SerialUnpack(char* buf, unsigned buflen) {
   CThing* pTh;
   CAsteroid ATmp;
 
-  UINT i, inext, ilast, crc, uTK;
-  UINT sz, acsz, iTm;
+  unsigned int i, inext, ilast, crc, uTK;
+  unsigned int sz, acsz, iTm;
   ThingKind TKind;
-  UINT tk = 0;
+  unsigned int tk = 0;
 
   vpb += BufRead(vpb, inext);
   vpb += BufRead(vpb, ilast);
   vpb += BufRead(vpb, gametime);
   vpb += BufRead(vpb, AnnouncerText, maxAnnouncerTextLen);
 
-  for (i = 0; i < numTeams; i++) {
+  for (i = 0; i < numTeams; ++i) {
     vpb += BufRead(vpb, auClock[i]);
     vpb += GetTeam(i)->SerialUnpack(vpb, buflen - (vpb - buf));
   }
 
-  for (i = UFirstIndex; i <= ilast; i++) {
+  for (i = UFirstIndex; i <= ilast; ++i) {
     pTh = GetThing(i);
     if (pTh != NULL && i < inext) {
       pTh->KillThing();
@@ -669,14 +669,14 @@ unsigned CWorld::SerialUnpack(char* buf, unsigned buflen) {
       if (vpb >= buf + buflen) {
         break;  // stooooooppppppp!!
       }
-      if (inext == (UINT)-1) {
+      if (inext == (unsigned int)-1) {
         break;
       }
     }
   }
 
   if (ilast < ULastIndex) {  // Stuff died at the end of the list
-    for (i = ilast + 1; i <= ULastIndex; i++) {
+    for (i = ilast + 1; i <= ULastIndex; ++i) {
       pTh = GetThing(i);
       if (pTh != NULL) {
         pTh->KillThing();
@@ -690,10 +690,10 @@ unsigned CWorld::SerialUnpack(char* buf, unsigned buflen) {
   return (vpb - buf);
 }
 
-CThing* CWorld::CreateNewThing(ThingKind TKind, UINT iTm) {
+CThing* CWorld::CreateNewThing(ThingKind TKind, unsigned int iTm) {
   CThing *pTh, *pThOld;
   CTeam* pTeam;
-  UINT shnum = 0;
+  unsigned int shnum = 0;
   pThOld = NULL;
 
   shnum = iTm >> 8;

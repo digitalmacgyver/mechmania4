@@ -55,7 +55,7 @@ class Observer {
   void printGameTime(double game_time);
 
   void clearStatusWins();
-  UINT AlertStatus(double, double);
+  unsigned int AlertStatus(double, double);
   void plotStatusWins(int, Pixmap);
   void drawAll();
   void printMsg(char *str, int color = 0);

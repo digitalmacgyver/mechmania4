@@ -224,7 +224,7 @@ int Observer::getWorld(CWorld *theWorld) {
 }
 
 int Observer::plotWorld() {
-  UINT nship, nteam;
+  unsigned int nship, nteam;
   CTeam *pTeam;
   CThing *aThing;
   CShip *pShip;
@@ -250,7 +250,7 @@ int Observer::plotWorld() {
 
   // Plot the lasers and update status
 
-  for (nteam = 0; nteam < myWorld->GetNumTeams(); nteam++) {
+  for (nteam = 0; nteam < myWorld->GetNumTeams(); ++nteam) {
     pTeam = myWorld->GetTeam(nteam);
 
     if (pTeam == NULL) {
@@ -258,7 +258,7 @@ int Observer::plotWorld() {
       continue;
     }
 
-    for (nship = 0; nship < pTeam->GetShipCount(); nship++) {
+    for (nship = 0; nship < pTeam->GetShipCount(); ++nship) {
       pShip = pTeam->GetShip(nship);
 
       if (pShip != NULL) {
@@ -279,7 +279,7 @@ int Observer::plotWorld() {
   }
 
   // And plot the things in the world
-  for (UINT i = myWorld->UFirstIndex; i != (UINT)-1;
+  for (unsigned int i = myWorld->UFirstIndex; i != (unsigned int)-1;
        i = myWorld->GetNextIndex(i)) {
     aThing = myWorld->GetThing(i);
     pX = aThing->GetPos().fX;
@@ -465,7 +465,7 @@ int Observer::plotWorld() {
   // Draw the velocity vectors as appropriate
 
   if (useVelVectors) {
-    for (UINT i = myWorld->UFirstIndex; i != (UINT)-1;
+    for (unsigned int i = myWorld->UFirstIndex; i != (unsigned int)-1;
          i = myWorld->GetNextIndex(i)) {
       aThing = myWorld->GetThing(i);
       pX = aThing->GetPos().fX;
@@ -506,7 +506,7 @@ void Observer::clearStatusWins() {
   colors for status text.
 */
 
-UINT Observer::AlertStatus(double statamt, double statcap) {
+unsigned int Observer::AlertStatus(double statamt, double statcap) {
   static bool lookedup = false;
   static int okCol = white, warnCol = white, critCol = white;
   XColor col, dummy;
@@ -532,8 +532,8 @@ UINT Observer::AlertStatus(double statamt, double statcap) {
 }
 
 /*
-UINT Observer::AlertStatus(double shipval, int typeNum, UINT badCol,
-                           UINT midCol, UINT safeCol)
+unsigned int Observer::AlertStatus(double shipval, int typeNum, unsigned int badCol,
+                           unsigned int midCol, unsigned int safeCol)
 {
   / This function takes a value and an array of values.  Comparing the
      input value to the table value, it will return a color value of
@@ -601,9 +601,9 @@ void Observer::plotStatusWins(int Teamnum, Pixmap tCanvas) {
 
   CShip *pSh;
   double dAmt, dCap;
-  UINT color;
+  unsigned int color;
 
-  for (UINT shnum = 0; shnum < pTeam->GetShipCount(); shnum++) {
+  for (unsigned int shnum = 0; shnum < pTeam->GetShipCount(); ++shnum) {
     pSh = pTeam->GetShip(shnum);
     if (pSh == NULL) {
       continue;  // Ship is Dead.

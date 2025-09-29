@@ -17,7 +17,7 @@ CParser::CParser(int argc, char **argv) {
   SetDefaults();
 
   int i;
-  for (i = 1; i < argc; i++) {
+  for (i = 1; i < argc; ++i) {
     if (argv[i][0] != '-') {
       needhelp = 1;
       continue;

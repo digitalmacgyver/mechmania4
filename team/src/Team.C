@@ -10,8 +10,8 @@
 ///////////////////////////////////////////////////
 // Construction/Destruction
 
-CTeam::CTeam(UINT TNum, CWorld* pworld) {
-  uWorldIndex = (UINT)-1;
+CTeam::CTeam(unsigned int TNum, CWorld* pworld) {
+  uWorldIndex = (unsigned int)-1;
   numShips = 0;
   pmyWorld = pworld;
   TeamNum = TNum;
@@ -19,10 +19,10 @@ CTeam::CTeam(UINT TNum, CWorld* pworld) {
   memset(MsgText, 0, maxTextLen);  // Initialize message buffer to prevent garbled text
 }
 
-bool CTeam::Create(UINT numSh, UINT uCrd) {
+bool CTeam::Create(unsigned int numSh, unsigned int uCrd) {
   numShips = numSh;
   char namebuf[maxnamelen];
-  UINT i = 0;
+  unsigned int i = 0;
 
   // COORDINATE SYSTEM: +Y points down on screen, so:
   // fWYMin (-512) is top of screen, fWYMax (+512) is bottom of screen
@@ -45,7 +45,7 @@ bool CTeam::Create(UINT numSh, UINT uCrd) {
   }
 
   apShips = new CShip*[numShips];
-  for (i = 0; i < numShips; i++) {
+  for (i = 0; i < numShips; ++i) {
     apShips[i] = new CShip(StPos, this, i);
     snprintf(namebuf, maxnamelen, "Ship-%d-of-%d", i, GetTeamNumber());
     apShips[i]->SetName(namebuf);
@@ -59,7 +59,7 @@ bool CTeam::Create(UINT numSh, UINT uCrd) {
 }
 
 CTeam::~CTeam() {
-  for (UINT i = 0; i < numShips; i++) {
+  for (unsigned int i = 0; i < numShips; ++i) {
     delete apShips[i];
   }
 
@@ -70,11 +70,11 @@ CTeam::~CTeam() {
 //////////////////////////////////////////////////////
 // Data access
 
-UINT CTeam::GetShipCount() const { return numShips; }
+unsigned int CTeam::GetShipCount() const { return numShips; }
 
-UINT CTeam::GetTeamNumber() const { return TeamNum; }
+unsigned int CTeam::GetTeamNumber() const { return TeamNum; }
 
-CShip* CTeam::GetShip(UINT n) const {
+CShip* CTeam::GetShip(unsigned int n) const {
   if (n >= numShips) {
     return NULL;
   }
@@ -87,7 +87,7 @@ double CTeam::GetScore() const { return (pStation->GetVinylStore()); }
 
 CWorld* CTeam::GetWorld() const { return pmyWorld; }
 
-UINT CTeam::GetWorldIndex() const { return uWorldIndex; }
+unsigned int CTeam::GetWorldIndex() const { return uWorldIndex; }
 
 char* CTeam::GetName() { return Name; }
 
@@ -96,7 +96,7 @@ CBrain* CTeam::GetBrain() { return pBrain; }
 ///////
 // Incoming
 
-CShip* CTeam::SetShip(UINT n, CShip* pSh) {
+CShip* CTeam::SetShip(unsigned int n, CShip* pSh) {
   if (n >= numShips) {
     return NULL;
   }
@@ -131,14 +131,14 @@ CWorld* CTeam::SetWorld(CWorld* pworld) {
   return ptmpw;
 }
 
-UINT CTeam::SetWorldIndex(UINT newInd) {
-  UINT oldInd = GetWorldIndex();
+unsigned int CTeam::SetWorldIndex(unsigned int newInd) {
+  unsigned int oldInd = GetWorldIndex();
   uWorldIndex = newInd;
   return oldInd;
 }
 
-UINT CTeam::SetTeamNumber(UINT newTN) {
-  UINT oldTN = GetTeamNumber();
+unsigned int CTeam::SetTeamNumber(unsigned int newTN) {
+  unsigned int oldTN = GetTeamNumber();
   TeamNum = newTN;
   return oldTN;
 }
@@ -146,7 +146,7 @@ UINT CTeam::SetTeamNumber(UINT newTN) {
 char* CTeam::SetName(const char* strname) {
   bool bGotZero = false;
 
-  for (UINT i = 0; i < maxTeamNameLen; i++) {
+  for (unsigned int i = 0; i < maxTeamNameLen; ++i) {
     if (bGotZero == true) {
       Name[i] = 0;
     }
@@ -175,11 +175,11 @@ CBrain* CTeam::SetBrain(CBrain* pBr) {
 
 void CTeam::Reset() {
   CShip* pSh;
-  UINT nSh;
+  unsigned int nSh;
 
   memset(MsgText, 0, maxTextLen);
 
-  for (nSh = 0; nSh < GetShipCount(); nSh++) {
+  for (nSh = 0; nSh < GetShipCount(); ++nSh) {
     pSh = GetShip(nSh);
     if (pSh == NULL) {
       continue;
@@ -223,7 +223,7 @@ unsigned CTeam::GetSerInitSize() const {
   double carcap = 0.0, fuelcap = 0.0;
   char name[maxnamelen];
 
-  for (UINT sh = 0; sh < GetShipCount(); sh++) {
+  for (unsigned int sh = 0; sh < GetShipCount(); ++sh) {
     totsize += BufWrite(NULL, carcap);
     totsize += BufWrite(NULL, fuelcap);
     totsize += BufWrite(NULL, name, maxnamelen);
@@ -246,7 +246,7 @@ unsigned CTeam::SerPackInitData(char* buf, unsigned len) const {
   char name[maxnamelen];
   CShip* pSh;
 
-  for (UINT sh = 0; sh < GetShipCount(); sh++) {
+  for (unsigned int sh = 0; sh < GetShipCount(); ++sh) {
     carcap = 0.0;
     fuelcap = 0.0;
     pSh = GetShip(sh);
@@ -281,7 +281,7 @@ unsigned CTeam::SerUnpackInitData(char* buf, unsigned len) {
   char name[maxnamelen];
   CShip* pSh;
 
-  for (UINT sh = 0; sh < GetShipCount(); sh++) {
+  for (unsigned int sh = 0; sh < GetShipCount(); ++sh) {
     vpb += BufRead(vpb, carcap);
     vpb += BufRead(vpb, fuelcap);
     vpb += BufRead(vpb, name, maxnamelen);
@@ -305,11 +305,11 @@ unsigned CTeam::GetSerialSize() const {
 
   totsize += BufWrite(NULL, MsgText, maxTextLen);
 
-  UINT shNum, ordnum;
+  unsigned int shNum, ordnum;
   double ordval = 0.0;
 
-  for (shNum = 0; shNum < GetShipCount(); shNum++) {
-    for (ordnum = 0; ordnum < (UINT)O_ALL_ORDERS; ordnum++) {
+  for (shNum = 0; shNum < GetShipCount(); ++shNum) {
+    for (ordnum = 0; ordnum < (unsigned int)O_ALL_ORDERS; ++ordnum) {
       totsize += BufWrite(NULL, ordval);
     }
   }
@@ -325,13 +325,13 @@ unsigned CTeam::SerialPack(char* buf, unsigned len) const {
 
   vpb += BufWrite(vpb, MsgText, maxTextLen);
 
-  UINT shNum, ordnum;
+  unsigned int shNum, ordnum;
   double ordval;
   CShip* pSh;
 
-  for (shNum = 0; shNum < GetShipCount(); shNum++) {
+  for (shNum = 0; shNum < GetShipCount(); ++shNum) {
     pSh = GetShip(shNum);
-    for (ordnum = 0; ordnum < (UINT)O_ALL_ORDERS; ordnum++) {
+    for (ordnum = 0; ordnum < (unsigned int)O_ALL_ORDERS; ++ordnum) {
       ordval = 0.0;
       if (pSh != NULL) {
         ordval = pSh->GetOrder((OrderKind)ordnum);
@@ -352,16 +352,16 @@ unsigned CTeam::SerialUnpack(char* buf, unsigned len) {
 
   vpb += BufRead(vpb, MsgText, maxTextLen);
 
-  UINT shNum, ordnum;
+  unsigned int shNum, ordnum;
   double ordval;
   CShip* pSh;
 
-  for (shNum = 0; shNum < GetShipCount(); shNum++) {
+  for (shNum = 0; shNum < GetShipCount(); ++shNum) {
     pSh = GetShip(shNum);
     if (pSh != NULL) {
       pSh->ResetOrders();
     }
-    for (ordnum = 0; ordnum < (UINT)O_ALL_ORDERS; ordnum++) {
+    for (ordnum = 0; ordnum < (unsigned int)O_ALL_ORDERS; ++ordnum) {
       vpb += BufRead(vpb, ordval);
       if (pSh != NULL) {
         pSh->SetOrder((OrderKind)ordnum, ordval);

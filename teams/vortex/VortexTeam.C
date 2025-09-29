@@ -24,7 +24,7 @@ VortexTeam::VortexTeam() {
 
 VortexTeam::~VortexTeam() {
   // Clean up ship brains
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     CShip* ship = GetShip(i);
     if (ship) {
       CBrain* brain = ship->GetBrain();
@@ -49,7 +49,7 @@ void VortexTeam::Init() {
   // Match ChromeFunk's aggression with balanced approach
   // 30 fuel, 30 cargo - can carry more per trip than Chrome
   // This beats Chrome's 45/15 through efficiency
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     CShip* ship = GetShip(i);
     ship->SetCapacity(S_FUEL, 30.0);
     ship->SetCapacity(S_CARGO, 30.0);
@@ -68,7 +68,7 @@ void VortexTeam::Turn() {
 
   // Quick scan of world resources
   CWorld* world = GetWorld();
-  for (UINT i = world->UFirstIndex; i != BAD_INDEX;
+  for (unsigned int i = world->UFirstIndex; i != BAD_INDEX;
        i = world->GetNextIndex(i)) {
     CThing* thing = world->GetThing(i);
     if (!thing || !thing->IsAlive()) {
@@ -86,7 +86,7 @@ void VortexTeam::Turn() {
   }
 
   // Let each ship decide
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     CShip* ship = GetShip(i);
     if (ship && ship->GetBrain()) {
       ship->GetBrain()->Decide();
@@ -158,7 +158,7 @@ void VortexCollector::FindTarget() {
   CThing* best = nullptr;
   double best_score = -99999;
 
-  for (UINT i = world->UFirstIndex; i != BAD_INDEX;
+  for (unsigned int i = world->UFirstIndex; i != BAD_INDEX;
        i = world->GetNextIndex(i)) {
     CThing* thing = world->GetThing(i);
     if (!thing || !thing->IsAlive()) {
@@ -212,7 +212,7 @@ void VortexCollector::FindTarget() {
 
     // Penalty for crowded areas
     int ships_nearby = 0;
-    for (UINT j = 0; j < 4; j++) {
+    for (unsigned int j = 0; j < 4; ++j) {
       CShip* other = team->GetShip(j);
       if (other && other != pShip && other->IsAlive()) {
         if (other->GetPos().DistTo(thing->GetPos()) < 100) {
@@ -328,7 +328,7 @@ bool VortexCollector::IsInMyZone(CThing* thing) {
 void VortexCollector::AvoidCollisions() {
   CWorld* world = pShip->GetWorld();
 
-  for (UINT i = world->UFirstIndex; i != BAD_INDEX;
+  for (unsigned int i = world->UFirstIndex; i != BAD_INDEX;
        i = world->GetNextIndex(i)) {
     CThing* thing = world->GetThing(i);
     if (!thing || thing == pShip || thing == current_target) {

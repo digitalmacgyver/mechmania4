@@ -21,7 +21,7 @@ class CClient {
 
   void MeetWorld();
   void MeetTeams();  // Only called by observer, once
-  UINT ReceiveWorld();
+  unsigned int ReceiveWorld();
 
   int SendAck();     // Send Observer acknowledge
   int SendPause();   // Send pause control
@@ -32,8 +32,8 @@ class CClient {
  protected:
   bool bObflag;
 
-  UINT numTeams;
-  UINT umyIndex;  // For client teams; doesn't do much for observer
+  unsigned int numTeams;
+  unsigned int umyIndex;  // For client teams; doesn't do much for observer
 
   CClientNet *pmyNet;
   CWorld *pmyWorld;

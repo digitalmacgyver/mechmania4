@@ -19,7 +19,7 @@ ChromeFunk::~ChromeFunk() {
   CShip* pSh;
   CBrain* pBr;
 
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     pSh = GetShip(i);
     if (pSh == NULL) {
       continue;  // Ship is dead
@@ -47,7 +47,7 @@ void ChromeFunk::Init() {
 
   // Assign default tactical context: All ships start as resource gatherers
   // This demonstrates the basic Brain system - ships get focused AI behaviors
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     GetShip(i)->SetCapacity(S_FUEL, 45.0);
     GetShip(i)->SetCapacity(S_CARGO, 15.0);  // Redundant, but be safe
     GetShip(i)->SetBrain(new Gatherer);  // Default context: resource collection
@@ -62,7 +62,7 @@ void ChromeFunk::Turn() {
 
   CShip* pSh;
 
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     pSh = GetShip(i);
     if (pSh == NULL) {
       continue;
@@ -267,7 +267,7 @@ Gatherer::Gatherer() { pTarget = NULL; }
 
 Gatherer::~Gatherer() {}
 
-UINT Gatherer::SelectTarget() {
+unsigned int Gatherer::SelectTarget() {
   CTeam* pmyTeam = pShip->GetTeam();
   CWorld* pmyWorld = pShip->GetWorld();
   char shipmsg[128];  // Ship message
@@ -283,7 +283,7 @@ UINT Gatherer::SelectTarget() {
     return pmyTeam->GetStation()->GetWorldIndex();
   }
 
-  UINT index, indbest = BAD_INDEX;
+  unsigned int index, indbest = BAD_INDEX;
   CThing* pTh;
   ThingKind ThKind;
   AsteroidKind AsMat;
@@ -328,7 +328,7 @@ UINT Gatherer::SelectTarget() {
 }
 
 void Gatherer::AvoidCollide() {
-  UINT index;
+  unsigned int index;
   CThing* pTh;
   double dsec;
   char shipmsg[128];  // Ship might print a message
@@ -402,7 +402,7 @@ void Gatherer::Decide() {
   CTeam* pmyTeam = pShip->GetTeam();
   CWorld* pmyWorld = pmyTeam->GetWorld();
 
-  UINT TargIndex = SelectTarget();
+  unsigned int TargIndex = SelectTarget();
   if (TargIndex != BAD_INDEX) {
     pTarget = pmyWorld->GetThing(TargIndex);
   } else {

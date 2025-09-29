@@ -25,7 +25,7 @@ Groogroo::~Groogroo() {
   CShip* pSh;
   CBrain* pBr;
 
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     pSh = GetShip(i);
     if (pSh == NULL) {
       continue;  // Ship is dead
@@ -57,7 +57,7 @@ void Groogroo::Init() {
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
   // Strategy: Aggressive collection, rely on uranium asteroids for refueling
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     GetShip(i)->SetCapacity(S_FUEL, 20.0);   // Only 20 tons fuel
     GetShip(i)->SetCapacity(S_CARGO, 40.0);  // Large 40 ton cargo hold
     GetShip(i)->SetBrain(new GetVinyl);      // Assign GetVinyl AI brain
@@ -72,7 +72,7 @@ void Groogroo::Turn() {
   PopulateMagicBag();  // Allocates new Groogroo::mb
 
   // PHASE 2: Each ship's AI uses the MagicBag to make decisions
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     pSh = GetShip(i);
     if (pSh == NULL) {
       continue;  // Skip dead ships
@@ -101,14 +101,14 @@ void Groogroo::PopulateMagicBag() {
   vinyl_left = 0.0;
 
   // For each of our ships, calculate paths to all objects
-  for (UINT ship_i = 0; ship_i < GetShipCount(); ship_i++) {
+  for (unsigned int ship_i = 0; ship_i < GetShipCount(); ++ship_i) {
     CShip* ship = GetShip(ship_i);
     if (ship == NULL || !ship->IsAlive()) {
       continue;  // Skip dead ships
     }
 
     // Iterate through all objects in the world
-    for (UINT thing_i = worldp->UFirstIndex; thing_i <= worldp->ULastIndex;
+    for (unsigned int thing_i = worldp->UFirstIndex; thing_i <= worldp->ULastIndex;
          thing_i = worldp->GetNextIndex(thing_i)) {
       CThing* athing = worldp->GetThing(thing_i);
 
@@ -133,7 +133,7 @@ void Groogroo::PopulateMagicBag() {
 
       // Calculate optimal intercept time (1-28 turns into future)
       // We try each time and take the first valid solution
-      for (UINT turn_i = 1; turn_i < 28; turn_i++) {
+      for (unsigned int turn_i = 1; turn_i < 28; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
         FuelTraj fueltraj = determine_orders(athing, turn_i, ship);
 

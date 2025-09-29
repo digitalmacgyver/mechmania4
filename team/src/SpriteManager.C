@@ -113,7 +113,7 @@ bool SpriteManager::LoadSprites(const std::string& registryFile) {
   // Load each sprite (up to the minimum of available files or SPRITE_COUNT)
   size_t numToLoad =
       std::min(spriteFiles.size(), static_cast<size_t>(SPRITE_COUNT));
-  for (size_t i = 0; i < numToLoad; i++) {
+  for (size_t i = 0; i < numToLoad; ++i) {
     // The registry entries are resolved relative to the registry file location
     sprites[i] = XPMLoader::LoadXPM(renderer, spriteFiles[i]);
 

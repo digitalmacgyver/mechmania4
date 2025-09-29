@@ -26,24 +26,24 @@
 
 class CTeam : public CSendable {
  public:
-  CTeam(UINT TNum = 0, CWorld* pWrld = NULL);
-  bool Create(UINT numSh, UINT uCrd);
+  CTeam(unsigned int TNum = 0, CWorld* pWrld = NULL);
+  bool Create(unsigned int numSh, unsigned int uCrd);
   ~CTeam();
 
-  UINT GetShipCount() const;
-  UINT GetTeamNumber() const;
-  CShip* GetShip(UINT n) const;
+  unsigned int GetShipCount() const;
+  unsigned int GetTeamNumber() const;
+  CShip* GetShip(unsigned int n) const;
   CStation* GetStation() const;
   CWorld* GetWorld() const;
   double GetScore() const;
-  UINT GetWorldIndex() const;
+  unsigned int GetWorldIndex() const;
   char* GetName();
 
-  CShip* SetShip(UINT n, CShip* pSh);   // Returns ptr to old ship
+  CShip* SetShip(unsigned int n, CShip* pSh);   // Returns ptr to old ship
   CStation* SetStation(CStation* pSt);  // Returns ptr to old station
   CWorld* SetWorld(CWorld* pworld);
-  UINT SetWorldIndex(UINT newInd);     // Returns old index
-  UINT SetTeamNumber(UINT newTN);      // Returns old
+  unsigned int SetWorldIndex(unsigned int newInd);     // Returns old index
+  unsigned int SetTeamNumber(unsigned int newTN);      // Returns old
   char* SetName(const char* strname);  // Returns ptr to Name
   void Reset();                        // Resets orders and text
 
@@ -68,11 +68,11 @@ class CTeam : public CSendable {
   char MsgText[maxTextLen];
   double GetWallClock();  // Returns # of realtime seconds team's been thinking
 
-  UINT uImgSet;  // For internal use only, specifies graphic
+  unsigned int uImgSet;  // For internal use only, specifies graphic
 
  protected:
-  UINT TeamNum, uWorldIndex;
-  UINT numShips;
+  unsigned int TeamNum, uWorldIndex;
+  unsigned int numShips;
 
   CBrain* pBrain;
   CShip** apShips;

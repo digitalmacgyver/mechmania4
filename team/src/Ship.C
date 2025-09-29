@@ -19,7 +19,7 @@ extern CParser* g_pParser;
 ///////////////////////////////////////////
 // Construction/Destruction
 
-CShip::CShip(CCoord StPos, CTeam *pteam, UINT ShNum)
+CShip::CShip(CCoord StPos, CTeam *pteam, unsigned int ShNum)
     : CThing(StPos.fX, StPos.fY) {
   TKind = SHIP;
   pmyTeam = pteam;
@@ -36,15 +36,15 @@ CShip::CShip(CCoord StPos, CTeam *pteam, UINT ShNum)
   dLaserDist = 0.0;
   omega = 0.0;
 
-  for (UINT sh = (UINT)S_CARGO; sh < (UINT)S_ALL_STATS; sh++) {
+  for (unsigned int sh = (unsigned int)S_CARGO; sh < (unsigned int)S_ALL_STATS; ++sh) {
     adStatMax[sh] = 30.0;
     adStatCur[sh] = 30.0;
-    if (sh == (UINT)S_CARGO) {
+    if (sh == (unsigned int)S_CARGO) {
       adStatCur[sh] = 0.0;
     }
   }
 
-  adStatMax[(UINT)S_SHIELD] = 8000.0;  // Arbitrarily large value
+  adStatMax[(unsigned int)S_SHIELD] = 8000.0;  // Arbitrarily large value
   ResetOrders();
 }
 
@@ -53,7 +53,7 @@ CShip::~CShip() {}
 ////////////////////////////////////////////
 // Data access
 
-UINT CShip::GetShipNumber() const { return myNum; }
+unsigned int CShip::GetShipNumber() const { return myNum; }
 
 bool CShip::IsDocked() const { return bDockFlag; }
 
@@ -61,21 +61,21 @@ double CShip::GetAmount(ShipStat st) const {
   if (st >= S_ALL_STATS) {
     return 0.0;
   }
-  return adStatCur[(UINT)st];
+  return adStatCur[(unsigned int)st];
 }
 
 double CShip::GetCapacity(ShipStat st) const {
   if (st >= S_ALL_STATS) {
     return 0.0;
   }
-  return adStatMax[(UINT)st];
+  return adStatMax[(unsigned int)st];
 }
 
 double CShip::GetOrder(OrderKind ord) const {
   if (ord >= O_ALL_ORDERS) {
     return 0.0;
   }
-  return adOrders[(UINT)ord];
+  return adOrders[(unsigned int)ord];
 }
 
 double CShip::GetMass() const {
@@ -102,7 +102,7 @@ double CShip::SetAmount(ShipStat st, double val) {
   if (val >= GetCapacity(st)) {
     val = GetCapacity(st);
   }
-  adStatCur[(UINT)st] = val;
+  adStatCur[(unsigned int)st] = val;
   return GetAmount(st);
 }
 
@@ -117,7 +117,7 @@ double CShip::SetCapacity(ShipStat st, double val) {
     val = dMaxStatTot;
   }
 
-  adStatMax[(UINT)st] = val;
+  adStatMax[(unsigned int)st] = val;
 
   double tot = 0.0;
   tot += adStatMax[S_CARGO];
@@ -126,15 +126,15 @@ double CShip::SetCapacity(ShipStat st, double val) {
   if (tot > dMaxStatTot) {
     tot -= dMaxStatTot;
     if (st == S_CARGO) {
-      adStatMax[(UINT)S_FUEL] -= tot;
+      adStatMax[(unsigned int)S_FUEL] -= tot;
     }
     if (st == S_FUEL) {
-      adStatMax[(UINT)S_CARGO] -= tot;
+      adStatMax[(unsigned int)S_CARGO] -= tot;
     }
   }
 
   if (GetAmount(st) > GetCapacity(st)) {
-    adStatCur[(UINT)st] = GetCapacity(st);
+    adStatCur[(unsigned int)st] = GetCapacity(st);
   }
   return GetCapacity(st);
 }
@@ -155,7 +155,7 @@ CBrain *CShip::SetBrain(CBrain *pBr) {
 
 void CShip::ResetOrders() {
   dLaserDist = 0.0;
-  for (UINT ord = (UINT)O_SHIELD; ord < (UINT)O_ALL_ORDERS; ord++) {
+  for (unsigned int ord = (unsigned int)O_SHIELD; ord < (unsigned int)O_ALL_ORDERS; ++ord) {
     adOrders[ord] = 0.0;
   }
 }
@@ -167,7 +167,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
   // readability
   double valtmp, fuelcon, maxfuel;
   CTraj AccVec;
-  UINT oit;
+  unsigned int oit;
 
   maxfuel = GetAmount(S_FUEL);
   if (IsDocked() == true) {
@@ -190,7 +190,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
         value = fuelcon;  // No, but here's how much we *can* do
       }
 
-      adOrders[(UINT)O_SHIELD] = value;
+      adOrders[(unsigned int)O_SHIELD] = value;
       return fuelcon;  // Doesn't need a break since this returns
 
     case O_LASER:  // "value" is specified length of laser beam
@@ -214,7 +214,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
         value = fuelcon * 50.0;  // No, but here's how much we *can* do
       }
 
-      adOrders[(UINT)O_LASER] = value;
+      adOrders[(unsigned int)O_LASER] = value;
       return fuelcon;
 
     case O_THRUST:  // "value" is magnitude of acceleration vector
@@ -230,8 +230,8 @@ double CShip::SetOrder(OrderKind ord, double value) {
       if (value == 0.0) {
         return 0.0;
       }
-      adOrders[(UINT)O_THRUST] = 0.0;
-      adOrders[(UINT)O_JETTISON] = 0.0;
+      adOrders[(unsigned int)O_THRUST] = 0.0;
+      adOrders[(unsigned int)O_JETTISON] = 0.0;
 
       // 1 ton of fuel rotates naked ship full-circle six times
       fuelcon = fabs(value) * GetMass() / (6.0 * PI2 * mass);
@@ -248,7 +248,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
         }
       }
 
-      adOrders[(UINT)O_TURN] = value;
+      adOrders[(unsigned int)O_TURN] = value;
       return fuelcon;
 
     case O_JETTISON: {  // "value" is tonnage: positive for fuel, neg for cargo
@@ -258,13 +258,13 @@ double CShip::SetOrder(OrderKind ord, double value) {
 
       // 1. Minimum mass threshold check
       if (requestedAmount < minmass) {
-        adOrders[(UINT)O_JETTISON] = 0.0;
+        adOrders[(unsigned int)O_JETTISON] = 0.0;
         return 0.0;
       }
 
       // 2. Cancel conflicting orders
-      adOrders[(UINT)O_THRUST] = 0.0;
-      adOrders[(UINT)O_TURN] = 0.0;
+      adOrders[(unsigned int)O_THRUST] = 0.0;
+      adOrders[(unsigned int)O_TURN] = 0.0;
 
       // 3. Determine material and inventory stat
       ShipStat inventoryStat;
@@ -285,10 +285,10 @@ double CShip::SetOrder(OrderKind ord, double value) {
 
       // 5. Update the order, restoring the sign
       if (isFuel) {
-        adOrders[(UINT)O_JETTISON] = actualAmount;
+        adOrders[(unsigned int)O_JETTISON] = actualAmount;
         return actualAmount;
       } else {
-        adOrders[(UINT)O_JETTISON] = -actualAmount;
+        adOrders[(unsigned int)O_JETTISON] = -actualAmount;
         return 0.0;
       }
     }
@@ -307,20 +307,20 @@ double CShip::SetOrder(OrderKind ord, double value) {
 
       if (fabs(value)<minmass) {
           value=0.0;
-          adOrders[(UINT)O_JETTISON]=0.0;
+          adOrders[(unsigned int)O_JETTISON]=0.0;
           return 0.0;  // Jettisoning costs no fuel
       }
 
-      adOrders[(UINT)O_THRUST] = 0.0;
-      adOrders[(UINT)O_TURN] = 0.0;
+      adOrders[(unsigned int)O_THRUST] = 0.0;
+      adOrders[(unsigned int)O_TURN] = 0.0;
 
       AsMat=URANIUM;
       if (value<=0.0) AsMat=VINYL;
-      oit = (UINT)AstToStat(AsMat);
+      oit = (unsigned int)AstToStat(AsMat);
 
       maxfuel=GetAmount((ShipStat)oit);  // Not necessarily fuel
       if (maxfuel<value) value=maxfuel;
-      adOrders[(UINT)O_JETTISON] = value;
+      adOrders[(unsigned int)O_JETTISON] = value;
 
       if (AsMat==URANIUM) return value;  // We're spitting out this much fuel
       else return 0.0;       // Jettisoning itself takes no fuel
@@ -344,7 +344,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
       /*
       default:
         valtmp=0.0;
-        for (oit=(UINT)O_SHIELD; oit<=(UINT)O_THRUST; oit++)
+        for (oit=(unsigned int)O_SHIELD; oit<=(unsigned int)O_THRUST; ++oit)
            valtmp += SetOrder((OrderKind)oit,GetOrder((OrderKind)oit));
         return valtmp;
       */
@@ -516,11 +516,11 @@ CThing *CShip::LaserTarget() {
 
   CThing *pTCur, *pTRes = NULL;
   double dist, mindist = -1.0;  // Start with something invalid
-  UINT i;
+  unsigned int i;
 
   dLaserDist = 0.0;
 
-  for (i = pWorld->UFirstIndex; i != (UINT)-1; i = pWorld->GetNextIndex(i)) {
+  for (i = pWorld->UFirstIndex; i != (unsigned int)-1; i = pWorld->GetNextIndex(i)) {
     pTCur = pWorld->GetThing(i);
     if (IsFacing(*pTCur) == false) {
       continue;  // Nevermind, we're not facing it
@@ -626,7 +626,7 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
       }
     }
     ((CStation *)pOthThing)->AddVinyl(vinylDelivered);
-    adStatCur[(UINT)S_CARGO] = 0.0;
+    adStatCur[(unsigned int)S_CARGO] = 0.0;
 
     bDockFlag = true;
     return;
@@ -706,10 +706,10 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     if (AsteroidFits((CAsteroid *)pOthThing)) {
       switch (((CAsteroid *)pOthThing)->GetMaterial()) {
         case VINYL:
-          adStatCur[(UINT)S_CARGO] += othmass;
+          adStatCur[(unsigned int)S_CARGO] += othmass;
           break;
         case URANIUM:
-          adStatCur[(UINT)S_FUEL] += othmass;
+          adStatCur[(unsigned int)S_FUEL] += othmass;
           break;
         default:
           break;
@@ -949,7 +949,7 @@ CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
 // Serialization routines
 
 unsigned CShip::GetSerialSize() const {
-  UINT totsize = 0;
+  unsigned int totsize = 0;
 
   totsize += CThing::GetSerialSize();
   totsize += BufWrite(NULL, myNum);
@@ -957,12 +957,12 @@ unsigned CShip::GetSerialSize() const {
   totsize += BufWrite(NULL, dDockDist);
   totsize += BufWrite(NULL, dLaserDist);
 
-  UINT i;
-  for (i = 0; i < (UINT)O_ALL_ORDERS; i++) {
+  unsigned int i;
+  for (i = 0; i < (unsigned int)O_ALL_ORDERS; ++i) {
     totsize += BufWrite(NULL, adOrders[i]);
   }
 
-  for (i = 0; i < (UINT)S_ALL_STATS; i++) {
+  for (i = 0; i < (unsigned int)S_ALL_STATS; ++i) {
     totsize += BufWrite(NULL, adStatCur[i]);
     totsize += BufWrite(NULL, adStatMax[i]);
   }
@@ -982,12 +982,12 @@ unsigned CShip::SerialPack(char *buf, unsigned buflen) const {
   vpb += BufWrite(vpb, dDockDist);
   vpb += BufWrite(vpb, dLaserDist);
 
-  UINT i;
-  for (i = 0; i < (UINT)O_ALL_ORDERS; i++) {
+  unsigned int i;
+  for (i = 0; i < (unsigned int)O_ALL_ORDERS; ++i) {
     vpb += BufWrite(vpb, adOrders[i]);
   }
 
-  for (i = 0; i < (UINT)S_ALL_STATS; i++) {
+  for (i = 0; i < (unsigned int)S_ALL_STATS; ++i) {
     vpb += BufWrite(vpb, adStatCur[i]);
     vpb += BufWrite(vpb, adStatMax[i]);
   }
@@ -1007,12 +1007,12 @@ unsigned CShip::SerialUnpack(char *buf, unsigned buflen) {
   vpb += BufRead(vpb, dDockDist);
   vpb += BufRead(vpb, dLaserDist);
 
-  UINT i;
-  for (i = 0; i < (UINT)O_ALL_ORDERS; i++) {
+  unsigned int i;
+  for (i = 0; i < (unsigned int)O_ALL_ORDERS; ++i) {
     vpb += BufRead(vpb, adOrders[i]);
   }
 
-  for (i = 0; i < (UINT)S_ALL_STATS; i++) {
+  for (i = 0; i < (unsigned int)S_ALL_STATS; ++i) {
     vpb += BufRead(vpb, adStatCur[i]);
     vpb += BufRead(vpb, adStatMax[i]);
   }
@@ -1044,8 +1044,8 @@ double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
   }
 
   // Cancel conflicting orderst this turn
-  adOrders[(UINT)O_TURN] = 0.0;
-  adOrders[(UINT)O_JETTISON] = 0.0;
+  adOrders[(unsigned int)O_TURN] = 0.0;
+  adOrders[(unsigned int)O_JETTISON] = 0.0;
 
   // Use an integer step counter so the number of physics ticks is immune to
   // floating-point accumulation error from "t += tstep" comparisons. In older
@@ -1081,7 +1081,7 @@ double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
     v_sim += tc.dv_achieved;
   }
 
-  adOrders[(UINT)O_THRUST] = value;
+  adOrders[(unsigned int)O_THRUST] = value;
   return est_cost;
 }
 
@@ -1098,8 +1098,8 @@ double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
   if (value == 0.0) {
     return 0.0;
   }
-  adOrders[(UINT)O_TURN] = 0.0;
-  adOrders[(UINT)O_JETTISON] = 0.0;
+  adOrders[(unsigned int)O_TURN] = 0.0;
+  adOrders[(unsigned int)O_JETTISON] = 0.0;
 
   AccVec = CTraj(value, orient);
   AccVec += Vel;
@@ -1130,7 +1130,7 @@ double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
     fuelcon = 0.0;
   }
 
-  adOrders[(UINT)O_THRUST] = value;
+  adOrders[(unsigned int)O_THRUST] = value;
   return fuelcon;
 }
 

@@ -13,7 +13,7 @@
 
 CClient::CClient(int port, char *hostname, bool bObserv) {
   bObflag = bObserv;
-  umyIndex = (UINT)-1;
+  umyIndex = (unsigned int)-1;
   aTms = NULL;
 
   pmyWorld = NULL;
@@ -68,7 +68,7 @@ CClient::~CClient() {
     delete pmyWorld;
   }
   if (aTms != NULL) {
-    for (UINT i = 0; i < numTeams; i++) {
+    for (unsigned int i = 0; i < numTeams; ++i) {
       if (aTms[i] != NULL) {
         delete aTms[i];
       }
@@ -89,7 +89,7 @@ int CClient::IsOpen() { return pmyNet->IsOpen(1); }
 
 void CClient::MeetWorld() {
   char *buf;
-  UINT numSh, len;
+  unsigned int numSh, len;
 
   delete pmyWorld;
   while (pmyNet->GetQueueLength() < 2) {
@@ -101,17 +101,17 @@ void CClient::MeetWorld() {
   numSh = buf[1];
   pmyNet->FlushQueue();
 
-  UINT i, teamNum;
+  unsigned int i, teamNum;
 
   aTms = new CTeam *[numTeams];
-  for (i = 0; i < numTeams; i++) {
+  for (i = 0; i < numTeams; ++i) {
     aTms[i] = CTeam::CreateTeam();
   }
   pmyWorld = new CWorld(numTeams);
 
   printf("%d teams with %d ships each\n", numTeams, numSh);
 
-  for (i = 0; i < numTeams; i++) {
+  for (i = 0; i < numTeams; ++i) {
     teamNum = 0;
 
     aTms[i]->SetTeamNumber(teamNum);
@@ -140,37 +140,37 @@ void CClient::MeetWorld() {
   delete buf;
 }
 
-UINT CClient::ReceiveWorld() {
+unsigned int CClient::ReceiveWorld() {
   if (IsOpen() == 0) {
     pmyWorld->bGameOver = true;
     pmyWorld->PhysicsModel(0.1);  // Slow-mo
     return 0;
   }
 
-  UINT netlen, len, aclen;
+  unsigned int netlen, len, aclen;
   char *buf = pmyNet->GetQueue();
 
-  while (pmyNet->GetQueueLength() < sizeof(UINT)) {
+  while (pmyNet->GetQueueLength() < sizeof(unsigned int)) {
     pmyNet->CatchPkt();
     if (IsOpen() == 0) {
       return 0;  // Eek!  World disappeared!
     }
   }
 
-  memcpy(&netlen, buf, sizeof(UINT));
+  memcpy(&netlen, buf, sizeof(unsigned int));
   len = ntohl(netlen);
 
   if (len > MAX_THINGS * 256) {
     return 0;  // Bad!
   }
-  while (pmyNet->GetQueueLength() < (int)(len + sizeof(UINT))) {
+  while (pmyNet->GetQueueLength() < (int)(len + sizeof(unsigned int))) {
     pmyNet->CatchPkt();
     if (IsOpen() == 0) {
       return 0;
     }
   }
 
-  aclen = pmyWorld->SerialUnpack(buf + sizeof(UINT), len);
+  aclen = pmyWorld->SerialUnpack(buf + sizeof(unsigned int), len);
   pmyNet->FlushQueue();
 
   if (aclen != len) {
@@ -184,10 +184,10 @@ void CClient::MeetTeams() {
     return;  // Only observer allowed
   }
 
-  UINT nTm, len;
+  unsigned int nTm, len;
   char *buf;
 
-  for (nTm = 0; nTm < numTeams; nTm++) {
+  for (nTm = 0; nTm < numTeams; ++nTm) {
     while ((len = pmyNet->GetQueueLength()) < aTms[nTm]->GetSerInitSize()) {
       pmyNet->CatchPkt();
     }
@@ -228,7 +228,7 @@ void CClient::DoTurn() {
   }
 
   CTeam *pTm = aTms[umyIndex];
-  UINT len = pTm->GetSerialSize();
+  unsigned int len = pTm->GetSerialSize();
   if (len > 4096) {
     return;  // BAD!
   }

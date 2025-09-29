@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
 
     // Receive world state from server if connected
     if (connected && myClient) {
-      UINT received = myClient->ReceiveWorld();
+      unsigned int received = myClient->ReceiveWorld();
 
       if (received > 0) {
         // Send acknowledgment to server (critical for observer!)

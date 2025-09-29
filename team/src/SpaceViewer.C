@@ -14,17 +14,17 @@
 
 // This one draws
 
-const UINT numImg = 1000;
+const unsigned int numImg = 1000;
 
 SpaceViewer::SpaceViewer(char* filename, Observer* myObserver) {
-  UINT initCol, i;
+  unsigned int initCol, i;
   XColor col1, col2;
 
   // cout << "Entered SpaceViewer constructor" << endl;
 
   gotImages = false;
   obImages = new ObserverImage*[numImg];
-  for (i = 0; i < numImg; i++) {
+  for (i = 0; i < numImg; ++i) {
     obImages[i] = NULL;
   }
 
@@ -48,7 +48,7 @@ SpaceViewer::SpaceViewer(char* filename, Observer* myObserver) {
   // Init xpmColors
   XAllocNamedColor(sObserver->display, sObserver->cmap, "blue", &col1, &col2);
   initCol = col1.pixel;
-  for (int cntr1 = 0; cntr1 < 256; cntr1++) {
+  for (int cntr1 = 0; cntr1 < 256; ++cntr1) {
     xpmColors[cntr1] = sObserver->lasCol;
   }
 
@@ -59,7 +59,7 @@ SpaceViewer::SpaceViewer(char* filename, Observer* myObserver) {
 
 SpaceViewer::~SpaceViewer() {
   int i;
-  for (i = 0; i < numImg; i++) {
+  for (i = 0; i < numImg; ++i) {
     delete obImages[i];
   }
   delete[] obImages;
@@ -113,7 +113,7 @@ int SpaceViewer::getImages(char* filename) {
       // Reset for the next batch
       namePos = 0;
       readingName = 0;
-      for (int cntr1 = 0; cntr1 < 13; cntr1++) {
+      for (int cntr1 = 0; cntr1 < 13; ++cntr1) {
         nameBuffer[cntr1] = 0;
       }
     }
@@ -148,7 +148,7 @@ int SpaceViewer::readXpmFromFile(char* fileName, Pixmap* newPixmap,
 #else
   int charsPerPixel, ycntr = 0;
   ;
-  UINT colval;
+  unsigned int colval;
   char inChar1, inChar2, *colString, *dataRow;
   bool infoRead, colorsRead, colorsStarted;
   XColor col1, col2;
@@ -216,7 +216,7 @@ int SpaceViewer::readXpmFromFile(char* fileName, Pixmap* newPixmap,
           colString = new char[(charsPerPixel + 1)];
           //		  colString = new char[7];
           for (int colInitCntr = 0; colInitCntr < (charsPerPixel + 1);
-               colInitCntr++)
+               ++colInitCntr)
             colString[colInitCntr] = 0;
           // cout << "charsPerPixel is " << charsPerPixel << endl;
 
@@ -241,7 +241,7 @@ int SpaceViewer::readXpmFromFile(char* fileName, Pixmap* newPixmap,
             inFile >> inChar2;
 
           colString[0] = '#';
-          for (int cntr1 = 1; cntr1 < (charsPerPixel + 1); cntr1++) {
+          for (int cntr1 = 1; cntr1 < (charsPerPixel + 1); ++cntr1) {
             inFile >> inChar2;
             colString[cntr1] = inChar2;
           }
@@ -262,7 +262,7 @@ int SpaceViewer::readXpmFromFile(char* fileName, Pixmap* newPixmap,
       {
         inFile >> dataRow;
 
-        for (int xcntr = 0; xcntr < imgInfo->width; xcntr++) {
+        for (int xcntr = 0; xcntr < imgInfo->width; ++xcntr) {
           XSetForeground(sObserver->display, sObserver->gc,
                          xpmColors[(int)dataRow[xcntr]]);
           XDrawPoint(sObserver->display, *newPixmap, sObserver->gc, xcntr,
@@ -484,7 +484,7 @@ void SpaceViewer::plotVelVector(double pX, double pY, double rad, double rho,
 // Checks for data in the first testSize elements of obImages
 
 void SpaceViewer::testImages(int testSize) {
-  for (int cntr1 = 0; cntr1 < testSize; cntr1++) {
+  for (int cntr1 = 0; cntr1 < testSize; ++cntr1) {
     cout << "ObImage test at index " << cntr1 << " ";
     cout << "Width " << obImages[cntr1]->getWidth() << " Height "
          << obImages[cntr1]->getHeight() << " Bitmap "
@@ -496,7 +496,7 @@ void SpaceViewer::testImages(int testSize) {
 // Misha's star-related methods
 
 void SpaceViewer::initStars(int maxx, int maxy) {
-  for (UINT i = 0; i < numstars; i++) {
+  for (unsigned int i = 0; i < numstars; ++i) {
     aStars[i].uX = rand() % maxx;
     aStars[i].uY = rand() % maxy;
   }
@@ -510,7 +510,7 @@ void SpaceViewer::plotStars() {
   }
 
   XSetForeground(sObserver->display, sObserver->gc, sObserver->white);
-  for (UINT i = 0; i < numstars; i++) {
+  for (unsigned int i = 0; i < numstars; ++i) {
     XDrawPoint(sObserver->display, sObserver->spaceCanvas, sObserver->gc,
                aStars[i].uX, aStars[i].uY);
   }

@@ -85,7 +85,7 @@ class Gatherer : public Shooter {
 
   void Decide();  // Main resource collection logic with context switching
 
-  UINT SelectTarget();  // Choose best resource target
+  unsigned int SelectTarget();  // Choose best resource target
   void AvoidCollide();  // Collision avoidance logic
 };
 

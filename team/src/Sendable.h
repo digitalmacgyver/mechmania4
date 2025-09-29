@@ -23,12 +23,12 @@ class CSendable {
   // Following functions return buflen
   unsigned BufWrite(char* dest, const char* src, unsigned buflen) const;
   unsigned BufWrite(char* dest, bool src) const;
-  unsigned BufWrite(char* dest, UINT src) const;
+  unsigned BufWrite(char* dest, unsigned int src) const;
   unsigned BufWrite(char* dest, double src) const;
 
   unsigned BufRead(char* src, char* dest, unsigned buflen) const;
   unsigned BufRead(char* src, bool& dest) const;
-  unsigned BufRead(char* src, UINT& dest) const;
+  unsigned BufRead(char* src, unsigned int& dest) const;
   unsigned BufRead(char* src, double& dest) const;
 };
 

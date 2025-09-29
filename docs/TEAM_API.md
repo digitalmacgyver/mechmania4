@@ -101,7 +101,7 @@ Ships can issue these orders each turn (all can be combined):
 
 ```cpp
 // Movement orders
-pShip->SetOrder(O_THRUST, value);   // -30 to +30 units/sec
+pShip->SetOrder(O_THRUST, value);   // -60 to +60 units/sec (Δv along orientation)
 pShip->SetOrder(O_TURN, radians);   // -2π to +2π radians
 
 // Combat orders
@@ -137,15 +137,34 @@ pShip->SetJettison(VINYL, 3.0);
 
 ### Fuel Costs
 
-Each order returns fuel consumed:
+Each order returns a **fuel estimate**:
 
 ```cpp
-double fuel_used = pShip->SetOrder(O_THRUST, 10.0);
-// Check if we had enough fuel
-if (fuel_used < 10.0) {
-    // Insufficient fuel - order was reduced
-}
+double fuel_est = pShip->SetOrder(O_THRUST, 10.0);
+// This is an estimate under current conditions (velocity, mass, fuel).
+// The actual fuel charged is computed during physics (5 sub-steps) and
+// can differ slightly if the world state changes (e.g., collisions or
+// other orders also consume fuel that turn).
 ```
+
+**How thrust fuel is computed (summary):**
+
+- A per-second thrust order is applied as **five equal instantaneous impulses** at 0.0, 0.2, 0.4, 0.6, and 0.8 seconds.
+- After each impulse the engine evaluates \(v_{\text{des}} = v_{\text{old}} + \Delta v\).
+- If \(\lVert v_{\text{des}} \rVert \le 30\) (the speed circle) the impulse is accepted as-is.
+- Otherwise the engine projects \(v_{\text{des}}\) back to the circle along the same ray and the trimmed portion is treated as **overshoot**.
+
+The fuel charged for each impulse uses the same slope for both the applied delta-v and any overshoot:
+
+\[
+\text{fuel}_{\text{base}} = \lVert \Delta v \rVert \cdot \frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
+\]
+
+\[
+\text{fuel}_{\text{gov}} = \max(0, \lVert v_{\text{des}} \rVert - 30) \cdot \frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
+\]
+
+Totals for the order are the sums of the five impulses. While **docked**, thrust and turn orders remain free (no base or governor fuel), though velocity is still clamped to the 30-speed circle.
 
 ## World Information
 
@@ -243,6 +262,8 @@ if (pShip->AsteroidFits(asteroid)) {
 - +X points to the right
 - Angles are in radians, with 0 pointing right (+X direction)
 - Heading angles: 0 = right, PI/2 = down (+Y), PI = left, -PI/2 = up (-Y)
+
+**Clarifying note:** In the underlying game world, PI/2 corresponds to the direction of increasing Y. The observer UI follows standard screen coordinates, so increasing Y is rendered downward; the angles displayed therefore appear inverted relative to the math convention.
 
 ### Position and Distance
 
@@ -427,7 +448,7 @@ const double fWXMin = -512.0, fWXMax = 512.0;
 const double fWYMin = -512.0, fWYMax = 512.0;
 
 // Physics
-const double maxspeed = 30.0;     // Maximum ship velocity
+const double maxspeed = 30.0;     // Maximum ship speed (radius of speed circle)
 const double PI = 3.14159265359;
 const double PI2 = 2 * PI;
 

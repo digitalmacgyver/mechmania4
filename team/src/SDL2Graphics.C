@@ -247,8 +247,8 @@ void SDL2Graphics::DrawCircle(int cx, int cy, int radius, const Color& color,
   SetDrawColor(color);
 
   if (filled) {
-    for (int w = 0; w < radius * 2; w++) {
-      for (int h = 0; h < radius * 2; h++) {
+    for (int w = 0; w < radius * 2; ++w) {
+      for (int h = 0; h < radius * 2; ++h) {
         int dx = radius - w;
         int dy = radius - h;
         if ((dx * dx + dy * dy) <= (radius * radius)) {
@@ -308,7 +308,7 @@ void SDL2Graphics::DrawPolygon(const int* xPoints, const int* yPoints,
 
   if (!filled) {
     // Draw outline
-    for (int i = 0; i < nPoints; i++) {
+    for (int i = 0; i < nPoints; ++i) {
       int next = (i + 1) % nPoints;
       SDL_RenderDrawLine(renderer, xPoints[i], yPoints[i], xPoints[next],
                          yPoints[next]);
@@ -316,16 +316,16 @@ void SDL2Graphics::DrawPolygon(const int* xPoints, const int* yPoints,
   } else {
     // Simple scanline fill (not optimal but works)
     int minY = yPoints[0], maxY = yPoints[0];
-    for (int i = 1; i < nPoints; i++) {
+    for (int i = 1; i < nPoints; ++i) {
       minY = std::min(minY, yPoints[i]);
       maxY = std::max(maxY, yPoints[i]);
     }
 
-    for (int y = minY; y <= maxY; y++) {
+    for (int y = minY; y <= maxY; ++y) {
       int intersections[100];
       int count = 0;
 
-      for (int i = 0; i < nPoints && count < 100; i++) {
+      for (int i = 0; i < nPoints && count < 100; ++i) {
         int next = (i + 1) % nPoints;
         int y1 = yPoints[i];
         int y2 = yPoints[next];

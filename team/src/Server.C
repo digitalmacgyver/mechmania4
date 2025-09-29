@@ -15,24 +15,24 @@
 // Construction/Destruction
 
 CServer::CServer(int numTms, int port) {
-  UINT i;
+  unsigned int i;
 
   nTms = numTms;
-  ObsConn = (UINT)-1;
+  ObsConn = (unsigned int)-1;
 
   pmyNet = new CServerNet(nTms + 1, port);
   pmyWorld = new CWorld(nTms);
 
   abOpen = new bool[nTms + 1];
-  for (i = 0; i < nTms + 1; i++) {
+  for (i = 0; i < nTms + 1; ++i) {
     abOpen[i] = false;  // No connections there yet
   }
 
-  auTCons = new UINT[nTms];
+  auTCons = new unsigned int[nTms];
   aTms = new CTeam *[nTms];
-  for (i = 0; i < nTms; i++) {
+  for (i = 0; i < nTms; ++i) {
     aTms[i] = CTeam::CreateTeam();
-    auTCons[i] = (UINT)-1;
+    auTCons[i] = (unsigned int)-1;
     aTms[i]->SetTeamNumber(i);
     aTms[i]->Create(4, i);
     pmyWorld->SetTeam(i, aTms[i]);
@@ -57,7 +57,7 @@ CServer::~CServer() {
   delete[] auTCons;
 
   delete pmyWorld;
-  for (UINT i = 0; i < nTms; i++) {
+  for (unsigned int i = 0; i < nTms; ++i) {
     delete aTms[i];
   }
   delete[] aTms;
@@ -68,7 +68,7 @@ CServer::~CServer() {
 ////////////////////////////////////////
 // Data access
 
-UINT CServer::GetNumTeams() const { return nTms; }
+unsigned int CServer::GetNumTeams() const { return nTms; }
 
 double CServer::GetTime() { return pmyWorld->GetGameTime(); }
 
@@ -77,11 +77,11 @@ CWorld *CServer::GetWorld() { return pmyWorld; }
 ////////////////////////////////////////
 // Methods
 
-UINT CServer::ConnectClients() {
+unsigned int CServer::ConnectClients() {
   int conn;
   char outbuf[2048];
 
-  for (UINT i = 0; i < GetNumTeams() + 1; i++) {  // Teams and observer
+  for (unsigned int i = 0; i < GetNumTeams() + 1; ++i) {  // Teams and observer
     conn = pmyNet->WaitForConn();
     abOpen[conn - 1] = true;
     printf("Establishing connection #%d\n", conn);
@@ -95,7 +95,7 @@ UINT CServer::ConnectClients() {
   int totcl = 0, tmindex = 0;
   int slen = strlen(n_obcon);  // n_obcon and n_teamcon same length
 
-  while ((UINT)totcl < GetNumTeams() + 1) {
+  while ((unsigned int)totcl < GetNumTeams() + 1) {
     conn = pmyNet->CatchPkt();
     if (pmyNet->GetQueueLength(conn) < slen) {
       continue;
@@ -110,7 +110,7 @@ UINT CServer::ConnectClients() {
     }
 
     if (memcmp(pmyNet->GetQueue(conn), n_teamcon, slen) == 0) {
-      if ((UINT)tmindex >= GetNumTeams()) {
+      if ((unsigned int)tmindex >= GetNumTeams()) {
         continue;  // Who are all these people!?
       }
       auTCons[tmindex] = conn;
@@ -138,7 +138,7 @@ void CServer::IntroduceWorld(int conn) {
   return;
 }
 
-UINT CServer::SendWorld(int conn) {
+unsigned int CServer::SendWorld(int conn) {
   if (abOpen[conn - 1] != true) {
     return 0;
   }
@@ -148,7 +148,7 @@ UINT CServer::SendWorld(int conn) {
     return 0;
   }
 
-  UINT lenpred, lenact, netsize;
+  unsigned int lenpred, lenact, netsize;
 
   lenpred = pmyWorld->GetSerialSize();
   if (lenpred > wldbuflen || lenpred <= 0) {
@@ -162,7 +162,7 @@ UINT CServer::SendWorld(int conn) {
   }
 
   netsize = htonl(lenact);
-  pmyNet->SendPkt(conn, (char *)(&netsize), sizeof(UINT));
+  pmyNet->SendPkt(conn, (char *)(&netsize), sizeof(unsigned int));
   pmyNet->SendPkt(conn, wldbuf, lenact);
   return lenact;
 }
@@ -172,7 +172,7 @@ void CServer::BroadcastWorld() {
     // While paused, avoid waking teams; observer gets updates elsewhere
     return;
   }
-  for (UINT conn = 1; conn <= GetNumTeams() + 1; conn++) {
+  for (unsigned int conn = 1; conn <= GetNumTeams() + 1; ++conn) {
     if (conn == ObsConn) {
       continue;  // Observer gets world elsewhere
     }
@@ -187,7 +187,7 @@ void CServer::BroadcastWorld() {
     SendWorld(conn);
   }
 
-  for (UINT tm = 0; tm < GetNumTeams(); tm++) {
+  for (unsigned int tm = 0; tm < GetNumTeams(); ++tm) {
     pmyWorld->atstamp[tm] = pmyWorld->GetTimeStamp();
     // They got the world, start counting!
   }
@@ -196,13 +196,13 @@ void CServer::BroadcastWorld() {
 void CServer::ResumeSync() {
   // Reset team timing
   double now = pmyWorld->GetTimeStamp();
-  for (UINT tm = 0; tm < GetNumTeams(); tm++) {
+  for (unsigned int tm = 0; tm < GetNumTeams(); ++tm) {
     pmyWorld->atstamp[tm] = now;
   }
   // Clear per-step flags without advancing time
   pmyWorld->PhysicsModel(0.0);
   // Push a fresh world snapshot to all teams even if paused was engaged
-  for (UINT conn = 1; conn <= GetNumTeams() + 1; conn++) {
+  for (unsigned int conn = 1; conn <= GetNumTeams() + 1; ++conn) {
     if (conn == ObsConn) {
       continue;
     }
@@ -222,7 +222,7 @@ void CServer::WaitForObserver() {
     return;
   }
 
-  UINT len;
+  unsigned int len;
   char *pq;
 
   while (true) {
@@ -271,16 +271,16 @@ void CServer::WaitForObserver() {
 
 void CServer::MeetTeams() {
   int conn;
-  UINT len, tn, totresp = 0;
+  unsigned int len, tn, totresp = 0;
   char *buf;
   bool *abGotFlag = new bool[GetNumTeams()];
 
-  for (tn = 0; tn < GetNumTeams(); tn++) {
+  for (tn = 0; tn < GetNumTeams(); ++tn) {
     abGotFlag[tn] = false;
   }
 
   while (totresp < GetNumTeams()) {
-    for (tn = 0; tn < GetNumTeams(); tn++) {
+    for (tn = 0; tn < GetNumTeams(); ++tn) {
       if (abGotFlag[tn] == true) {
         continue;
       }
@@ -299,7 +299,7 @@ void CServer::MeetTeams() {
     pmyNet->CatchPkt();
   }
 
-  for (tn = 0; tn < GetNumTeams(); tn++) {
+  for (tn = 0; tn < GetNumTeams(); ++tn) {
     conn = auTCons[tn];
     len = pmyNet->GetQueueLength(conn);
     buf = pmyNet->GetQueue(conn);
@@ -323,13 +323,13 @@ void CServer::ReceiveTeamOrders() {
     return;
   }
   int conn, len;
-  UINT tn, totresp = 0;
+  unsigned int tn, totresp = 0;
   char *buf;
   bool *abGotFlag = new bool[GetNumTeams()];
   double tstart, tnow, tobs;
   double timediff, tthink;
 
-  for (tn = 0; tn < GetNumTeams(); tn++) {
+  for (tn = 0; tn < GetNumTeams(); ++tn) {
     aTms[tn]->Reset();
     abGotFlag[tn] = false;
   }
@@ -345,7 +345,7 @@ void CServer::ReceiveTeamOrders() {
       tobs = tnow;
     }
 
-    for (tn = 0; tn < GetNumTeams(); tn++) {
+    for (tn = 0; tn < GetNumTeams(); ++tn) {
       if (abGotFlag[tn] == true) {
         continue;  // Already counted
       }
@@ -388,7 +388,7 @@ void CServer::ReceiveTeamOrders() {
       }
 
       len = pmyNet->GetQueueLength(conn);
-      if ((UINT)len >= aTms[tn]->GetSerialSize()) {
+      if ((unsigned int)len >= aTms[tn]->GetSerialSize()) {
         totresp++;
         abGotFlag[tn] = true;
 
@@ -442,7 +442,7 @@ double CServer::Simulation() {
     WaitForObserver();
     SendWorld(ObsConn);
 
-    for (UINT tm = 0; tm < nTms; tm++) {
+    for (unsigned int tm = 0; tm < nTms; ++tm) {
       aTms[tm]->MsgText[0] = 0;
     }
     // Clear announcer messages after each frame
@@ -454,7 +454,7 @@ double CServer::Simulation() {
   /*
   // Legacy floating-point loop retained for historical reference:
   double t, maxt=g_game_turn_duration, tstep=g_physics_simulation_dt;
-  UINT tm;
+  unsigned int tm;
   for (t=0.0; t<maxt; t+=tstep) {
     pmyWorld->PhysicsModel (tstep);
     if (t>=maxt-tstep) {
@@ -464,7 +464,7 @@ double CServer::Simulation() {
     WaitForObserver();
     SendWorld(ObsConn);
 
-    for (tm=0; tm<nTms; tm++) {
+    for (tm=0; tm<nTms; ++tm) {
       aTms[tm]->MsgText[0]=0;
     }
   }

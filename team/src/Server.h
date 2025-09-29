@@ -18,14 +18,14 @@ class CServer {
   CServer(int numTms = 2, int port = 2323);
   ~CServer();
 
-  UINT GetNumTeams() const;
+  unsigned int GetNumTeams() const;
   double GetTime();
   CWorld *GetWorld();
 
-  UINT ConnectClients();  // Return # successfully connected
+  unsigned int ConnectClients();  // Return # successfully connected
 
   void IntroduceWorld(int conn);
-  UINT SendWorld(int conn);
+  unsigned int SendWorld(int conn);
   void BroadcastWorld();  // Sends world to all open connections
   void MeetTeams();       // Gets teams from clients and sends to observer
 
@@ -40,13 +40,13 @@ class CServer {
   void ResumeSync();
 
  protected:
-  UINT nTms;      // # teams
-  UINT *auTCons;  // Array of team connection #'s
+  unsigned int nTms;      // # teams
+  unsigned int *auTCons;  // Array of team connection #'s
 
-  UINT ObsConn;  // Observer connection
+  unsigned int ObsConn;  // Observer connection
   bool *abOpen;  // Flag to tell if connection's open
 
-  UINT wldbuflen;
+  unsigned int wldbuflen;
   char *wldbuf;  // World buffer
 
   CServerNet *pmyNet;

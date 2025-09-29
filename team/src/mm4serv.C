@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
   printf("========================================\n");
   CWorld* pWorld = myServ.GetWorld();
   if (pWorld) {
-    for (UINT i = 0; i < pWorld->GetNumTeams(); i++) {
+    for (unsigned int i = 0; i < pWorld->GetNumTeams(); ++i) {
       CTeam* pTeam = pWorld->GetTeam(i);
       if (pTeam && pTeam->GetStation()) {
         printf("%s: %.2f vinyl\n", pTeam->GetName(),

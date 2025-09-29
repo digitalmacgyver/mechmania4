@@ -22,7 +22,7 @@ NoOp::~NoOp() {
 void NoOp::Init() {
   // Initialize ships with default configuration
   // All ships get equal fuel/cargo split
-  for (UINT i = 0; i < GetShipCount(); i++) {
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
     GetShip(i)->SetCapacity(S_FUEL, 30.0);   // 30 tons fuel
     GetShip(i)->SetCapacity(S_CARGO, 30.0);  // 30 tons cargo
   }

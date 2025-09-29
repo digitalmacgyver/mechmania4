@@ -23,42 +23,42 @@
 
 #define MAX_THINGS 512
 
-const UINT BAD_INDEX = ((UINT)-1);
+const unsigned int BAD_INDEX = ((unsigned int)-1);
 
 class CTeam;
 
 class CWorld : public CSendable {
  public:
-  CWorld(UINT nTm);
+  CWorld(unsigned int nTm);
   ~CWorld();
   CWorld* CreateCopy();
 
-  CTeam* GetTeam(UINT nt) const;  // Returns ptr to team, NULL on error
-  UINT GetNumTeams() const;       // Tells how many teams
+  CTeam* GetTeam(unsigned int nt) const;  // Returns ptr to team, NULL on error
+  unsigned int GetNumTeams() const;       // Tells how many teams
   double GetGameTime() const;     // Tells elapsed game time
 
   // Announcer system
   void AddAnnouncerMessage(const char* message);
 
-  UINT PhysicsModel(double dt = 1.0);  // Specify amt of time to pass
+  unsigned int PhysicsModel(double dt = 1.0);  // Specify amt of time to pass
   void LaserModel();                   // Compute all laser firings
   void AddThingToWorld(CThing* pNewThing);
 
-  void CreateAsteroids(AsteroidKind mat, UINT numast, double mass);
-  CTeam* SetTeam(UINT n,
+  void CreateAsteroids(AsteroidKind mat, unsigned int numast, double mass);
+  CTeam* SetTeam(unsigned int n,
                  CTeam* pTm);  // Returns previous team ptr, NULL on fail
 
-  CThing* GetThing(UINT index) const;      // returns NULL on failure
-  UINT GetNextIndex(UINT curindex) const;  // returns (UINT)-1 if at end of list
-  UINT GetPrevIndex(
-      UINT curindex) const;  // returns (UINT)-1 if at beginning of list
-  UINT UFirstIndex, ULastIndex;
+  CThing* GetThing(unsigned int index) const;      // returns NULL on failure
+  unsigned int GetNextIndex(unsigned int curindex) const;  // returns (unsigned int)-1 if at end of list
+  unsigned int GetPrevIndex(
+      unsigned int curindex) const;  // returns (unsigned int)-1 if at beginning of list
+  unsigned int UFirstIndex, ULastIndex;
 
   // Serialization routines
   unsigned GetSerialSize() const;
   unsigned SerialPack(char* buf, unsigned buflen) const;
   unsigned SerialUnpack(char* buf, unsigned buflen);
-  CThing* CreateNewThing(ThingKind TKind, UINT iTm);
+  CThing* CreateNewThing(ThingKind TKind, unsigned int iTm);
 
   // For internal use only
   double GetTimeStamp();  // Returns #sec, to 1msec res
@@ -73,20 +73,20 @@ class CWorld : public CSendable {
 
  protected:
   CThing* apThings[MAX_THINGS];
-  UINT aUNextInd[MAX_THINGS];
-  UINT aUPrevInd[MAX_THINGS];
+  unsigned int aUNextInd[MAX_THINGS];
+  unsigned int aUPrevInd[MAX_THINGS];
 
   CThing* apTAddQueue[MAX_THINGS];
-  UINT numNewThings;
+  unsigned int numNewThings;
 
-  void RemoveIndex(UINT index);
-  UINT AddNewThings();
-  UINT KillDeadThings();
-  UINT CollisionEvaluation();
+  void RemoveIndex(unsigned int index);
+  unsigned int AddNewThings();
+  unsigned int KillDeadThings();
+  unsigned int CollisionEvaluation();
   void ReLinkList();
 
   double gametime;
-  UINT numTeams;
+  unsigned int numTeams;
   CTeam** apTeams;
 };
 

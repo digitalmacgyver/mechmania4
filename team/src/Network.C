@@ -17,7 +17,7 @@ using namespace std;
 int CNetwork::fd2conn(int fd) {
   int i;
 
-  for (i = 0; i < maxconn; i++) {
+  for (i = 0; i < maxconn; ++i) {
     if (fds[i] == fd) {
       return i + 1;
     }
@@ -60,7 +60,7 @@ CNetwork::CNetwork(int themaxconn, int thequeuelen) {
   queuebuf = new char[maxqlen];
   queue = new char *[maxconn];
 
-  for (i = 0; i < maxconn; i++) {
+  for (i = 0; i < maxconn; ++i) {
     fds[i] = 0;
     timeout[i] = -1;
     queuelen[i] = 0;
@@ -78,7 +78,7 @@ CNetwork::~CNetwork() {
   delete[] queuelen;
   delete[] queuebuf;
 
-  for (int i = 0; i < maxconn; i++) {
+  for (int i = 0; i < maxconn; ++i) {
     delete[] queue[i];
   }
   delete[] queue;
@@ -104,7 +104,7 @@ int CNetwork::RecvPkt(char *data, int &len) {
   if (!v)
     return -1;
 
-  for (fd = 0; fd <= max_fd; fd++) {
+  for (fd = 0; fd <= max_fd; ++fd) {
     if (FD_ISSET(fd, &e_fds)) {
       len = 0;
       data[0] = 0;

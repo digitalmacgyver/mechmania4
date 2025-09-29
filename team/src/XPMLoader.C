@@ -107,9 +107,9 @@ SDL_Texture* XPMLoader::LoadXPM(SDL_Renderer* renderer,
   // Fill surface with pixel data
   Uint32* pixelData = (Uint32*)surface->pixels;
 
-  for (int y = 0; y < info.height; y++) {
+  for (int y = 0; y < info.height; ++y) {
     const std::string& row = pixels[y];
-    for (int x = 0; x < info.width; x++) {
+    for (int x = 0; x < info.width; ++x) {
       std::string key = row.substr(x * info.charsPerPixel, info.charsPerPixel);
 
       auto it = colorMap.find(key);

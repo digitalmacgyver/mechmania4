@@ -291,7 +291,7 @@ CCoord operator*(double scale, const CCoord& C1) {
 // Serialization routines
 
 unsigned CCoord::GetSerialSize() const {
-  UINT tot = 0;
+  unsigned int tot = 0;
   tot += BufWrite(NULL, fX);
   tot += BufWrite(NULL, fY);
   return tot;

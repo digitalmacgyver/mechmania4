@@ -23,20 +23,20 @@ unsigned CSendable::GetSerialSize() const { return 0; }
 
 unsigned CSendable::SerialPack(char* buf, unsigned buflen) const {
   if (buf == NULL) {
-    return (UINT)-1;
+    return (unsigned int)-1;
   }
   if (buflen < GetSerialSize()) {
-    return (UINT)-1;
+    return (unsigned int)-1;
   }
   return 0;
 }
 
 unsigned CSendable::SerialUnpack(char* buf, unsigned buflen) {
   if (buf == NULL) {
-    return (UINT)-1;
+    return (unsigned int)-1;
   }
   if (buflen < GetSerialSize()) {
-    return (UINT)-1;
+    return (unsigned int)-1;
   }
   return 0;
 }
@@ -56,8 +56,8 @@ unsigned CSendable::BufWrite(char* dest, const char* src,
 }
 
 unsigned CSendable::BufWrite(char* dest, bool src) const {
-  UINT buflen = sizeof(UINT);
-  UINT val = htonl((UINT)src);
+  unsigned int buflen = sizeof(unsigned int);
+  unsigned int val = htonl((unsigned int)src);
 
   if (dest != NULL) {
     memcpy(dest, &val, buflen);
@@ -66,9 +66,9 @@ unsigned CSendable::BufWrite(char* dest, bool src) const {
   return buflen;
 }
 
-unsigned CSendable::BufWrite(char* dest, UINT src) const {
-  UINT val = htonl(src);
-  UINT buflen = sizeof(UINT);
+unsigned CSendable::BufWrite(char* dest, unsigned int src) const {
+  unsigned int val = htonl(src);
+  unsigned int buflen = sizeof(unsigned int);
 
   if (dest != NULL) {
     memcpy(dest, &val, buflen);
@@ -79,7 +79,7 @@ unsigned CSendable::BufWrite(char* dest, UINT src) const {
 
 unsigned CSendable::BufWrite(char* dest, double src) const {
   int val = (int)(src * 1000.0);
-  UINT buflen = sizeof(int);
+  unsigned int buflen = sizeof(int);
   val = htonl(val);
 
   if (dest != NULL) {
@@ -97,8 +97,8 @@ unsigned CSendable::BufRead(char* src, char* dest, unsigned buflen) const {
 }
 
 unsigned CSendable::BufRead(char* src, bool& dest) const {
-  UINT buflen = sizeof(UINT);
-  UINT val;
+  unsigned int buflen = sizeof(unsigned int);
+  unsigned int val;
 
   memcpy(&val, src, buflen);
 
@@ -106,9 +106,9 @@ unsigned CSendable::BufRead(char* src, bool& dest) const {
   return buflen;
 }
 
-unsigned CSendable::BufRead(char* src, UINT& dest) const {
-  UINT val;
-  UINT buflen = sizeof(UINT);
+unsigned CSendable::BufRead(char* src, unsigned int& dest) const {
+  unsigned int val;
+  unsigned int buflen = sizeof(unsigned int);
 
   memcpy(&val, src, buflen);
 
@@ -118,7 +118,7 @@ unsigned CSendable::BufRead(char* src, UINT& dest) const {
 
 unsigned CSendable::BufRead(char* src, double& dest) const {
   int val;
-  UINT buflen = sizeof(int);
+  unsigned int buflen = sizeof(int);
 
   memcpy(&val, src, buflen);
   val = ntohl(val);

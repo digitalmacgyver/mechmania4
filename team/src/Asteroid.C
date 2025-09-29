@@ -157,7 +157,7 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   }
 
   // Make child asteroids
-  UINT i, numNew = 3;
+  unsigned int i, numNew = 3;
   double angstep = (PI2) / ((double)numNew);
   double nMass = GetMass() / ((double)numNew);
   if (nMass < minmass) {
@@ -173,7 +173,7 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   }
   CAsteroid* pChildAst;
 
-  for (i = 0; i < numNew; i++) {
+  for (i = 0; i < numNew; ++i) {
     pChildAst = MakeChildAsteroid(nMass);
     pChildAst->Vel = VCh;
     pChildAst->Pos = Pos;
@@ -187,11 +187,11 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
 // Serialization routines
 
 unsigned CAsteroid::GetSerialSize() const {
-  UINT totsize = 0;
+  unsigned int totsize = 0;
 
   totsize += CThing::GetSerialSize();
 
-  UINT umat = (UINT)material;
+  unsigned int umat = (unsigned int)material;
   totsize += BufWrite(NULL, umat);
 
   return totsize;
@@ -205,7 +205,7 @@ unsigned CAsteroid::SerialPack(char* buf, unsigned buflen) const {
 
   vpb += (CThing::SerialPack(buf, buflen));
 
-  UINT umat = (UINT)material;
+  unsigned int umat = (unsigned int)material;
   vpb += BufWrite(vpb, umat);
 
   return (vpb - buf);
@@ -219,7 +219,7 @@ unsigned CAsteroid::SerialUnpack(char* buf, unsigned buflen) {
 
   vpb += (CThing::SerialUnpack(buf, buflen));
 
-  UINT umat;
+  unsigned int umat;
   vpb += BufRead(vpb, umat);
   material = (AsteroidKind)umat;
 

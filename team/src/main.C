@@ -21,8 +21,8 @@ main() {
 
   // First let's create the teams and add them to the world
   CTeam *aTms[2], *aTestTms[2];
-  UINT unTm;
-  for (unTm = 0; unTm < 2; unTm++) {
+  unsigned int unTm;
+  for (unTm = 0; unTm < 2; ++unTm) {
     aTms[unTm] = new CTeam(unTm, &myWorld);
     aTms[unTm]->Create(2, unTm);
     myWorld.SetTeam(unTm, aTms[unTm]);
@@ -45,14 +45,14 @@ main() {
 
   double cyc;
   char wldbuf[16176];
-  UINT wldsz;
+  unsigned int wldsz;
 
   while (myWorld.GetGameTime() < 400.0) {
     //    printf ("%f\n",myWorld.GetGameTime());
     wldsz = myWorld.SerialPack(wldbuf, myWorld.GetSerialSize());
     TestWorld.SerialUnpack(wldbuf, wldsz);
 
-    for (unTm = 0; unTm < 2; unTm++) {
+    for (unTm = 0; unTm < 2; ++unTm) {
       aTms[unTm]->Turn();
     }
 
@@ -83,7 +83,7 @@ main() {
 
   double maxvin = -1.0;
   char wintm[512];
-  for (unTm = 0; unTm < 2; unTm++) {
+  for (unTm = 0; unTm < 2; ++unTm) {
     if (aTms[unTm]->GetScore() > maxvin) {
       maxvin = aTms[unTm]->GetScore();
       snprintf(wintm, sizeof(wintm), "%s", aTms[unTm]->GetName());

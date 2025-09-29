@@ -161,7 +161,7 @@ void ObserverSDL::Draw() {
   if (myWorld) {
     // Draw all things in the world
     // Iterate through all things using the linked list
-    for (UINT i = myWorld->UFirstIndex; i != BAD_INDEX;
+    for (unsigned int i = myWorld->UFirstIndex; i != BAD_INDEX;
          i = myWorld->GetNextIndex(i)) {
       CThing* thing = myWorld->GetThing(i);
       if (thing) {
@@ -170,10 +170,10 @@ void ObserverSDL::Draw() {
     }
 
     // Draw laser beams for all ships
-    for (UINT t = 0; t < myWorld->GetNumTeams(); t++) {
+    for (unsigned int t = 0; t < myWorld->GetNumTeams(); ++t) {
       CTeam* team = myWorld->GetTeam(t);
       if (team) {
-        for (UINT s = 0; s < team->GetShipCount(); s++) {
+        for (unsigned int s = 0; s < team->GetShipCount(); ++s) {
           CShip* ship = team->GetShip(s);
           if (ship && ship->IsAlive()) {
             DrawLaserBeam(ship, t);
@@ -183,7 +183,7 @@ void ObserverSDL::Draw() {
     }
 
     // Draw team info
-    for (UINT t = 0; t < myWorld->GetNumTeams(); t++) {
+    for (unsigned int t = 0; t < myWorld->GetNumTeams(); ++t) {
       CTeam* team = myWorld->GetTeam(t);
       if (team) {
         int x = (t == 0) ? t1PosX : t2PosX;
@@ -272,11 +272,11 @@ void ObserverSDL::DrawSpace() {
     Color gridColor(60, 60, 60);
     int gridStep = spaceWidth / 8;  // 8x8 grid
 
-    for (int i = 1; i < 8; i++) {
+    for (int i = 1; i < 8; ++i) {
       int x = borderX + i * gridStep;
       graphics->DrawLine(x, borderY, x, borderY + spaceHeight, gridColor);
     }
-    for (int i = 1; i < 8; i++) {
+    for (int i = 1; i < 8; ++i) {
       int y = borderY + i * gridStep;
       graphics->DrawLine(borderX, y, borderX + spaceWidth, y, gridColor);
     }
@@ -301,7 +301,7 @@ void ObserverSDL::DrawStarfield() {
   static std::vector<std::pair<int, int>> stars;
 
   if (!starsInit) {
-    for (int i = 0; i < 2048; i++) {
+    for (int i = 0; i < 2048; ++i) {
       int x = rand() % spaceWidth;
       int y = rand() % spaceHeight;
       stars.push_back({x, y});
@@ -420,7 +420,7 @@ void ObserverSDL::DrawShip(CShip* ship, int teamNum) {
     int shipNum = 0;
     if (ship->GetTeam()) {
       CTeam* team = ship->GetTeam();
-      for (UINT i = 0; i < team->GetShipCount(); i++) {
+      for (unsigned int i = 0; i < team->GetShipCount(); ++i) {
         if (team->GetShip(i) == ship) {
           shipNum = static_cast<int>(i);
           break;
@@ -621,7 +621,7 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
   currentY += lineHeight;
 
   // Draw ships in tabular format
-  for (UINT i = 0; i < team->GetShipCount() && i < 4; i++) {
+  for (unsigned int i = 0; i < team->GetShipCount() && i < 4; ++i) {
     CShip* ship = team->GetShip(i);
     if (ship && ship->IsAlive()) {
       const char* shipName = ship->GetName();
@@ -686,7 +686,7 @@ void ObserverSDL::DrawTeamInfo(CTeam* team, int x, int y) {
     char line[256];
     int linePos = 0;
 
-    for (int i = 0; i < maxTextLen && msg[i] != '\0'; i++) {
+    for (int i = 0; i < maxTextLen && msg[i] != '\0'; ++i) {
       if (msg[i] == '\n' || linePos >= 255) {
         line[linePos] = '\0';
         if (linePos > 0) {
@@ -718,7 +718,7 @@ void ObserverSDL::DrawAnnouncerMessages() {
     char line[256];
     int linePos = 0;
 
-    for (int i = 0; i < myWorld->maxAnnouncerTextLen && msg[i] != '\0'; i++) {
+    for (int i = 0; i < myWorld->maxAnnouncerTextLen && msg[i] != '\0'; ++i) {
       if (msg[i] == '\n' || linePos >= 255) {
         line[linePos] = '\0';
         if (linePos > 0) {
@@ -1084,7 +1084,7 @@ void ObserverSDL::DrawHelpFooter() {
 
   int gapChars = 7;  // spread commands out more
   int gapPixels = gapChars * (charW > 0 ? charW : 7);
-  for (int i = 0; controls[i] != nullptr; i++) {
+  for (int i = 0; controls[i] != nullptr; ++i) {
     int w = 0, h = 0;
     graphics->GetTextSize(controls[i], w, h, true);
     graphics->DrawText(controls[i], x, textY, helpColor, true);
@@ -1178,7 +1178,7 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
     int shipNum = 0;
     if (ship->GetTeam()) {
       CTeam* team = ship->GetTeam();
-      for (UINT i = 0; i < team->GetShipCount(); i++) {
+      for (unsigned int i = 0; i < team->GetShipCount(); ++i) {
         if (team->GetShip(i) == ship) {
           shipNum = static_cast<int>(i);
           break;

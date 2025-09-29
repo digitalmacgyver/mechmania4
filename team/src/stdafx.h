@@ -18,9 +18,6 @@
 
 using namespace std;
 
-// Modern C++ type definitions
-typedef unsigned int UINT;
-
 // bool, true, and false are built-in C++ keywords
 // No need to define them
 

@@ -25,14 +25,14 @@ class SpaceViewer {
   };
 
   struct SStarType {
-    UINT uX, uY;
+    unsigned int uX, uY;
   } aStars[numstars];
 
   ObserverImage **obImages;
   Observer *sObserver;
-  UINT lasCol;
+  unsigned int lasCol;
   double imgRotInc;
-  UINT xpmColors[256];
+  unsigned int xpmColors[256];
 
   int getImages(char *);
 

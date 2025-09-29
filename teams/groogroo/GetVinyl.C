@@ -19,7 +19,7 @@ void GetVinyl::Decide() {
   CTeam *pmyTeam = pShip->GetTeam();
   CWorld *pmyWorld = pmyTeam->GetWorld();
 
-  UINT shipnum = pShip->GetShipNumber();
+  unsigned int shipnum = pShip->GetShipNumber();
   MagicBag *mbp = ((Groogroo *)pmyTeam)->mb;
 
   Entry *e;
@@ -34,7 +34,7 @@ void GetVinyl::Decide() {
   bool lock_orders = false;
 
   // Collision Handling.
-  for (UINT thing_i = pmyWorld->UFirstIndex; thing_i <= pmyWorld->ULastIndex;
+  for (unsigned int thing_i = pmyWorld->UFirstIndex; thing_i <= pmyWorld->ULastIndex;
        thing_i = pmyWorld->GetNextIndex(thing_i)) {
     CThing *athing = pmyWorld->GetThing(thing_i);
     if (athing == NULL || !(athing->IsAlive())) {
@@ -157,7 +157,7 @@ void GetVinyl::Decide() {
         ((((Groogroo *)pmyTeam)->vinyl_left < 0.01) &&
          (pShip->GetAmount(S_CARGO) > 0.01))) {
       // make the return to station better
-      for (UINT j = 0; j < 50; j++) {
+      for (unsigned int j = 0; j < 50; ++j) {
         FuelTraj ft = ((Groogroo *)pmyTeam)
                           ->determine_orders(pmyTeam->GetStation(), j, pShip);
         if (ft.fuel_used >= 0.0) {
@@ -167,7 +167,7 @@ void GetVinyl::Decide() {
       }
 
     } else {
-      UINT i = 0;
+      unsigned int i = 0;
       for (e = mbp->getEntry(shipnum, 0); e != NULL;
            e = mbp->getEntry(shipnum, i), i++) {
         if (e->thing != NULL) {

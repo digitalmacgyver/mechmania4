@@ -79,7 +79,7 @@ EvoAI::~EvoAI() {
         logFile_.close();
     }
     // Clean up brains
-    for (UINT i = 0; i < GetShipCount(); i++) {
+    for (unsigned int i = 0; i < GetShipCount(); ++i) {
         CShip* pSh = GetShip(i);
         if (pSh) {
             CBrain* pBr = pSh->GetBrain();
@@ -123,7 +123,7 @@ void EvoAI::Init() {
     double cargo_capacity = dMaxStatTot * cargoRatio;
     double fuel_capacity = dMaxStatTot - cargo_capacity;
 
-    for (UINT i = 0; i < GetShipCount(); i++) {
+    for (unsigned int i = 0; i < GetShipCount(); ++i) {
         CShip* ship = GetShip(i);
         if (ship) {
             ship->SetCapacity(S_FUEL, fuel_capacity);
@@ -139,7 +139,7 @@ void EvoAI::Init() {
 void EvoAI::Turn() {
     CWorld* pWorld = GetWorld();
     if (!pWorld || pWorld->bGameOver) return;
-    for (UINT i = 0; i < GetShipCount(); i++) {
+    for (unsigned int i = 0; i < GetShipCount(); ++i) {
         CShip* ship = GetShip(i);
         if (ship && ship->IsAlive() && ship->GetBrain()) {
             ship->GetBrain()->Decide();
@@ -318,7 +318,7 @@ void HarvesterBrain::SelectTarget() {
     double bestScore = -std::numeric_limits<double>::infinity();
 
     // Optimized hot path.
-    for (UINT index = pWorld->UFirstIndex; index != (UINT)-1; index = pWorld->GetNextIndex(index)) {
+    for (unsigned int index = pWorld->UFirstIndex; index != (unsigned int)-1; index = pWorld->GetNextIndex(index)) {
         CThing* pTh = pWorld->GetThing(index);
         if (pTh && pTh->GetKind() == ASTEROID && pTh->IsAlive()) {
             CAsteroid* asteroid = (CAsteroid*)pTh;
@@ -404,7 +404,7 @@ bool HarvesterBrain::AvoidCollisions() {
     CThing* threat = NULL;
     double min_ttc = std::numeric_limits<double>::max();
 
-    for (UINT index = pWorld->UFirstIndex; index != (UINT)-1; index = pWorld->GetNextIndex(index)) {
+    for (unsigned int index = pWorld->UFirstIndex; index != (unsigned int)-1; index = pWorld->GetNextIndex(index)) {
         CThing* pTh = pWorld->GetThing(index);
         if (!pTh || pTh == pShip || !pTh->IsAlive() || pTh == pTarget_) continue;
 

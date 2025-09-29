@@ -19,7 +19,7 @@
 
 CThing::CThing(double fx0, double fy0) {
   TKind = GENTHING;
-  for (UINT i = 0; i < maxnamelen; i++) {
+  for (unsigned int i = 0; i < maxnamelen; ++i) {
     Name[i] = 0;  // Initialize Name
   }
 
@@ -31,7 +31,7 @@ CThing::CThing(double fx0, double fy0) {
 
   pmyTeam = NULL;
   pmyWorld = NULL;
-  uWldIndex = (UINT)-1;
+  uWldIndex = (unsigned int)-1;
 
   Pos = CCoord(fx0, fy0);
   Vel = CTraj(0.0, 0.0);
@@ -76,7 +76,7 @@ bool CThing::IsAlive() const {
   return true;
 }
 
-UINT CThing::GetImage() const { return uImgSet; }
+unsigned int CThing::GetImage() const { return uImgSet; }
 
 const char* CThing::GetName() const { return Name; }
 
@@ -86,7 +86,7 @@ const char* CThing::GetName() const { return Name; }
 void CThing::SetName(const char* strsrc) {
   bool bGotZero = false;
 
-  for (UINT i = 0; i < maxnamelen - 1; i++) {
+  for (unsigned int i = 0; i < maxnamelen - 1; ++i) {
     if (bGotZero == true) {
       Name[i] = 0;
     }
@@ -367,7 +367,7 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
 
 CThing& CThing::operator=(const CThing& OthThing) {
   char* buf;
-  UINT pksz, sz = OthThing.GetSerialSize();
+  unsigned int pksz, sz = OthThing.GetSerialSize();
 
   buf = new char[sz];
   pksz = OthThing.SerialPack(buf, sz);
@@ -410,9 +410,9 @@ void CThing::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
 // Serialization routines
 
 unsigned CThing::GetSerialSize() const {
-  UINT totsize = 0;
+  unsigned int totsize = 0;
 
-  UINT uTK = (UINT)TKind;
+  unsigned int uTK = (unsigned int)TKind;
   totsize += BufWrite(NULL, uTK);
 
   totsize += BufWrite(NULL, ulIDCookie);
@@ -435,13 +435,13 @@ unsigned CThing::GetSerialSize() const {
 }
 
 unsigned CThing::SerialPack(char* buf, unsigned buflen) const {
-  UINT needlen = GetSerialSize();
+  unsigned int needlen = GetSerialSize();
   if (buflen < needlen) {
     return 0;
   }
   char* vpb = buf;
 
-  UINT uTK = (UINT)TKind;
+  unsigned int uTK = (unsigned int)TKind;
   vpb += BufWrite(vpb, uTK);
 
   vpb += BufWrite(vpb, ulIDCookie);
@@ -469,7 +469,7 @@ unsigned CThing::SerialUnpack(char* buf, unsigned buflen) {
   }
   char* vpb = buf;
 
-  UINT uTK;
+  unsigned int uTK;
   vpb += BufRead(vpb, uTK);
   TKind = (ThingKind)uTK;
 

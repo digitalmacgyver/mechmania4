@@ -93,7 +93,7 @@ void CStation::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
 // Serialization routines
 
 unsigned CStation::GetSerialSize() const {
-  UINT totsize = 0;
+  unsigned int totsize = 0;
 
   totsize += CThing::GetSerialSize();
   totsize += BufWrite(NULL, dCargo);

@@ -73,11 +73,32 @@ Ships can perform the following actions each turn:
 
 ### Maximum Velocity Enforcement
 
-Ships can issue thrust orders requesting for a delta-v of up to 60 in their current orientation either forwards or backwards (reverse thrust).
+Ships can issue **thrust orders up to ±60** units/second of **Δv** along their current **orientation** (forward = positive, reverse = negative).  
+**Orientation is independent of velocity**: a ship “faces” its orientation; it may be traveling another way.
 
-The Ships velocity after a thurst command, however, is limited to a radius 30 "speed circle."
+**How thrust is applied (per second):**
+1. The order’s Δv is split into **five equal instantaneous impulses** at **t = 0.0, 0.2, 0.4, 0.6, 0.8 s**.  
+2. After each impulse, the engine computes \(v_{\text{des}} = v_{\text{old}} + \Delta v\).  
+3. If \(\lVert v_{\text{des}}\rVert \le 30\) (**speed circle**), it is accepted.  
+4. If \(\lVert v_{\text{des}}\rVert > 30\), the engine **projects** \(v_{\text{des}}\) **back to the circle** along the same ray (Option‑A projection).
 
-Overthursting will result in a velcity of 30 in the direction of what the full overthrusted heading would have been.
+**Governor penalty (fuel):** When projection is needed, the **overshoot length**
+\[
+\text{overshoot} \;=\; \big(\ \lVert v_{\text{des}}\rVert - 30\ \big)_+
+\]
+is charged as extra fuel using the **same per-Δv fuel slope** as base thrust for that impulse. (Think of it as paying for the “red” piece the engine chopped off.)  
+**Base thrust fuel** for an impulse of magnitude \(\lVert \Delta v\rVert\) is:
+\[
+\text{fuel}_\text{base} \;=\; \lVert \Delta v\rVert \cdot
+\frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
+\]
+**Governor fuel** for that impulse is:
+\[
+\text{fuel}_\text{gov} \;=\; \text{overshoot} \cdot
+\frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
+\]
+Totals over the second are the sums of the five impulses.  
+**While docked:** thrust/turn remain **free**; projection still limits speed to 30 but **no governor fuel** is charged.
 
 Consider these examples:
 

@@ -30,10 +30,10 @@ enum ShipStat { S_CARGO, S_FUEL, S_SHIELD, S_ALL_STATS };
 
 class CShip : public CThing {
  public:
-  CShip(CCoord StPos, CTeam* pteam = NULL, UINT ShNum = 0);
+  CShip(CCoord StPos, CTeam* pteam = NULL, unsigned int ShNum = 0);
   virtual ~CShip();
 
-  UINT GetShipNumber() const;
+  unsigned int GetShipNumber() const;
   bool IsDocked() const;
 
   double GetAmount(ShipStat st) const;          // Returns current amount
@@ -74,14 +74,14 @@ class CShip : public CThing {
   unsigned SerialUnpack(char* buf, unsigned buflen);
 
  protected:
-  UINT myNum;
+  unsigned int myNum;
   bool bDockFlag;
   double dDockDist, dLaserDist;
   CBrain* pBrain;
 
-  double adOrders[(UINT)O_ALL_ORDERS];
-  double adStatCur[(UINT)S_ALL_STATS];
-  double adStatMax[(UINT)S_ALL_STATS];
+  double adOrders[(unsigned int)O_ALL_ORDERS];
+  double adStatCur[(unsigned int)S_ALL_STATS];
+  double adStatMax[(unsigned int)S_ALL_STATS];
 
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
   virtual void HandleJettison();

@@ -210,7 +210,7 @@ CTraj operator*(double scale, const CTraj& T1) {
 // Serialization routines
 
 unsigned CTraj::GetSerialSize() const {
-  UINT tot = 0;
+  unsigned int tot = 0;
   tot += BufWrite(NULL, rho);
   tot += BufWrite(NULL, theta);
   return tot;
