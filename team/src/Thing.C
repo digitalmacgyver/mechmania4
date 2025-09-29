@@ -5,7 +5,6 @@
  */
 
 #include <cmath>  // For sqrt()
-#include <memory>
 
 #include "Coord.h"
 #include "ParserModern.h"
@@ -216,36 +215,40 @@ bool CThing::IsFacing(const CThing& OthThing) const {
 // Global parser instance - will be set by main programs
 extern CParser* g_pParser;
 
-// Anonymous namespace for strategy implementations
-namespace {
+double CThing::DetectCollisionCourse(const CThing& OthThing) const {
+  // Use ArgumentParser to determine which collision detection to use
+  // Default to new behavior unless explicitly set to old
+  if (g_pParser && !g_pParser->UseNewFeature("collision-detection")) {
+    return DetectCollisionCourseOld(OthThing);
+  } else {
+    return DetectCollisionCourseNew(OthThing);
+  }
+}
 
-// Legacy collision detection strategy
-class LegacyCollisionStrategy : public CThing::CollisionStrategy {
-public:
-  double detectCollision(const CThing* self, const CThing& other) const override {
+double CThing::DetectCollisionCourseOld(const CThing& OthThing) const {
   // LEGACY COLLISION DETECTION (retained for backward compatibility)
   // This uses an approximation that projects along relative velocity direction
   // for a distance equal to current separation. Works in some cases but fails
   // for perpendicular approaches and complex trajectories.
 
-  if (other == *self) {
+  if (OthThing == *this) {
     return NO_COLLIDE;
   }
 
-  CTraj VRel = other.GetVelocity() - self->GetVelocity();  // Direction of vector
+  CTraj VRel = OthThing.Vel - Vel;  // Direction of vector
   if (VRel.rho <= 0.05) {
     return NO_COLLIDE;  // Never gonna hit if effectively not moving
   }
 
   double flyred =
-      self->GetSize() + other.GetSize();  // Don't allow them to scrape each other
-  double dist = self->GetPos().DistTo(other.GetPos());  // Magnitude of vector
+      size + OthThing.size;  // Don't allow them to scrape each other
+  double dist = Pos.DistTo(OthThing.Pos);  // Magnitude of vector
   if (dist < flyred) {
     return 0.0;  // They're already impacting
   }
 
   CTraj VHit(dist, VRel.theta);
-  CCoord RelPos = other.GetPos() - self->GetPos(),
+  CCoord RelPos = OthThing.Pos - Pos,
          CHit(RelPos + VHit.ConvertToCoord());
 
   double flyby = CHit.DistTo(CCoord(0.0, 0.0));
@@ -256,16 +259,12 @@ public:
   // Pending collision
   double hittime = (dist - flyred) / VRel.rho;
   return hittime;
-  }
-};
+}
 
-// Quadratic collision detection strategy
-class QuadraticCollisionStrategy : public CThing::CollisionStrategy {
-public:
-  double detectCollision(const CThing* self, const CThing& other) const override {
+double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
   // Robust collision detection using the Quadratic Formula approach.
-  // We analyze the motion in a relative frame of reference where 'self' object
-  // is stationary at the origin, and 'other' moves relative to it.
+  // We analyze the motion in a relative frame of reference where 'this' object
+  // is stationary at the origin, and 'OthThing' moves relative to it.
 
   // NOTE ON OVERALL APPROACH BELOW:
   // Optimization: We operate on and compare squared distances (e.g. PMagSq <
@@ -273,29 +272,29 @@ public:
   // because sqrt() is expensive. The result is mathematically identical since
   // distances are always positive.
 
-  if (other == *self) {
+  if (OthThing == *this) {
     return NO_COLLIDE;
   }
 
   // 1. Setup Relative Vectors in Cartesian Coordinates.
 
-  // P: Relative Position (Vector from 'self' to 'other').
+  // P: Relative Position (Vector from 'this' to 'OthThing').
   // CCoord operator- correctly handles toroidal wrap-around, providing the
   // shortest path vector.
-  CCoord RelPos = other.GetPos() - self->GetPos();
+  CCoord RelPos = OthThing.Pos - Pos;
   double Px = RelPos.fX;
   double Py = RelPos.fY;
 
-  // V: Relative Velocity (Velocity of 'other' minus Velocity of 'self').
+  // V: Relative Velocity (Velocity of 'OthThing' minus Velocity of 'this').
   // We convert the result (CTraj) to Cartesian coordinates (CCoord) for the
   // vector math.
-  CTraj VRel_Traj = other.GetVelocity() - self->GetVelocity();
+  CTraj VRel_Traj = OthThing.Vel - Vel;
   CCoord VRel = VRel_Traj.ConvertToCoord();
   double Vx = VRel.fX;
   double Vy = VRel.fY;
 
   // R: Collision Radius (Sum of the radii of both objects).
-  double R = self->GetSize() + other.GetSize();
+  double R = size + OthThing.size;
   double RSq = R * R;
 
   // 2. Check for immediate overlap.
@@ -360,26 +359,6 @@ public:
   }
 
   return TTC;
-  }
-};
-
-} // anonymous namespace
-
-// Initialize collision strategy based on configuration
-void CThing::InitializeCollisionStrategy() const {
-  if (g_pParser && !g_pParser->UseNewFeature("collision-detection")) {
-    collisionStrategy = std::make_unique<LegacyCollisionStrategy>();
-  } else {
-    collisionStrategy = std::make_unique<QuadraticCollisionStrategy>();
-  }
-}
-
-double CThing::DetectCollisionCourse(const CThing& OthThing) const {
-  // Initialize strategy on first use if needed
-  if (!collisionStrategy) {
-    InitializeCollisionStrategy();
-  }
-  return collisionStrategy->detectCollision(this, OthThing);
 }
 
 

@@ -217,11 +217,13 @@ double CShip::SetOrder(OrderKind ord, double value) {
       return fuelcon;
 
     case O_THRUST:  // "value" is magnitude of acceleration vector
-      // Initialize strategy on first use if needed
-      if (!velocityStrategy) {
-        InitializeVelocityStrategy();
+      // Use ArgumentParser to determine which thrust processing to use
+      // Default to new behavior unless explicitly set to old
+      if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+        return ProcessThrustOrderOld(ord, value);
+      } else {
+        return ProcessThrustOrderNew(ord, value);
       }
-      return velocityStrategy->processThrustOrder(this, ord, value);
 
     case O_TURN:  // "value" is angle, in radians, to turn
       if (value == 0.0) {
@@ -455,11 +457,13 @@ void CShip::Drift(double dt) {
 
   // Thrusting time
   if (thrustamt != 0.0) {
-    // Initialize strategy on first use if needed
-    if (!velocityStrategy) {
-      InitializeVelocityStrategy();
+    // Use ArgumentParser to determine which drift processing to use
+    // Default to new behavior unless explicitly set to old
+    if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+      ProcessThrustDriftOld(thrustamt, dt);
+    } else {
+      ProcessThrustDriftNew(thrustamt, dt);
     }
-    velocityStrategy->processThrustDrift(this, thrustamt, dt);
   }
 
   // Also from CThing::Drift
@@ -872,146 +876,121 @@ unsigned CShip::SerialUnpack(char *buf, unsigned buflen) {
 // Strategy Pattern Implementation for Velocity/Acceleration Processing
 
 // Anonymous namespace for strategy implementations
-namespace {
+double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
+  // Legacy thrust order processing - contains the current SetOrder O_THRUST logic
+  double valtmp, fuelcon, maxfuel;
+  CTraj AccVec;
 
-// Legacy velocity/acceleration strategy
-class LegacyVelocityStrategy : public CShip::VelocityStrategy {
-public:
-  double processThrustOrder(CShip* ship, OrderKind ord, double value) override {
-    // Legacy thrust order processing - contains the current SetOrder O_THRUST logic
-    double valtmp, fuelcon, maxfuel;
-    CTraj AccVec;
-
-    maxfuel = ship->GetAmount(S_FUEL);
-    if (ship->IsDocked() == true) {
-      maxfuel = ship->GetCapacity(S_FUEL);
-    }
-
-    if (value == 0.0) {
-      return 0.0;
-    }
-    ship->ClearTurnJettisonOrders();
-
-    AccVec = CTraj(value, ship->GetOrient());
-    AccVec += ship->GetVelocity();
-    if (AccVec.rho > maxspeed) {
-      AccVec.rho = maxspeed;
-    }
-    AccVec = AccVec - ship->GetVelocity();  // Should = what it was before, in most cases
-    if (value <= 0.0) {
-      value = -AccVec.rho;
-    } else {
-      value = AccVec.rho;
-    }
-
-    // NOTE: The departure thrust of a ship is limited by its maximum fuel
-    // capacity, even though that thrust is free (will only be relevant for
-    // ships with very small fuel tanks).
-    //
-    // 1 ton of fuel accelerates a naked ship from zero to 6.0*maxspeed
-    fuelcon = fabs(value) * ship->GetMass() / (6.0 * maxspeed * ship->GetBaseMass());
-    if (fuelcon > maxfuel && ship->IsDocked() == false) {
-      fuelcon = maxfuel;
-      valtmp = fuelcon * 6.0 * maxspeed * ship->GetBaseMass() / ship->GetMass();
-      // If our original requested thrust was negative, make our clamped value
-      // negative as well.
-      if (value <= 0.0) {
-        value = -valtmp;
-      } else {
-        value = valtmp;
-      }
-    }
-    if (ship->IsDocked() == true) {
-      fuelcon = 0.0;
-    }
-
-    ship->SetThrustOrder(value);
-    return fuelcon;
+  maxfuel = GetAmount(S_FUEL);
+  if (IsDocked() == true) {
+    maxfuel = GetCapacity(S_FUEL);
   }
 
-  void processThrustDrift(CShip* ship, double thrustamt, double dt) override {
-    // Legacy thrust drift processing - contains the current Drift thrusting logic
-    double fuelcons;
-
-    // Calculate fuel consumption directly using legacy method
-    fuelcons = processThrustOrder(ship, O_THRUST, thrustamt);
-    double oldFuel = ship->GetAmount(S_FUEL);
-    double newFuel = oldFuel - fuelcons;
-    ship->SetAmount(S_FUEL, newFuel);
-
-    // Check if out of fuel
-    if (oldFuel > 0.01 && newFuel <= 0.01) {
-      printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", ship->GetName(),
-             ship->GetTeam() ? ship->GetTeam()->GetName() : "Unknown");
-    }
-
-    CTraj Accel(thrustamt, ship->GetOrient());
-    CTraj currentVel = ship->GetVelocity();
-    currentVel += (Accel * dt);
-    if (currentVel.rho > maxspeed) {
-      double originalSpeed = currentVel.rho;
-      currentVel.rho = maxspeed;
-
-      // Announce when thrusting causes velocity clamping (if enabled)
-      if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
-        CWorld* pWorld = ship->GetTeam()->GetWorld();
-        if (pWorld) {
-          char msg[256];
-          snprintf(msg, sizeof(msg), "%s thrust clamped %.1f -> %.1f",
-                   ship->GetName(), originalSpeed, maxspeed);
-          pWorld->AddAnnouncerMessage(msg);
-        }
-      }
-    }
-    ship->ApplyVelocityChange(currentVel);
-
-    if (ship->IsDocked() == true) {
-      CTraj VOff(ship->GetDockDistance() + 5.0, ship->GetOrient());
-      CCoord newPos = ship->GetPos();
-      if (ship->GetOrder(O_THRUST) > 0.0) {
-        newPos += VOff.ConvertToCoord();
-      } else {
-        newPos -= VOff.ConvertToCoord();
-      }
-      ship->ApplyPositionChange(newPos);
-      ship->ApplyVelocityChange(Accel);  // Leave station at full speed
-      ship->SetDockFlag(false);
-    }
-
-    if (thrustamt < 0.0) {
-      ship->SetImageSet(2);
-    } else {
-      ship->SetImageSet(1);
-    }
+  if (value == 0.0) {
+    return 0.0;
   }
-};
+  adOrders[(UINT)O_TURN] = 0.0;
+  adOrders[(UINT)O_JETTISON] = 0.0;
 
-// New/improved velocity/acceleration strategy
-class ImprovedVelocityStrategy : public CShip::VelocityStrategy {
-public:
-  double processThrustOrder(CShip* ship, OrderKind ord, double value) override {
-    // For now, use the same logic as legacy until we implement improvements
-    // This is where future improvements to velocity/acceleration limits would go
-    LegacyVelocityStrategy legacy;
-    return legacy.processThrustOrder(ship, ord, value);
+  AccVec = CTraj(value, orient);
+  AccVec += Vel;
+  if (AccVec.rho > maxspeed) {
+    AccVec.rho = maxspeed;
   }
-
-  void processThrustDrift(CShip* ship, double thrustamt, double dt) override {
-    // For now, use the same logic as legacy until we implement improvements
-    // This is where future improvements to drift behavior would go
-    LegacyVelocityStrategy legacy;
-    legacy.processThrustDrift(ship, thrustamt, dt);
-  }
-};
-
-} // anonymous namespace
-
-// Initialize velocity strategy based on configuration
-void CShip::InitializeVelocityStrategy() const {
-  extern CParser* g_pParser;
-  if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
-    velocityStrategy = std::make_unique<LegacyVelocityStrategy>();
+  AccVec = AccVec - Vel;  // Should = what it was before, in most cases
+  if (value <= 0.0) {
+    value = -AccVec.rho;
   } else {
-    velocityStrategy = std::make_unique<ImprovedVelocityStrategy>();
+    value = AccVec.rho;
   }
+
+  // NOTE: The departure thrust of a ship is limited by its maximum fuel
+  // capacity, even though that thrust is free (will only be relevant for
+  // ships with very small fuel tanks).
+  //
+  // 1 ton of fuel accelerates a naked ship from zero to 6.0*maxspeed
+  fuelcon = fabs(value) * GetMass() / (6.0 * maxspeed * mass);
+  if (fuelcon > maxfuel && IsDocked() == false) {
+    fuelcon = maxfuel;
+    valtmp = fuelcon * 6.0 * maxspeed * mass / GetMass();
+    // If our original requested thrust was negative, make our clamped value
+    // negative as well.
+    if (value <= 0.0) {
+      value = -valtmp;
+    } else {
+      value = valtmp;
+    }
+  }
+  if (IsDocked() == true) {
+    fuelcon = 0.0;
+  }
+
+  adOrders[(UINT)O_THRUST] = value;
+  return fuelcon;
+}
+
+double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
+  if (value == 0.0) {
+    return 0.0;
+  }
+  // TODO: Implement improved velocity/acceleration limits
+  return value;
+}
+
+void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
+  // Legacy thrust drift processing - contains the current Drift thrusting logic
+  double fuelcons;
+
+  // Calculate fuel consumption directly using legacy method
+  fuelcons = ProcessThrustOrderOld(O_THRUST, thrustamt);
+  double oldFuel = GetAmount(S_FUEL);
+  double newFuel = oldFuel - fuelcons;
+  SetAmount(S_FUEL, newFuel);
+
+  // Check if out of fuel
+  if (oldFuel > 0.01 && newFuel <= 0.01) {
+    printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
+           GetTeam() ? GetTeam()->GetName() : "Unknown");
+  }
+
+  CTraj Accel(thrustamt, orient);
+  Vel += (Accel * dt);
+  if (Vel.rho > maxspeed) {
+    double originalSpeed = Vel.rho;
+    Vel.rho = maxspeed;
+
+    // Announce when thrusting causes velocity clamping (if enabled)
+    if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
+      CWorld* pWorld = GetTeam()->GetWorld();
+      if (pWorld) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "%s thrust clamped %.1f -> %.1f",
+                 GetName(), originalSpeed, maxspeed);
+        pWorld->AddAnnouncerMessage(msg);
+      }
+    }
+  }
+
+  if (bDockFlag == true) {
+    CTraj VOff(dDockDist + 5.0, orient);
+    if (GetOrder(O_THRUST) > 0.0) {
+      Pos += VOff.ConvertToCoord();
+    } else {
+      Pos -= VOff.ConvertToCoord();
+    }
+    Vel = Accel;  // Leave station at full speed
+    bDockFlag = false;
+  }
+
+  if (thrustamt < 0.0) {
+    uImgSet = 2;
+  } else {
+    uImgSet = 1;
+  }
+}
+
+void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
+  // For now, use the same logic as legacy until we implement improvements
+  // This is where future improvements to drift behavior would go
+  ProcessThrustDriftOld(thrustamt, dt);
 }
