@@ -15,8 +15,8 @@
 #include "Traj.h"
 #include "stdafx.h"
 
-const double minmass = 3.0, minsize = 1.0, maxspeed = 30.0, NO_COLLIDE = -1.0,
-             NO_DAMAGE = -123.45;
+const double minmass = 3.0, minsize = 1.0,
+             NO_COLLIDE = -1.0, NO_DAMAGE = -123.45;
 
 #ifndef maxnamelen
 #define maxnamelen 14  // Thing names buffer: 14 bytes (13 characters + NUL)

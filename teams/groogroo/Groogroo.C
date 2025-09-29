@@ -6,6 +6,7 @@
  */
 
 #include "Asteroid.h"
+#include "GameConstants.h"
 #include "GetVinyl.h"
 #include "Groogroo.h"
 
@@ -170,7 +171,7 @@ FuelTraj Groogroo::determine_orders(CThing* thing, double time, CShip* ship) {
 
   // Get ship's current and next-turn positions
   CCoord us_now = ship->GetPos();
-  CCoord us_later = ship->PredictPosition(1.0);  // Position after 1 sec drift
+  CCoord us_later = ship->PredictPosition(g_game_turn_duration);  // Position after 1 turn drift
 
   // STRATEGY 1: Try immediate thrust
   // Calculate thrust vector needed if we thrust right now

@@ -120,6 +120,9 @@ Lasers are modeled as colliding masses for damage purposes.
 
 ========================== FEATURES TO ADD ============================================
 
+
+**************** GROONEW PERFECT NAV ************************************
+
 * Perfect navigation in Groogroo/MattMatt:
   * Phase 1 - understand what we're doing and fix any bugs
   * Phase 2 - fixes related to 0.2 micro tics between game turns.
@@ -129,6 +132,17 @@ Lasers are modeled as colliding masses for damage purposes.
   * Handle negative thrusting and lesser rotations. At least for now
     we don't care what direction we are facing so we should check if
     it's faster to rotate less and then negative thrust.
+
+1. Navigation enhancements: Shortest distance doesn't necessarily mean
+fastest time to intercept, and/or cheapest cost. Consider the case
+where presently it is only marginally better to go left than right in
+terms of distance, however we currently have a large velocity to the
+right - we might get there in the same number of turns going right, at
+a much reduced cost.
+  * Think deep thoughts about magic bag, whereby we want to know for N turns among all possible paths which ones get to the item with the least cost (also possible in the future consider which ones woudl generate the least collisions).
+    * Alternatively, add all the paths to the magic bag and magic bag can have multiple things for any target with (path1, nturns, cost), (path2, nturns, cost) ,etc. etc.
+      * could weight colisions with our station highly as we get free acceleration?
+      * Could consider alternate paths in all cases of: go to station and then launch?
 
 * Deep thoughts for future perfect navigation:
   1. Our current approach assumes if you can't reach destination D with
@@ -156,15 +170,12 @@ Lasers are modeled as colliding masses for damage purposes.
   nondeterministically identifies one of the things we're colliding
   with soon and plans based on that - we can do better.
 
+**************** END GROONEW PERFECT NAV ************************************
+
 * Game fix of collision eat bug - colliding with an asteroid you can
   eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
 
 * We do change momentum when capturing an asteroid, but this is OK - see if we conserve momentum or not - we should correctly conserve momentum. (This is a physics fix if we need to make one).
-
-* Either an engine enhancement to change this, or make a TEAMS/RULES
-  readme update that clarifies while docking thrust and turn is free,
-  it's gated by your max fuel capacity - so ships with 0 fuel can't
-  take off or turn even in base.
 
 * Game option to prevent docking at enemy bases (set at start time of either the server or observer) (counts as collision with asteroid for damage?)
 
@@ -174,23 +185,9 @@ Lasers are modeled as colliding masses for damage purposes.
 
 * Configure number and size of initial asteroids.
 
-* Make team groonew and hack on that leaving orignal groogroo in place
-(take groogroo3 contents and make it mattmatt I guess).
-
 1. Add comments throughout on orders:
   * Thrust, Turn, Jettison are mutually exclusive
   * Fire lasers and raise shields be done in any combination with one of the above.
-
-1. Navigation enhancements: Shortest distance doesn't necessarily mean
-fastest time to intercept, and/or cheapest cost. Consider the case
-where presently it is only marginally better to go left than right in
-terms of distance, however we currently have a large velocity to the
-right - we might get there in the same number of turns going right, at
-a much reduced cost.
-  * Think deep thoughts about magic bag, whereby we want to know for N turns among all possible paths which ones get to the item with the least cost (also possible in the future consider which ones woudl generate the least collisions).
-    * Alternatively, add all the paths to the magic bag and magic bag can have multiple things for any target with (path1, nturns, cost), (path2, nturns, cost) ,etc. etc.
-      * could weight colisions with our station highly as we get free acceleration?
-      * Could consider alternate paths in all cases of: go to station and then launch?
 
 Engine enhancements:
   * Physically costed rotation based on assumption of linear accel and decel to change angle X and end up at a dead stop? (Normalized to physicall acceleration costs?)

@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "Asteroid.h"
+#include "GameConstants.h"
 #include "ObserverSDL.h"
 #include "Ship.h"
 #include "Station.h"
@@ -1317,8 +1318,8 @@ void ObserverSDL::DrawVelocityVector(CThing* thing) {
     return;
   }
   // Clamp speed to world max (legacy behaviour)
-  if (speed > maxspeed) {
-    speed = maxspeed;
+  if (speed > g_game_max_speed) {
+    speed = g_game_max_speed;
   }
 
   double theta = vel.theta;  // direction of motion

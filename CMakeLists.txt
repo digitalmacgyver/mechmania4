@@ -29,6 +29,7 @@ set(COMMON_SOURCES
     ${SRC_DIR}/Team.C
     ${SRC_DIR}/ArgumentParser.C
     ${SRC_DIR}/ParserModern.C
+    ${SRC_DIR}/GameConstants.C
 )
 
 # Network sources

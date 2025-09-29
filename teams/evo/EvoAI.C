@@ -1,4 +1,5 @@
 #include "EvoAI.h"
+#include "GameConstants.h"
 #include "ParserModern.h"
 #include <sstream>
 #include <cstdlib>
@@ -303,7 +304,7 @@ void HarvesterBrain::HandleDeparting() {
     if (turn < -PI) turn += PI2;
     if (turn > PI) turn -= PI2;
     pShip->SetOrder(O_TURN, turn);
-    if (fabs(turn) < 0.1) pShip->SetOrder(O_THRUST, maxspeed);
+    if (fabs(turn) < 0.1) pShip->SetOrder(O_THRUST, g_game_max_speed);
 }
 
 
@@ -427,7 +428,7 @@ bool HarvesterBrain::AvoidCollisions() {
         pShip->SetOrder(O_TURN, turnNeeded);
 
         if (fabs(turnNeeded) < 0.2) {
-            pShip->SetOrder(O_THRUST, maxspeed);
+            pShip->SetOrder(O_THRUST, g_game_max_speed);
         }
 
         if (EvoAI::s_loggingEnabled) {

@@ -7,6 +7,7 @@
 #include "Station.h"
 #include "Team.h"
 #include "World.h"
+#include "GameConstants.h"
 
 main() {
   // Test code
@@ -55,8 +56,10 @@ main() {
       aTms[unTm]->Turn();
     }
 
-    for (cyc = 0.0; cyc < 0.8; cyc += 0.2) {
-      myWorld.PhysicsModel(0.2);
+    // Loop for all physics steps except the last one
+    double physics_steps_except_last = g_game_turn_duration - g_physics_simulation_dt;
+    for (cyc = 0.0; cyc < physics_steps_except_last; cyc += g_physics_simulation_dt) {
+      myWorld.PhysicsModel(g_physics_simulation_dt);
 
       wldsz = myWorld.SerialPack(wldbuf, myWorld.GetSerialSize());
       TestWorld.SerialUnpack(wldbuf, wldsz);
@@ -65,7 +68,8 @@ main() {
       TestObserver.plotWorld();
     }
 
-    myWorld.PhysicsModel(0.2);
+    // Final physics step with laser model
+    myWorld.PhysicsModel(g_physics_simulation_dt);
     myWorld.LaserModel();
 
     wldsz = myWorld.SerialPack(wldbuf, myWorld.GetSerialSize());

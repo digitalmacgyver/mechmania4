@@ -6,6 +6,7 @@
  */
 
 #include "Brain.h"
+#include "GameConstants.h"
 #include "ParserModern.h"
 #include "Ship.h"
 #include "Station.h"
@@ -390,9 +391,9 @@ void CShip::Drift(double dt) {
   bIsGettingShot = NO_DAMAGE;
 
   // Check for velocity clamping before applying it
-  if (Vel.rho > maxspeed) {
+  if (Vel.rho > g_game_max_speed) {
     double originalSpeed = Vel.rho;
-    Vel.rho = maxspeed;
+    Vel.rho = g_game_max_speed;
 
     // Announce when velocity gets clamped (if enabled)
     if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
@@ -400,7 +401,7 @@ void CShip::Drift(double dt) {
       if (pWorld) {
         char msg[256];
         snprintf(msg, sizeof(msg), "%s velocity clamped %.1f -> %.1f",
-                 GetName(), originalSpeed, maxspeed);
+                 GetName(), originalSpeed, g_game_max_speed);
         pWorld->AddAnnouncerMessage(msg);
       }
     }
@@ -455,7 +456,7 @@ void CShip::Drift(double dt) {
     }
   }
 
-  // Thrusting time
+  // Thrusting time!
   if (thrustamt != 0.0) {
     // Use ArgumentParser to determine which drift processing to use
     // Default to new behavior unless explicitly set to old
@@ -466,7 +467,10 @@ void CShip::Drift(double dt) {
     }
   }
 
-  // Also from CThing::Drift
+  // Finally, update position and orientation. 
+  // From CThing::Drift
+  //
+  // TODO - factor this out in Thing.C to be a common function for CThing::Drift and us to use.
   Pos += (Vel * dt).ConvertToCoord();
   orient += omega * dt;
   if (orient < -PI || orient > PI) {
@@ -695,8 +699,8 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     double othmass = pOthThing->GetMass();
     double masstot = GetMass() + othmass;
     Vel = MomTot / masstot;
-    if (Vel.rho > maxspeed) {
-      Vel.rho = maxspeed;
+    if (Vel.rho > g_game_max_speed) {
+      Vel.rho = g_game_max_speed;
     }
 
     if (AsteroidFits((CAsteroid *)pOthThing)) {
@@ -731,8 +735,8 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   double dmassrat = pOthThing->GetMass() / GetMass();
   MovVec = MovVec * dmassrat;
   Vel += MovVec;
-  if (Vel.rho > maxspeed) {
-    Vel.rho = maxspeed;
+  if (Vel.rho > g_game_max_speed) {
+    Vel.rho = g_game_max_speed;
   }
 }
 
@@ -787,14 +791,158 @@ void CShip::HandleJettison() {
   MovVec = MovVec / dnewmass;
 
   Vel = MovVec;
-  if (Vel.rho > maxspeed) {
-    Vel.rho = maxspeed;
+  if (Vel.rho > g_game_max_speed) {
+    Vel.rho = g_game_max_speed;
   }
   SetOrder(O_JETTISON, 0.0);
 
   double matamt = GetAmount(AstToStat(AsMat));
   matamt -= dMass;
   SetAmount(AstToStat(AsMat), matamt);
+}
+
+///////////////////////////////////////////////////
+// Private methods
+
+// Helper math for the new thrust governor (velocity-circle projection).
+// Kept local to this translation unit.
+static inline double FuelPerDV(double current_mass, double hull_mass) {
+  // 1 ton of fuel accelerates a naked ship (mass=hull_mass) from 0 to 6*V.
+  // With payload, cost scales linearly with current total mass:
+  //   cost_per_dv = current_mass / (6 * V * hull_mass)
+  return current_mass / (6.0 * g_game_max_speed * hull_mass);
+}
+static inline CCoord UnitFromAngle(double ang) {
+  CTraj t(1.0, ang);
+  return t.ConvertToCoord();
+}
+static inline double Dot(const CCoord& a, const CCoord& b) {
+  return a.fX * b.fX + a.fY * b.fY;
+}
+// Closed-form clamp for a single instantaneous impulse s along unit u,
+// starting from velocity v (cartesian), with speed cap V and a "dv-budget"
+// Smax (fuel_avail converted to dv units). See derivation in discussion:
+//   If s reaches the speed circle: s_hit = -a + sqrt(a^2 + (V^2 - |v|^2)),
+//   where a = v dot u. If Smax <= s_hit, take s=Smax. If request <= s_hit, take it.
+//   Otherwise solve s + (|v+su|-V) = Smax  => closed form:
+//     s = ((V + Smax)^2 - |v|^2) / (2 * (V + Smax + a)).
+static inline double ClampSingleImpulseS(double s_req,
+                                         const CCoord& vCart,
+                                         const CCoord& u,
+                                         double V,
+                                         double Smax) {
+  if (s_req <= 0.0) return 0.0;
+  if (Smax <= g_fp_error_epsilon) return 0.0;
+  const double vx = vCart.fX, vy = vCart.fY;
+  const double v2 = vx * vx + vy * vy;
+  const double a  = Dot(vCart, u);              // component of v along u
+  double under = a * a + (V * V - v2);
+  if (under < 0.0) under = 0.0;                 // numeric guard
+  const double s_hit = -a + sqrt(under);        // first contact with |v+su|=V
+
+  // If budget can't reach the circle, just spend the budget (or request).
+  if (Smax <= s_hit + 1e-12) {
+    double s = Smax;
+    if (s > s_req) s = s_req;
+    if (s < 0.0) s = 0.0;
+    return s;
+  }
+  // If the request itself doesn't reach the circle, take it fully.
+  if (s_req <= s_hit + 1e-12) {
+    return s_req;
+  }
+  // Otherwise, budget allows overshoot; solve s + (|v+su|-V) = Smax.
+  const double B = V + Smax;
+  const double denom = 2.0 * (B + a);
+  double s_star = (denom != 0.0) ? ((B * B - v2) / denom) : 0.0;
+  if (s_star < 0.0) s_star = 0.0;
+  if (s_star > s_req) s_star = s_req;          // never exceed the request
+  return s_star;
+}
+
+// Calculate cost and achieved delta-v for a single instantaneous thrust.
+CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
+                                        CTraj v,
+                                        double orient,
+                                        double current_mass,
+                                        double fuel_avail,
+                                        bool is_docked) const {
+  if (thrustamt == 0.0) {
+    return ThrustCost{false, 0.0, 0.0, 0.0, CTraj(0.0, 0.0)};
+  }
+  
+  // Clamp our thrustamt to the maximum possible order value.
+  if (thrustamt > g_game_max_thrust_order_mag) {
+    thrustamt = g_game_max_thrust_order_mag;
+  } else if (thrustamt < -g_game_max_thrust_order_mag) {
+    thrustamt = -g_game_max_thrust_order_mag;
+  }
+
+  const double V = g_game_max_speed;
+  const double s_req = (thrustamt >= 0.0) ? thrustamt : -thrustamt;
+  // Command direction (flip 180 degrees if negative thrust).
+  double cmdAng = orient;
+  if (thrustamt < 0.0) {
+    cmdAng += PI;
+  }
+  const CCoord u = UnitFromAngle(cmdAng);
+  const CCoord vCart = v.ConvertToCoord();
+
+  // Cost-per-unit-delta-v for this impulse (uses current total mass and hull mass `mass`).
+  const double c_per_dv = FuelPerDV(current_mass, mass);
+  // Budget in "dv-equivalent" units (so geometry & penalty share the same units).
+  const double Smax = is_docked ? 1.0e300
+                                : (c_per_dv > 0.0 ? (fuel_avail / c_per_dv)
+                                                  : 0.0);
+
+  // Maximum delta-v magnitude we can actually apply this tick, respecting fuel.
+  double s_used = ClampSingleImpulseS(s_req, vCart, u, V, Smax);
+
+  // Build the attempted velocity and clip to the speed circle if needed.
+  const double s_signed = (thrustamt >= 0.0) ? s_used : -s_used;
+  CTraj dv_used(s_signed, orient);
+  CTraj v_des = v + dv_used;                    // pre-clamp ("desired")
+  double overshoot = 0.0;
+  if (v_des.rho > V + g_fp_error_epsilon) {
+    overshoot = v_des.rho - V;                  // how far past the circle
+    v_des.rho = V;                              // project onto circle
+  }
+  CTraj dv_act = v_des - v;                     // actually applied delta-v
+
+  // Costs: thrust cost is on s_used; governor cost is on overshoot length.
+  double thrust_cost   = is_docked ? 0.0 : (c_per_dv * s_used);
+  double governor_cost = is_docked ? 0.0 : (c_per_dv * overshoot);
+  double total_cost    = thrust_cost + governor_cost;
+
+  // Numeric safety: never exceed available fuel by rounding.
+  if (!is_docked && total_cost > fuel_avail + 1e-10) {
+    const double scale = fuel_avail / total_cost;
+    double s2 = (scale > 0.0) ? (s_used * scale) : 0.0;
+    const double s2_signed = (thrustamt >= 0.0) ? s2 : -s2;
+    CTraj dv2(s2_signed, orient);
+    CTraj v_des2 = v + dv2;
+    double over2 = 0.0;
+    if (v_des2.rho > V + g_fp_error_epsilon) {
+      over2 = v_des2.rho - V;
+      v_des2.rho = V;
+    }
+    dv_act        = v_des2 - v;
+    thrust_cost   = c_per_dv * s2;
+    governor_cost = c_per_dv * over2;
+    total_cost    = thrust_cost + governor_cost;
+    s_used        = s2;
+  }
+
+  const bool fuel_limited =
+      (!is_docked) && (s_req > s_used + g_fp_error_epsilon || total_cost + g_fp_error_epsilon >= fuel_avail);
+
+  ThrustCost out;
+  out.fuel_limited = fuel_limited;
+  out.thrust_cost = thrust_cost;
+  out.governor_cost = governor_cost;
+  out.total_cost = total_cost;
+  out.dv_achieved = dv_act;
+  return out;
 }
 
 ///////////////////////////////////////////////////
@@ -872,10 +1020,71 @@ unsigned CShip::SerialUnpack(char *buf, unsigned buflen) {
   return (vpb - buf);
 }
 
-///////////////////////////////////////////
-// Strategy Pattern Implementation for Velocity/Acceleration Processing
 
-// Anonymous namespace for strategy implementations
+///////////////////////////////////////////////////
+// Feature Flag Controlled Methods - Note - Never call these methods directly,
+// call the public methods in the class and it will redirect to the correct ones
+// here based on command line options.
+
+double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
+  // This is substantially similar to the legacy code, however we leave speed
+  // enforcement to the Drift engine entirely in the new version. Drift knows
+  // about the real situaion, perhaps we've collided or otherwise our velocity
+  // has changed since the order was issued, and Drift goes in dt ticks (usually
+  // 0.2 seconds) - so the fuelcon here is only an estimate.
+  if (value == 0.0) {
+    return 0.0;
+  }
+
+  // Clamp our order value to the maximum possible order value.
+  if (value > g_game_max_thrust_order_mag) {
+    value = g_game_max_thrust_order_mag;
+  } else if (value < -g_game_max_thrust_order_mag) {
+    value = -g_game_max_thrust_order_mag;
+  }
+
+  // Cancel conflicting orderst this turn
+  adOrders[(UINT)O_TURN] = 0.0;
+  adOrders[(UINT)O_JETTISON] = 0.0;
+
+  // Use an integer step counter so the number of physics ticks is immune to
+  // floating-point accumulation error from "t += tstep" comparisons. In older
+  // builds the final iteration could be skipped if rounding nudged t past maxt.
+  // This block retains the desired behavior of always running the loop at least
+  // once, even if tstep >= maxt.
+  int stepCount = 0;
+  if (g_game_turn_duration > 0.0 && g_physics_simulation_dt > 0.0) {
+    stepCount = static_cast<int>(g_game_turn_duration / g_physics_simulation_dt);
+    if (static_cast<double>(stepCount) * g_physics_simulation_dt <
+        g_game_turn_duration) {
+      stepCount++;
+    }
+    if (stepCount <= 0) {
+      stepCount = 1;
+    }
+  }
+
+  CTraj v_sim = Vel;
+  double current_mass = GetMass();
+  double fuel_avail = GetAmount(S_FUEL);
+  double est_cost = 0.0;
+
+  for (int i = 0; i < stepCount; ++i) {
+    if (fuel_avail <= g_fp_error_epsilon) {
+      break;
+    }
+
+    ThrustCost tc = CalcThrustCost(value*g_physics_simulation_dt, v_sim, GetOrient(), current_mass, fuel_avail, IsDocked());
+    fuel_avail -= tc.total_cost;
+    est_cost += tc.total_cost;
+    current_mass -= tc.total_cost; // -1 fuel == -1 ton of mass
+    v_sim += tc.dv_achieved;
+  }
+
+  adOrders[(UINT)O_THRUST] = value;
+  return est_cost;
+}
+
 double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
   // Legacy thrust order processing - contains the current SetOrder O_THRUST logic
   double valtmp, fuelcon, maxfuel;
@@ -894,8 +1103,8 @@ double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
 
   AccVec = CTraj(value, orient);
   AccVec += Vel;
-  if (AccVec.rho > maxspeed) {
-    AccVec.rho = maxspeed;
+  if (AccVec.rho > g_game_max_speed) {
+    AccVec.rho = g_game_max_speed;
   }
   AccVec = AccVec - Vel;  // Should = what it was before, in most cases
   if (value <= 0.0) {
@@ -904,15 +1113,11 @@ double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
     value = AccVec.rho;
   }
 
-  // NOTE: The departure thrust of a ship is limited by its maximum fuel
-  // capacity, even though that thrust is free (will only be relevant for
-  // ships with very small fuel tanks).
-  //
   // 1 ton of fuel accelerates a naked ship from zero to 6.0*maxspeed
-  fuelcon = fabs(value) * GetMass() / (6.0 * maxspeed * mass);
+  fuelcon = fabs(value) * GetMass() / (6.0 * g_game_max_speed * mass);
   if (fuelcon > maxfuel && IsDocked() == false) {
     fuelcon = maxfuel;
-    valtmp = fuelcon * 6.0 * maxspeed * mass / GetMass();
+    valtmp = fuelcon * 6.0 * g_game_max_speed * mass / GetMass();
     // If our original requested thrust was negative, make our clamped value
     // negative as well.
     if (value <= 0.0) {
@@ -929,19 +1134,57 @@ double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
   return fuelcon;
 }
 
-double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
-  if (value == 0.0) {
-    return 0.0;
+void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
+  const double fuel_avail = GetAmount(S_FUEL);
+
+  ThrustCost tc = CalcThrustCost(thrustamt*dt, Vel, GetOrient(), GetMass(), fuel_avail, IsDocked());
+
+  SetAmount(S_FUEL, fuel_avail - tc.total_cost);
+
+  Vel += tc.dv_achieved;
+
+  // Check if out of fuel
+  if (fuel_avail > 0.01 && GetAmount(S_FUEL) <= 0.01) {
+    printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
+           GetTeam() ? GetTeam()->GetName() : "Unknown");
   }
-  // TODO: Implement improved velocity/acceleration limits
-  return value;
+
+  // Special Docking Departure Positional Adjustment.
+  if (IsDocked()) {
+    // Put us 5 units further off than we were from the center of the station
+    // when we docked.
+    // 
+    // TODO: Clean this up - we can get stuck in the station if
+    // we're not careful.
+    CTraj VOff(dDockDist + 5.0, orient);
+    if (thrustamt > 0.0) {
+      Pos += VOff.ConvertToCoord();
+    } else {
+      Pos -= VOff.ConvertToCoord();
+    }
+    bDockFlag = false;
+  }
+
+  if (thrustamt < 0.0) {
+    uImgSet = 2;
+  } else {
+    uImgSet = 1;
+  }
 }
+
 
 void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   // Legacy thrust drift processing - contains the current Drift thrusting logic
   double fuelcons;
 
   // Calculate fuel consumption directly using legacy method
+  //  
+  // NOTE: There was a bug (or maybe intentional game balancing?) here where the
+  // full fuel cost of the thrust is applied on each game tick. Since elsewhere
+  // we document the fuel costs it seems more like a bug, but maybe that's why
+  // there is a 6x multiplier in the calculation of how much thrust you get per
+  // ton of fuel to cancel out the bug. Anyway - the legacy behavior is left
+  // alone here.
   fuelcons = ProcessThrustOrderOld(O_THRUST, thrustamt);
   double oldFuel = GetAmount(S_FUEL);
   double newFuel = oldFuel - fuelcons;
@@ -955,9 +1198,9 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
 
   CTraj Accel(thrustamt, orient);
   Vel += (Accel * dt);
-  if (Vel.rho > maxspeed) {
+  if (Vel.rho > g_game_max_speed) {
     double originalSpeed = Vel.rho;
-    Vel.rho = maxspeed;
+    Vel.rho = g_game_max_speed;
 
     // Announce when thrusting causes velocity clamping (if enabled)
     if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
@@ -965,7 +1208,7 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
       if (pWorld) {
         char msg[256];
         snprintf(msg, sizeof(msg), "%s thrust clamped %.1f -> %.1f",
-                 GetName(), originalSpeed, maxspeed);
+                 GetName(), originalSpeed, g_game_max_speed);
         pWorld->AddAnnouncerMessage(msg);
       }
     }
@@ -987,10 +1230,4 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   } else {
     uImgSet = 1;
   }
-}
-
-void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
-  // For now, use the same logic as legacy until we implement improvements
-  // This is where future improvements to drift behavior would go
-  ProcessThrustDriftOld(thrustamt, dt);
 }

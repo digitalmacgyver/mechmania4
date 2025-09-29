@@ -9,6 +9,7 @@
 #include "Ship.h"
 #include "Team.h"
 #include "World.h"
+#include "GameConstants.h"
 
 ///////////////////////////////////////////
 // Construction/Destruction
@@ -418,15 +419,13 @@ double CServer::Simulation() {
   // Use an integer step counter so the number of physics ticks is immune to
   // floating-point accumulation error from "t += tstep" comparisons. In older
   // builds the final iteration could be skipped if rounding nudged t past maxt.
-  const double maxt = 1.0;
-  const double tstep = 0.2;
-
   // This block retains the desired behavior of always running the loop at least
   // once, even if tstep >= maxt.
   int stepCount = 0;
-  if (maxt > 0.0 && tstep > 0.0) {
-    stepCount = static_cast<int>(maxt / tstep);
-    if (static_cast<double>(stepCount) * tstep < maxt) {
+  if (g_game_turn_duration > 0.0 && g_physics_simulation_dt > 0.0) {
+    stepCount = static_cast<int>(g_game_turn_duration / g_physics_simulation_dt);
+    if (static_cast<double>(stepCount) * g_physics_simulation_dt <
+        g_game_turn_duration) {
       stepCount++;
     }
     if (stepCount <= 0) {
@@ -435,7 +434,7 @@ double CServer::Simulation() {
   }
 
   for (int step = 0; step < stepCount; ++step) {
-    pmyWorld->PhysicsModel(tstep);
+    pmyWorld->PhysicsModel(g_physics_simulation_dt);
     if (step == stepCount - 1) {
       pmyWorld->LaserModel();
     }
@@ -454,7 +453,7 @@ double CServer::Simulation() {
 
   /*
   // Legacy floating-point loop retained for historical reference:
-  double t, maxt=1.0, tstep=0.2;
+  double t, maxt=g_game_turn_duration, tstep=g_physics_simulation_dt;
   UINT tm;
   for (t=0.0; t<maxt; t+=tstep) {
     pmyWorld->PhysicsModel (tstep);

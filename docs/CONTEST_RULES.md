@@ -71,6 +71,20 @@ Ships can perform the following actions each turn:
 - **Mass Effects:** More cargo/fuel makes ship heavier, requiring more fuel to maneuver
 - **Maximum Velocity:** 30 units/second (enforced)
 
+### Maximum Velocity Enforcement
+
+Ships can issue thrust orders requesting for a delta-v of up to 60 in their current orientation either forwards or backwards (reverse thrust).
+
+The Ships velocity after a thurst command, however, is limited to a radius 30 "speed circle."
+
+Overthursting will result in a velcity of 30 in the direction of what the full overthrusted heading would have been.
+
+Consider these examples:
+
+| Current Velocity + Thrust Delta-V <= Maxspeed | Current Velocity + Thrust Delta-V > Maxspeed |
+|:---:|:---:|
+| **Positive thrust case:**<br/>![Positive thrust within limit](diagrams/thrust_positive_within_limit.svg) | **Positive thrust case:**<br/>![Positive thrust exceeds limit](diagrams/thrust_positive_exceeds_limit.svg) |
+| **Negative thrust case:**<br/>![Negative thrust within limit](diagrams/thrust_negative_within_limit.svg) | **Negative thrust case:**<br/>![Negative thrust exceeds limit](diagrams/thrust_negative_exceeds_limit.svg) |
 ## Combat System
 
 ### Lasers
@@ -141,7 +155,7 @@ Ships can perform the following actions each turn:
 ### Order Limits
 - **Shield:** Limited by available fuel
 - **Laser:** Limited by fuel (Beam length/50 fuel cost), maximum beam length is 512, and cannot fire while docked
-- **Thrust:** ±30 units/second change (limited by fuel)
+- **Thrust:** ±60 units/second change (limited by fuel)
 - **Turn:** ±2π radians (limited by fuel). Note - you turn to the desired heading and stop - ships don't continue to spin after turning.
 - **Jettison:** Limited by cargo/fuel carried
 

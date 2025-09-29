@@ -5,6 +5,7 @@
  */
 
 #include "ChromeFunk.h"
+#include "GameConstants.h"
 
 // Tell the game to use our class
 CTeam* CTeam::CreateTeam() { return new ChromeFunk; }
@@ -118,7 +119,7 @@ void Voyager::Decide() {
   // O_THRUST and O_TURN orders while docked cost us no fuel, so we can go all
   // the way to maxspeed at no cost.
   if (fabs(tang) < 0.2)
-    pShip->SetOrder(O_THRUST, maxspeed);
+    pShip->SetOrder(O_THRUST, g_game_max_speed);
 }
 
 //------------------------------------------
@@ -238,9 +239,9 @@ void Shooter::Decide() {
   // when it hits our poor helpless target
 
   CCoord MyPos, TargPos;
-  MyPos = pShip->PredictPosition(1.0);
-  TargPos = pTarget->PredictPosition(1.0);
-  // We're shooting 1 second from now, since the physics
+  MyPos = pShip->PredictPosition(g_game_turn_duration);
+  TargPos = pTarget->PredictPosition(g_game_turn_duration);
+  // We're shooting one game turn from now, since the physics
   //  model computes movement before lasers
 
   CTraj TurnVec = MyPos.VectTo(TargPos);

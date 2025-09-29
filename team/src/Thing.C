@@ -7,6 +7,7 @@
 #include <cmath>  // For sqrt()
 
 #include "Coord.h"
+#include "GameConstants.h"
 #include "ParserModern.h"
 #include "Team.h"
 #include "Thing.h"
@@ -109,8 +110,8 @@ void CThing::KillThing() { DeadFlag = true; }
 void CThing::Drift(double dt) {
   bIsColliding = NO_DAMAGE;
   bIsGettingShot = NO_DAMAGE;
-  if (Vel.rho > maxspeed) {
-    Vel.rho = maxspeed;
+  if (Vel.rho > g_game_max_speed) {
+    Vel.rho = g_game_max_speed;
   }
 
   Pos += (Vel * dt).ConvertToCoord();
@@ -325,8 +326,7 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
   // Check for Zero Relative Velocity (Fixes Flaw 1: Division by zero/Incorrect
   // Theta usage) If A is near zero, the relative velocity is zero. Since we
   // already checked for overlap (C > 0), they will not collide.
-  const double EPSILON = 1e-9;
-  if (A < EPSILON) {
+  if (A < g_fp_error_epsilon) {
     return NO_COLLIDE;
   }
 

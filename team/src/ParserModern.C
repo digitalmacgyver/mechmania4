@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "ParserModern.h"
+#include "GameConstants.h"
 
 CParser::CParser(int argc, char** argv) {
   SetDefaults();
@@ -28,6 +29,9 @@ CParser::CParser(int argc, char** argv) {
   retry = parser.retry ? 1 : 0;
   reconnect = parser.reconnect ? 1 : 0;
   verbose = parser.verbose ? 1 : 0;
+
+  // Initialize global game constants from the parsed values
+  InitializeGameConstants(&parser);
 }
 
 CParser::~CParser() {}

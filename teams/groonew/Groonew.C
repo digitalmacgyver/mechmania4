@@ -6,6 +6,7 @@
  */
 
 #include "Asteroid.h"
+#include "GameConstants.h"
 #include "GetVinyl.h"
 #include "Groonew.h"
 
@@ -175,7 +176,12 @@ void Groonew::PopulateMagicBag() {
 namespace {
   // Returns true if the game engine will clamp us as a result sending a thrust
   // order with rho for this ship.
-  bool is_speeding(CShip* ship, double rho, double maxspeed=30.0) {
+  bool is_speeding(CShip* ship, double rho, double maxspeed = -1.0) {
+    // Emulate the behavior of a default parameter for this global that isn't
+    // known till runtime.
+    if (maxspeed < 0) {
+      maxspeed = g_game_max_speed;
+    }
     return ((ship->GetVelocity() + CTraj(rho, ship->GetOrient())).rho > maxspeed);
   }
 }
@@ -206,7 +212,7 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
 
   // Get ship's current and next-turn positions
   CCoord us_now = ship->GetPos();
-  CCoord us_later = ship->PredictPosition(1.0);  // Position after 1 sec drift
+  CCoord us_later = ship->PredictPosition(g_game_turn_duration);  // Position after 1 turn drift
 
   // STRATEGY 1: Try immediate thrust
   // Calculate thrust vector needed if we thrust right now
@@ -217,6 +223,42 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
 
   // Adjust angle relative to ship's current orientation
   thrust_vec_now.theta = thrust_vec_now.theta - ship->GetOrient();
+
+  DEBUG - we need to adapt to new physics here - right now we refuse to thrust if
+  we can't get there in time even if we're on the right heading. But it may be that 
+  thursting on that heading this turn puts us:
+
+  !!!NEXT STEP - LETS THINK ABOUT OVERTHRUSTS THAT CAN PUT US ON THE TRAJECTORY WE WANT,
+  AND REASON ABOUT OUR TIME TO ARRIVE BY LOOKING AT OUR VELOCITY ON THAT TRAJ THIS TURN +
+  30 ON FUTURE TURNS.!!! This is promising.
+
+
+     a. In a position to get there on future turns.
+     b. So here we're starting to think about optimal paths...
+     c. Before going full optimal path, maybe there is a better heuristic we can do for a 2-4 turn planning horizon.
+        Right now we consider 1-2 turns, either thrust now, or turn and then thrust.
+        We should consider:
+          Drift
+          Thrust
+          Drift, Drift
+          Thrust, Drift
+          Thrust, Thurst
+          Turn, Thrust
+          Drift, Drift, Drift
+          Drift, Drift, Thrust
+          Drift, Thrust, Drift
+          Dirft, Thrust, Thrust
+          Thrust, Drift, Drift
+          Thrust, Drift, Thrust
+          Thrust, Thrust, Drift
+          Thrust, Thrust, Thrust
+          Thrust, Turn, Thrust
+          Turn, Drift, Thrust
+          Turn, Thrust, Drift
+          Turn, Thrust, Thrust
+
+          My intuition tells me the other options are redundant other than facing (facing could set us up for optimal paths), but here Im trying to think of a quick fix that could dramatically improve groonew without going all the way to optimal paths.
+
 
   // Check if we're already facing the right direction and thrust is reasonable
   // TODO: We sometimes rotate around in a circle for nearby flybys, rather than

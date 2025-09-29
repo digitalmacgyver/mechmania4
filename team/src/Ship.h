@@ -93,6 +93,17 @@ class CShip : public CThing {
   void ProcessThrustDriftOld(double thrustamt, double dt);    // Legacy
   void ProcessThrustDriftNew(double thrustamt, double dt);    // Improved
 
+  // Helper function used in both SetOrder and Drift. Ship users should use
+  // SetOrder() to evaluate the fuel cost of any order.
+  struct ThrustCost {
+    bool fuel_limited; // True if thrust_achieved was limited by fuel capacity
+    double thrust_cost;
+    double governor_cost; // 0.0 if thrust was not governed
+    double total_cost; // thrust_cost + governor_cost
+    CTraj dv_achieved; // .rho is the magnitude of the achieved thurst, .theta is the heading
+  };
+  ThrustCost CalcThrustCost(double thrustamt, CTraj v, double orient, double mass, double fuel_avail, bool is_docked) const;
+
 };
 
 #endif  // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF

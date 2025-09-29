@@ -62,6 +62,24 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
                                    "Enable all new physics features")(
         "legacy-mode", "Use all old/legacy features");
 
+    // Game timing options
+    options.add_options("Timing")(
+        "game-turn-duration",
+        "Game turn duration in seconds (default: 1.0)",
+        cxxopts::value<double>()->default_value("1.0"))(
+        "physics-dt",
+        "Physics simulation timestep in seconds (default: 0.2)",
+        cxxopts::value<double>()->default_value("0.2"));
+
+    // Game physics options
+    options.add_options("Physics")(
+        "max-speed",
+        "Maximum velocity magnitude (default: 30.0)",
+        cxxopts::value<double>()->default_value("30.0"))(
+        "max-thrust-order-mag",
+        "Maximum thrust order magnitude (default: 60.0)",
+        cxxopts::value<double>()->default_value("60.0"));
+
     auto result = options.parse(argc, argv);
 
     // Basic options
@@ -84,6 +102,42 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     }
 
     verbose = result.count("verbose") > 0;
+
+    // Parse timing options
+    if (result.count("game-turn-duration")) {
+      game_turn_duration_ = result["game-turn-duration"].as<double>();
+      if (game_turn_duration_ <= 0.0) {
+        std::cerr << "Error: game-turn-duration must be > 0" << std::endl;
+        return false;
+      }
+    }
+    if (result.count("physics-dt")) {
+      physics_simulation_dt_ = result["physics-dt"].as<double>();
+      if (physics_simulation_dt_ <= 0.0) {
+        std::cerr << "Error: physics-dt must be > 0" << std::endl;
+        return false;
+      }
+      if (physics_simulation_dt_ > game_turn_duration_) {
+        std::cerr << "Error: physics-dt must be <= game-turn-duration" << std::endl;
+        return false;
+      }
+    }
+
+    // Parse physics options
+    if (result.count("max-speed")) {
+      max_speed_ = result["max-speed"].as<double>();
+      if (max_speed_ <= 0.0) {
+        std::cerr << "Error: max-speed must be > 0" << std::endl;
+        return false;
+      }
+    }
+    if (result.count("max-thrust-order-mag")) {
+      max_thrust_order_mag_ = result["max-thrust-order-mag"].as<double>();
+      if (max_thrust_order_mag_ <= 0.0) {
+        std::cerr << "Error: max-thrust-order-mag must be > 0" << std::endl;
+        return false;
+      }
+    }
 
     if (needhelp) {
       std::cout << options.help() << std::endl;
@@ -133,6 +187,11 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
+    // Set timing and physics parameters to default values for legacy mode
+    game_turn_duration_ = 1.0;
+    physics_simulation_dt_ = 0.2;
+    max_speed_ = 30.0;
+    max_thrust_order_mag_ = 60.0;
   }
 }
 

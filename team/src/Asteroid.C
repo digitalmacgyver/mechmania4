@@ -6,6 +6,7 @@
  */
 
 #include "Asteroid.h"
+#include "GameConstants.h"
 #include "Ship.h"
 #include "World.h"
 
@@ -57,7 +58,7 @@ CAsteroid::CAsteroid(double dm, AsteroidKind mat) : CThing(0.0, 0.0) {
   pThEat = NULL;
 
   double vt = (((double)rand() / (double)RAND_MAX) * PI2) - PI;
-  double vr = (1.0 - ((double)rand() / (double)RAND_MAX)) * maxspeed;
+  double vr = (1.0 - ((double)rand() / (double)RAND_MAX)) * g_game_max_speed;
   Vel = CTraj(vr, vt);
 }
 
@@ -167,8 +168,8 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   if (OthKind == GENTHING) {
     VCh.rho = pOthThing->GetMass() / (3.0 * GetMass());
   }
-  if (VCh.rho > maxspeed) {
-    VCh.rho = maxspeed;
+  if (VCh.rho > g_game_max_speed) {
+    VCh.rho = g_game_max_speed;
   }
   CAsteroid* pChildAst;
 
