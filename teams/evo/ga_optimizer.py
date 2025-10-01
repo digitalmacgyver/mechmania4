@@ -16,22 +16,42 @@ import multiprocessing
 
 # --- Configuration (Constants) ---
 
-# Define the parameters (Genome)
+# Define the parameters (Genome) - UPDATED: Added Prediction Horizon and Dynamic Fuel parameters
 PARAMETERS = {
     # Heuristics
     "W_DISTANCE": (-5.0, 0.0),
-    "W_VINYL": (1.0, 30.0),
-    "W_URANIUM": (1.0, 15.0),
+    "W_VINYL": (1.0, 40.0),
+    "W_URANIUM": (1.0, 20.0),
     "W_FUEL_BOOST_FACTOR": (1.0, 10.0),
+    "W_FUEL_COST_PENALTY": (0.0, 30.0),
+    "W_TTI_PENALTY": (0.0, 10.0),
+    "W_CONFLICT_PENALTY": (10.0, 200.0),
+    
     # Thresholds
     "THRESHOLD_RETURN_CARGO": (0.8, 1.0),
-    "THRESHOLD_FUEL_LOW": (5.0, 30.0),
-    "THRESHOLD_FUEL_TARGET": (20.0, 60.0),
-    # Navigation
-    "NAV_ANGLE_TOLERANCE": (0.05, 0.5),
-    "NAV_TURN_AGGRESSION": (0.8, 2.0),
+    # THRESHOLD_FUEL_LOW is deprecated
+    "THRESHOLD_FUEL_TARGET": (50.0, 150.0),
+    "THRESHOLD_MAX_SHIELD_BOOST": (15.0, 60.0),
+    
+    # Dynamic Fuel Management (NEW)
+    "FUEL_COST_PER_DIST": (0.05, 0.2), 
+    "FUEL_SAFETY_MARGIN": (10.0, 50.0),
+
+    # Navigation (P-Controller and Vector Navigation)
+    "NAV_DESIRED_SPEED_FACTOR": (0.5, 1.0),
+    "NAV_ALIGNMENT_STRICT_ANGLE": (0.01, 0.2), # Tighter range (0.5 deg to 11 deg)
+    "NAV_ALIGNMENT_LOOSE_ANGLE": (0.5, 1.5),   # (PI/2 ~= 1.57)
+    "NAV_CLOSE_ENOUGH_DIST": (10.0, 50.0),
+    "NAV_PREDICTION_HORIZON": (0.0, 15.0), # NEW: Max time horizon for prediction (seconds)
+
+    # Safety
     "NAV_AVOIDANCE_HORIZON": (5.0, 20.0),
-    "NAV_THRUST_POWER": (5.0, 50.0),
+    "NAV_SHIELD_BOOST_TTC": (0.5, 4.0),
+    
+    # Tactics
+    "TACTICS_LASER_POWER": (500.0, 2000.0),
+    "TACTICS_LASER_RANGE": (50.0, 200.0),
+
     # Configuration
     "SHIP_CARGO_RATIO": (0.1, 0.9)
 }
@@ -165,6 +185,9 @@ def prepare_parameters(params):
     clamped_params = []
     # Ensure params is treated correctly if it's a list or numpy array
     if not isinstance(params, np.ndarray):
+        # Handle potential NoneType if worker failed completely
+        if params is None:
+            return [0.0] * NUM_PARAMS
         params = np.array(params)
 
     for i, key in enumerate(PARAM_KEYS):
@@ -184,6 +207,19 @@ def prepare_parameters(params):
             clamped_params[fuel_target_idx] = min(clamped_params[fuel_target_idx], max_val)
     except ValueError:
         pass
+    
+    # Constraint: NAV_ALIGNMENT_LOOSE_ANGLE must be >= NAV_ALIGNMENT_STRICT_ANGLE
+    try:
+        strict_idx = PARAM_KEYS.index("NAV_ALIGNMENT_STRICT_ANGLE")
+        loose_idx = PARAM_KEYS.index("NAV_ALIGNMENT_LOOSE_ANGLE")
+        if clamped_params[loose_idx] < clamped_params[strict_idx]:
+            clamped_params[loose_idx] = clamped_params[strict_idx]
+            # Re-clip loose angle if it exceeded the max range
+            max_val = PARAMETERS["NAV_ALIGNMENT_LOOSE_ANGLE"][1]
+            clamped_params[loose_idx] = min(clamped_params[loose_idx], max_val)
+    except ValueError:
+        pass
+
     return clamped_params
 
 # --- Checkpointing ---
@@ -491,7 +527,7 @@ def genetic_algorithm(config):
             print("Error: Population size must be greater than 0.")
             return None, None, config, FILENAMES
         
-        # --- SEEDING LOGIC (Q1 Implementation) ---
+        # --- SEEDING LOGIC ---
         if config.seed:
             if os.path.exists(config.seed):
                 print(f"Seeding initial 'Best' parameters from: {config.seed}")
@@ -512,7 +548,7 @@ def genetic_algorithm(config):
                         best_params_overall = np.array(seed_data)
                         # We don't know the fitness of the seed yet, so best_fitness_overall remains -inf
                     else:
-                         raise ValueError("Seed file parameter mismatch.")
+                         raise ValueError(f"Seed file parameter mismatch. Expected {NUM_PARAMS}, found {len(seed_data)}.")
                 except Exception as e:
                     print(f"Warning: Could not load seed file correctly ({e}). Falling back to random initialization.")
                     best_params_overall = population[0].copy()
@@ -554,7 +590,7 @@ def genetic_algorithm(config):
             
             # Evaluation (Parallel)
             fitness = np.zeros(config.population_size)
-            # Store clamped parameters for logging (Q2 Implementation)
+            # Store clamped parameters for logging
             clamped_params_gen = [None] * config.population_size
             futures_to_index = {}
             
@@ -688,7 +724,7 @@ def parse_arguments():
     parser.add_argument('-j', '--jobs', type=int, default=default_jobs,
                         help=f"Number of parallel jobs (workers) to run. Default: {default_jobs} (CPU count).")
 
-    # Resume and Seeding (UPDATED)
+    # Resume and Seeding
     parser.add_argument('--resume', type=str, default=None, metavar="FILE.pkl",
                         help="Resume optimization from a specified checkpoint file.")
     parser.add_argument('--seed', type=str, default=None, metavar="FILE.txt",
@@ -735,8 +771,10 @@ if __name__ == '__main__':
     CONFIG = parse_arguments()
     
     # Set the multiprocessing start method to 'fork' if available (Unix/Linux)
+    # This is generally preferred for this type of application over 'spawn' for stability and efficiency.
     if sys.platform != "win32":
         try:
+            # Check if multiprocessing context is available and set method
             if multiprocessing.get_start_method(allow_none=True) != 'fork':
                 multiprocessing.set_start_method('fork', force=True)
         except (RuntimeError, AttributeError, ValueError):
