@@ -27,7 +27,7 @@ void set_order_results(CTraj v, double rho, double theta, double maxspeed = 30.0
 
   CTraj accel( final_vel.rho, theta );
   printf("accel: %g, %g\n", accel.rho, accel.theta);
-  for ( int i = 0; i < 5; i++ ) {
+  for ( int i = 0; i < 5; ++i ) {
     v += (accel * 0.2);
     printf("engine step %d - v before clamping: %g, %g\n", i, v.rho, v.theta);
     if ( v.rho > maxspeed ) {
@@ -69,9 +69,7 @@ void test1() {
   printf("Distance to b3 : %g\n", r3.rho);
 }
 
-void do_tests() {
-  //test1();
-
+void test2() {
   CTraj v( 30.0, 0.0 );
   double rho = 30.0;
   double theta = PI / 2;
@@ -81,6 +79,22 @@ void do_tests() {
   double rho2 = 3.36;
   double theta2 = 1.1;
   set_order_results( v2, rho2, theta2 );
+}
+
+void test3() {
+  CTraj vtraj( 30.0, PI / 2.0 );
+  printf("vtraj: %g, %g\n", vtraj.rho, vtraj.theta);
+  vtraj.Normalize();
+  printf("vtraj: %g, %g\n", vtraj.rho, vtraj.theta);
+  vtraj.rho *= 500;
+  printf("vtraj: %g, %g\n", vtraj.rho, vtraj.theta);
+}
+
+void do_tests() {
+  //test1();
+  //test2();
+  test3();
+
 }
 
 int main() {

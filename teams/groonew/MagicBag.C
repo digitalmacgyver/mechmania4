@@ -18,7 +18,7 @@ MagicBag::MagicBag(unsigned int drones, unsigned int len) {
   table = new Entry **[drones];   // Array of ship arrays
 
   // Initialize each ship's entry list
-  for (unsigned int i = 0; i < drones; i++) {
+  for (unsigned int i = 0; i < drones; ++i) {
     table[i] = new Entry *[len];  // Allocate entry array for this ship
     length[i] = 0;                // Start with 0 entries
   }
@@ -26,9 +26,9 @@ MagicBag::MagicBag(unsigned int drones, unsigned int len) {
 
 MagicBag::~MagicBag() {
   // Clean up all allocated memory
-  for (unsigned int i = 0; i < num_drones; i++) {
+  for (unsigned int i = 0; i < num_drones; ++i) {
     // Delete all Entry objects for this ship
-    for (unsigned int j = 0; j < length[i]; j++) {
+    for (unsigned int j = 0; j < length[i]; ++j) {
       delete table[i][j];
     }
     // Delete the array of Entry pointers

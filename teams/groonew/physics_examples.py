@@ -182,11 +182,41 @@ def test_velocity_composition():
     print(f"Note: Magnitude is {actual_accel.rho:.2f}, not 30!")
 
 
+import random
+
+def test_coordinate_math():
+    vs = Traj(20, 0)
+    vt = Traj(5, PI/6)
+    theta = PI/3
+
+    print( "Ship Velocity: %s\nDesired Velocity: %s" % (vs, vt))
+
+    #import pdb
+    #pdb.set_trace()
+    cs = vs.convert_to_coord()
+    ct = vt.convert_to_coord()
+    print( "Ship Coord: %s\nDesired Coord: %s" % (cs, ct))
+    
+    tmp = ct - cs
+    print( "Desired Cord - Ship Coord = Thurst: %s" % (tmp))
+    
+    x = tmp.fX
+    y = tmp.fY
+    print( "Thurst Coord: %s, %s" % (x, y))
+
+
+    #random.seed(42)
+    #random_speeds = [random.uniform(0, MAX_SPEED) for _ in range(10)]
+    # Without loss of generality, ship velocity to the right.
+    #vs = Traj(random.uniform(0, MAX_SPEED), 0.0)
+    
+
 # Run all tests
 if __name__ == "__main__":
-    test_thrust_mechanics()
-    test_wrapping_navigation()
-    test_interception_strategy()
-    test_orbit_calculation()
-    test_collision_avoidance()
-    test_velocity_composition()
+    #test_thrust_mechanics()
+    #test_wrapping_navigation()
+    #test_interception_strategy()
+    #test_orbit_calculation()
+    #test_collision_avoidance()
+    #test_velocity_composition()
+    test_coordinate_math()

@@ -4,10 +4,19 @@
 #include "Traj.h"
 #include "Ship.h"
 
+// Todo - rewrite this type to handle the "drift" case more naturally and not 
+// confuse ourselves in the future with O_SHIELD orders. As it is this is a hack
+// since it's generallyu safe/free to issue O_SHIELD orders with magnitude 0.
 class FuelTraj {
  public:
-  double fuel_used;
-  OrderKind order_kind;
-  double order_mag;
+  FuelTraj(bool found, double fuel, OrderKind kind, double mag) 
+   : path_found(found), fuel_used(fuel), order_kind(kind), order_mag(mag) {}
+
+  FuelTraj() = default;
+
+  bool path_found = false; // No change to trajectory needed to get to target.
+  double fuel_used = 0.0; // Estimated order cost (can be 0 if no order needed).
+  OrderKind order_kind = O_SHIELD; // Order kind to get to target - it's always safe to set O_SHIELD on each tic.
+  double order_mag = 0.0; // Order magnitude to get to target.
 };
 #endif

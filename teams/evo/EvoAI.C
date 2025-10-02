@@ -953,6 +953,7 @@ double HarvesterBrain::EvaluateAsteroid(CAsteroid* asteroid, bool prioritizeFuel
 
 // NavigateVectorP (P-Controller)
 // Implements Dual-Threshold strategy, Oscillation Damping, and Predictive Intercept.
+// FIXED: Corrected usage of CThing::PredictPosition
 bool HarvesterBrain::NavigateVectorP() {
     
     // 1. Determine Desired Velocity Vector
@@ -973,14 +974,14 @@ bool HarvesterBrain::NavigateVectorP() {
             estimated_time = cache_.NAV_PREDICTION_HORIZON;
         }
 
-        CCoord futurePos;
         // Use CThing::PredictPosition to estimate future location.
-        // We assume PredictPosition handles toroidal wrapping internally based on the engine API.
-        if (estimated_time > 0.1 && pTarget_->PredictPosition(estimated_time, futurePos)) {
+        if (estimated_time > 0.1) {
+             // FIX: PredictPosition returns the CCoord directly.
+             CCoord futurePos = pTarget_->PredictPosition(estimated_time);
              // Aim at the predicted position
              desiredVelocity = pShip->GetPos().VectTo(futurePos);
         } else {
-             // Fallback to current position if prediction fails or time is too short
+             // Fallback to current position if time is too short
              desiredVelocity = pShip->GetPos().VectTo(targetPos);
         }
 

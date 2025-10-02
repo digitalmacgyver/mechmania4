@@ -25,20 +25,14 @@ Major old behaviors changed:
 
 ==================================
 
-1. Replace foo++ with ++foo in for loops.
-
 1. Look around for other constants that would be better off handled in GlobalConstants.h.
 
 1. Get rid of Parser.C/.h - look for other unused files but be more careful with those as we want to preserve some of the stuff for historic interest.
 
---
-
-Try to understand the below, several issues:
-
-1. Rather than trying to understand gold leader ship turns, I've
-inverted the approach. Since the game engine physics is bonkers bad
-and I'm going to fix it, I'm going to fix the game engine first, and
-then worry about re-writing groonew with the new engine behavior.
+0. Consider optimizing initial base launch so we don't all bonk into
+each other. Consider initial facing and if it matters which base
+you're in. Maybe first 2 turns are always to rotate the ships to cover
+an arc towards the center and blast off with max v.
 
 ===============
 
@@ -96,7 +90,7 @@ Station radius:
 
 Maxspeed = 30
 Game world is 2-D toroid with x, y are in [-512,512)
-Items have an orientation, which is in [-PI, PI] with 0 to the right / eastward.
+Items have an orientation, which is in [-PI, PI) with 0 to the right / eastward.
 
 Asteroid mass:
  * >= minmass = 3.0

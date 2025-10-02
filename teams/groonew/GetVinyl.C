@@ -28,7 +28,7 @@ void GetVinyl::Decide() {
     printf("t=%.1f\t%s:\n", pmyWorld->GetGameTime(), pShip->GetName());
   }
 
-  UINT shipnum = pShip->GetShipNumber();
+  unsigned int shipnum = pShip->GetShipNumber();
   MagicBag *mbp = ((Groonew *)pmyTeam)->mb;
 
   Entry *e;
@@ -43,7 +43,7 @@ void GetVinyl::Decide() {
   bool lock_orders = false;
 
   // Collision Handling.
-  for (UINT thing_i = pmyWorld->UFirstIndex; thing_i <= pmyWorld->ULastIndex;
+  for (unsigned int thing_i = pmyWorld->UFirstIndex; thing_i <= pmyWorld->ULastIndex;
        thing_i = pmyWorld->GetNextIndex(thing_i)) {
     CThing *athing = pmyWorld->GetThing(thing_i);
     if (athing == NULL || !(athing->IsAlive())) {
@@ -200,17 +200,23 @@ void GetVinyl::Decide() {
       if (g_pParser && g_pParser->verbose) {
         printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
       }
-      for (UINT j = 0; j < 50; j++) {
+      for (unsigned int j = 0; j < 50; ++j) {
         FuelTraj ft = ((Groonew *)pmyTeam)
                           ->determine_orders(pmyTeam->GetStation(), j, pShip);
-        if (ft.fuel_used >= 0.0) {
-          pShip->SetOrder(ft.order_kind, ft.order_mag);
+        if (ft.path_found) {
+          // DEBUG - fix this - this is a hack were using right now when we want
+          // to drift, we set the order to O_SHIELD with mag 0.
+          if (ft.order_kind != O_SHIELD) {
+            pShip->SetOrder(ft.order_kind, ft.order_mag);
+          }
+          // Either we set the order above, or we didn't need an order this turn
+          // to achieve our goal.
           break;
         }
       }
 
     } else {
-      UINT i = 0;
+      unsigned int i = 0;
       for (e = mbp->getEntry(shipnum, 0); e != NULL;
            e = mbp->getEntry(shipnum, i), i++) {
         if (e->thing != NULL) {
@@ -258,7 +264,7 @@ void GetVinyl::Decide() {
           printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
                  best_e->turns_total,
                  ((best_e->fueltraj).order_kind == O_THRUST) ? "thrust" :
-                 ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other",
+                 ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other/none",
                  (best_e->fueltraj).order_mag);
         }
         pShip->SetOrder((best_e->fueltraj).order_kind,
