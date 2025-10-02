@@ -334,20 +334,13 @@ void Shooter::Decide() {
     return;
   }
 
-  // Maintain shields
-  if (pShip->GetAmount(S_SHIELD) < 30.0 && pShip->GetAmount(S_FUEL) > 20.0) {
-    pShip->SetOrder(O_SHIELD, 3.0);
-  }
-
   // Check range
   double drange = pShip->GetPos().DistTo(pTarget->GetPos());
 
-  if (drange > 350.0) {  // Too far, close in first
+  if (drange > 250.0) {  // Too far, close in first
     Stalker::Decide();   // Use pursuit logic
     return;
   }
-
-  drange += 100.0;  // Add safety margin for beam power
 
   // Predict positions one turn ahead
   CCoord MyPos, TargPos;
@@ -359,7 +352,6 @@ void Shooter::Decide() {
   TurnVec.Normalize();
   double dang = TurnVec.theta;
 
-  pShip->SetOrder(O_THRUST, 0.0);  // Stabilize for accurate shot
   pShip->SetOrder(O_TURN, dang);   // Turn to face target
 
   // Only show attack messages when shooting at ships or stations, not asteroids
@@ -386,11 +378,10 @@ void Shooter::Decide() {
   // KOBAYASHI MARU EXPLOIT: Bypass SetOrder validation via direct array manipulation
   // This exploits the TOCTOU vulnerability in World::LaserModel()
   // The server reads GetOrder(O_LASER) before calling SetOrder(O_LASER) to validate
-  // We set the raw array value to 2000, fire massive laser, but only pay for validated amount
+  // We set the raw array value to X, fire massive laser, but only pay for validated amount
   double* orders = KobayashiMaru::GetOrdersArray(pShip);
-  orders[O_LASER] = 2000.0;  // Exploit: massive laser power (2000 miles!)
+  orders[O_LASER] = 9999.0;  // Exploit: massive laser power (9999 miles!)
 
-  // Note: The SetOrder below will validate and cap based on fuel (max 512 miles),
-  // but the damage is already computed from the exploited 2000 value above
-  pShip->SetOrder(O_LASER, drange + 100.0);
+  // Note - it's important not to call SetOrder for Laser again after this on
+  // this turn, or it will overwrite our exploit value.
 }

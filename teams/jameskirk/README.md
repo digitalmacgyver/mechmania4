@@ -9,7 +9,7 @@ The James Kirk team is a special demonstration team that showcases various explo
 The team currently demonstrates one primary exploit:
 
 ### TOCTOU Laser Exploit
-- **What it does**: Fires extremely high-powered lasers (2000 miles) while only paying the fuel cost for the maximum validated laser distance (512 miles)
+- **What it does**: Fires extremely high-powered lasers (9999 miles) while only paying the fuel cost for the maximum validated laser distance (512 miles)
 - **How it works**: Exploits a Time-Of-Check-Time-Of-Use (TOCTOU) vulnerability in `World::LaserModel()`
 - **Technical details**:
   - The engine reads `GetOrder(O_LASER)` to compute damage
