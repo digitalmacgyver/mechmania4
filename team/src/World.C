@@ -11,6 +11,7 @@
 
 #include "Asteroid.h"
 #include "GameConstants.h"
+#include "ParserModern.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
@@ -449,6 +450,15 @@ unsigned int CWorld::CollisionEvaluation() {
       }
 
       pTItr->Collide(pTTm, this);  // Asteroid(?) shattered by ship
+
+      // Defense layer 3: Stop processing dead things (if fair-collisions enabled)
+      extern CParser* g_pParser;
+      if (g_pParser && g_pParser->UseNewFeature("fair-collisions")) {
+        if (!pTItr->IsAlive()) {
+          break;  // No more collisions for this dead asteroid
+        }
+      }
+
       if (pTTm->Collide(pTItr, this) ==  true) {  // Ship deflected by asteroid(?)
         URes++;
       }

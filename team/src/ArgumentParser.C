@@ -21,6 +21,7 @@ void ArgumentParser::InitializeFeatures() {
   // Physics features
   features["collision-detection"] = true;  // New collision detection is default
   features["velocity-limits"] = true;      // New velocity/acceleration limits is default
+  features["fair-collisions"] = true;      // Fair collision resolution is default
 
   // Announcer features
   features["announcer-velocity-clamping"] = false;  // Disabled by default
@@ -184,9 +185,11 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
   if (bundle == "improved-physics") {
     features["collision-detection"] = true;
     features["velocity-limits"] = true;
+    features["fair-collisions"] = true;
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
+    features["fair-collisions"] = false;
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

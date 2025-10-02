@@ -29,6 +29,7 @@ class CAsteroid : public CThing {
  protected:
   AsteroidKind material;
   CThing* pThEat;  // Ptr to ship which captures asteroid, initially NULL
+  double dClosestClaimDist;  // Distance to claiming ship (for fair collision resolution)
 
   virtual CAsteroid* MakeChildAsteroid(double dm = 40.0);
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);

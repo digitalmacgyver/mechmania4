@@ -7,6 +7,7 @@
 
 #include "Asteroid.h"
 #include "GameConstants.h"
+#include "ParserModern.h"
 #include "Ship.h"
 #include "World.h"
 
@@ -58,6 +59,7 @@ CAsteroid::CAsteroid(double dm, AsteroidKind mat) : CThing(0.0, 0.0) {
   size = g_asteroid_size_base +
          g_asteroid_size_mass_scale * sqrt(mass);
   pThEat = NULL;
+  dClosestClaimDist = 0.0;
 
   double vt = (((double)rand() / (double)RAND_MAX) * PI2) - PI;
   double vr = (1.0 - ((double)rand() / (double)RAND_MAX)) * g_game_max_speed;
@@ -82,6 +84,14 @@ CAsteroid* CAsteroid::MakeChildAsteroid(double dm) {
 }
 
 void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
+  // Defense layer 1: Dead asteroids don't process collisions (if fair-collisions enabled)
+  extern CParser* g_pParser;
+  if (g_pParser && g_pParser->UseNewFeature("fair-collisions")) {
+    if (DeadFlag) {
+      return;
+    }
+  }
+
   ThingKind OthKind = pOthThing->GetKind();
 
   bIsColliding = g_no_damage_sentinel;
@@ -154,7 +164,26 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
     // Implements momentum exchange between asteroid and ship.
     // Ships can absorb asteroids if they're small enough or take damage from
     // larger ones.
-    pThEat = pOthThing;
+
+    if (g_pParser && g_pParser->UseNewFeature("fair-collisions")) {
+      // Defense layer 2: Award asteroid to closest ship (fair, no team bias)
+      double dist = Pos.DistTo(pOthThing->GetPos());
+
+      if (pThEat == NULL) {
+        // First claimant
+        pThEat = pOthThing;
+        dClosestClaimDist = dist;
+      } else if (dist < dClosestClaimDist) {
+        // Closer ship takes precedence
+        pThEat = pOthThing;
+        dClosestClaimDist = dist;
+      }
+      // Else: Ship is farther away - claim remains with closer ship
+    } else {
+      // Legacy behavior: last ship to collide gets the asteroid
+      pThEat = pOthThing;
+    }
+
     if (((CShip*)pOthThing)->AsteroidFits(this)) {
       return;  // Don't make child asteroids if this one got eaten
     }
