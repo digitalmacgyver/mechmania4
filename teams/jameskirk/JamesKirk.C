@@ -153,7 +153,7 @@ void Stalker::Decide() {
 
   // Check for pending collision
   double dt = LegacyDetectCollisionCourse(*pTarget);
-  if (dt != NO_COLLIDE) {
+  if (dt != g_no_collide_sentinel) {
     pShip->SetOrder(O_THRUST, 0.0);  // Cancel thrust, we're on intercept
     return;
   }
@@ -179,12 +179,12 @@ void Stalker::Decide() {
 // Legacy collision detection from ChromeFunk
 double Stalker::LegacyDetectCollisionCourse(const CThing& OthThing) const {
   if (OthThing == *pShip) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   CTraj VRel = pShip->RelativeVelocity(OthThing);
   if (VRel.rho <= 0.05) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   double flyred = pShip->GetSize() + OthThing.GetSize();
@@ -200,7 +200,7 @@ double Stalker::LegacyDetectCollisionCourse(const CThing& OthThing) const {
 
   double flyby = CHit.DistTo(CCoord(0.0, 0.0));
   if (flyby > flyred) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // Pending collision

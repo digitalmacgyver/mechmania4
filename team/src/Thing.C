@@ -26,8 +26,8 @@ CThing::CThing(double fx0, double fy0) {
   snprintf(Name, maxnamelen, "Generic Thing");
   ulIDCookie = rand();
   DeadFlag = false;
-  bIsColliding = NO_DAMAGE;
-  bIsGettingShot = NO_DAMAGE;
+  bIsColliding = g_no_damage_sentinel;
+  bIsGettingShot = g_no_damage_sentinel;
 
   pmyTeam = NULL;
   pmyWorld = NULL;
@@ -108,8 +108,8 @@ void CThing::KillThing() { DeadFlag = true; }
 // Explicit methods
 
 void CThing::Drift(double dt) {
-  bIsColliding = NO_DAMAGE;
-  bIsGettingShot = NO_DAMAGE;
+  bIsColliding = g_no_damage_sentinel;
+  bIsGettingShot = g_no_damage_sentinel;
   if (Vel.rho > g_game_max_speed) {
     Vel.rho = g_game_max_speed;
   }
@@ -233,12 +233,12 @@ double CThing::DetectCollisionCourseOld(const CThing& OthThing) const {
   // for perpendicular approaches and complex trajectories.
 
   if (OthThing == *this) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   CTraj VRel = OthThing.Vel - Vel;  // Direction of vector
   if (VRel.rho <= 0.05) {
-    return NO_COLLIDE;  // Never gonna hit if effectively not moving
+    return g_no_collide_sentinel;  // Never gonna hit if effectively not moving
   }
 
   double flyred =
@@ -254,7 +254,7 @@ double CThing::DetectCollisionCourseOld(const CThing& OthThing) const {
 
   double flyby = CHit.DistTo(CCoord(0.0, 0.0));
   if (flyby > flyred) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // Pending collision
@@ -274,7 +274,7 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
   // distances are always positive.
 
   if (OthThing == *this) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // 1. Setup Relative Vectors in Cartesian Coordinates.
@@ -327,14 +327,14 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
   // Theta usage) If A is near zero, the relative velocity is zero. Since we
   // already checked for overlap (C > 0), they will not collide.
   if (A < g_fp_error_epsilon) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // Check if objects are receding after a collision in the past (Fixes Flaw 2:
   // CPA in the past) PdotV indicates the rate of closure. If PdotV >= 0, the
   // distance is increasing or constant (moving apart or parallel).
   if (PdotV >= 0.0) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // 5. Calculate the Discriminant.
@@ -344,7 +344,7 @@ double CThing::DetectCollisionCourseNew(const CThing& OthThing) const {
   double Discriminant = B * B - 4.0 * A * C;
 
   if (Discriminant < 0.0) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // 6. Calculate the Time to Impact (TTC) (Fixes Flaw 3: Incorrect TTC

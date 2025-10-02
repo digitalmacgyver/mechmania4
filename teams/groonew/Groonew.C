@@ -359,7 +359,8 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
   // intercept trajectory always to collide - so we do this test before checking
   // if we're on a (point mass) intercept trajectory.
   double its_coming_right_for_us = ship->DetectCollisionCourse(*thing);
-  if (!ship-> IsDocked() && its_coming_right_for_us != NO_COLLIDE && its_coming_right_for_us <= time) {
+  if (!ship-> IsDocked() && its_coming_right_for_us != g_no_collide_sentinel &&
+      its_coming_right_for_us <= time) {
     // TODO: We have to issue some kind of order in FuelTraj but we don't actually
     // want our planner to take note of the order - O_SHIELD seems the safest bet,
     // but we should clean this up.

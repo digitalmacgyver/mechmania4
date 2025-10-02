@@ -15,19 +15,20 @@
 
 CAsteroid::CAsteroid(double dm, AsteroidKind mat) : CThing(0.0, 0.0) {
   mass = dm;
-  if (mass < minmass) {
-    mass = minmass;
+  if (mass < g_thing_minmass) {
+    mass = g_thing_minmass;
   }
   if (mass == 0.0) {
-    mass = 1.0 + ((double)rand() / (double)RAND_MAX) * 10.0;
+    mass = g_asteroid_random_mass_offset +
+           ((double)rand() / (double)RAND_MAX) * g_asteroid_random_mass_range;
   }
 
   TKind = ASTEROID;
   material = mat;
 
-  if (mass >= 40.0) {
+  if (mass >= g_asteroid_large_mass_threshold) {
     uImgSet = 0;
-  } else if (mass >= 10.0) {
+  } else if (mass >= g_asteroid_medium_mass_threshold) {
     uImgSet = 1;
   } else {
     uImgSet = 2;
@@ -54,7 +55,8 @@ CAsteroid::CAsteroid(double dm, AsteroidKind mat) : CThing(0.0, 0.0) {
   Pos = CCoord(0, 0);
   orient = 0.0;
   omega = 1.0;
-  size = 3.0 + 1.6 * sqrt(mass);
+  size = g_asteroid_size_base +
+         g_asteroid_size_mass_scale * sqrt(mass);
   pThEat = NULL;
 
   double vt = (((double)rand() / (double)RAND_MAX) * PI2) - PI;
@@ -82,8 +84,8 @@ CAsteroid* CAsteroid::MakeChildAsteroid(double dm) {
 void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   ThingKind OthKind = pOthThing->GetKind();
 
-  bIsColliding = NO_DAMAGE;
-  bIsGettingShot = NO_DAMAGE;
+  bIsColliding = g_no_damage_sentinel;
+  bIsGettingShot = g_no_damage_sentinel;
 
   // Asteroid-to-asteroid interactions are not simulated in the engine.
   // World::CollisionEvaluation only pairs team-controlled things
@@ -136,11 +138,13 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   // CWorld::LaserModel. That temporary "laser thing" is positioned
   // one unit shy of the target along the beam, and its mass encodes
   // the remaining beam power at impact:
-  //   mass = 30 * (L - D)
+  //   mass = g_laser_mass_scale_per_remaining_unit * (L - D)
   // where L is the requested beam length and D is the shooter-to-
-  // impact distance. We require at least 1000 units of laser mass to
+  // impact distance. We require at least g_asteroid_laser_shatter_threshold
+  // units of laser mass to
   // shatter the asteroid. If below threshold, the beam glances off.
-  if (OthKind == GENTHING && pOthThing->GetMass() < 1000.0) {
+  if (OthKind == GENTHING &&
+      pOthThing->GetMass() < g_asteroid_laser_shatter_threshold) {
     return;
   }
 
@@ -157,16 +161,18 @@ void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   }
 
   // Make child asteroids
-  unsigned int i, numNew = 3;
-  double angstep = (PI2) / ((double)numNew);
-  double nMass = GetMass() / ((double)numNew);
-  if (nMass < minmass) {
+  unsigned int i;
+  unsigned int numNew = g_asteroid_split_child_count;
+  double angstep = (PI2) / static_cast<double>(numNew);
+  double nMass = GetMass() / static_cast<double>(numNew);
+  if (nMass < g_thing_minmass) {
     return;  // Space-dust
   }
 
   CTraj VCh = RelativeVelocity(*pOthThing);
   if (OthKind == GENTHING) {
-    VCh.rho = pOthThing->GetMass() / (3.0 * GetMass());
+    VCh.rho = pOthThing->GetMass() /
+              (g_asteroid_laser_impulse_divisor * GetMass());
   }
   if (VCh.rho > g_game_max_speed) {
     VCh.rho = g_game_max_speed;

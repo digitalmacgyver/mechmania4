@@ -34,12 +34,14 @@ CServer::CServer(int numTms, int port) {
     aTms[i] = CTeam::CreateTeam();
     auTCons[i] = (unsigned int)-1;
     aTms[i]->SetTeamNumber(i);
-    aTms[i]->Create(4, i);
+    aTms[i]->Create(g_initial_team_ship_count, i);
     pmyWorld->SetTeam(i, aTms[i]);
   }
 
-  pmyWorld->CreateAsteroids(VINYL, 5, 40.0);
-  pmyWorld->CreateAsteroids(URANIUM, 5, 40.0);
+  pmyWorld->CreateAsteroids(VINYL, g_initial_vinyl_asteroid_count,
+                            g_initial_asteroid_mass);
+  pmyWorld->CreateAsteroids(URANIUM, g_initial_uranium_asteroid_count,
+                            g_initial_asteroid_mass);
   pmyWorld->PhysicsModel(0.0);  // Add new stuff
 
   wldbuflen = MAX_THINGS * 256;

@@ -4,6 +4,7 @@
  * Misha Voloshin 5/28/98
  */
 
+#include "GameConstants.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
@@ -23,10 +24,10 @@ CStation::CStation(CCoord StPos, CTeam* pTeam) : CThing(StPos.fX, StPos.fY) {
     uImgSet = 0;
   }
 
-  size = 30.0;
-  mass = 99999.9;
+  size = g_station_spawn_size;
+  mass = g_station_spawn_mass;
   orient = 0.0;
-  omega = 0.9;
+  omega = g_station_spawn_spin_rate;
   dCargo = 0.0;
 }
 
@@ -54,7 +55,7 @@ void CStation::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   CCoord myPos(GetPos());
 
   if (OthKind == SHIP) {
-    bIsColliding = NO_DAMAGE;
+    bIsColliding = g_no_damage_sentinel;
     return;
   }
 
@@ -66,7 +67,7 @@ void CStation::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
   }
 
   double dDmg = pOthThing->GetMass();  // Laser object, whuppage is mass
-  dDmg /= 1000.0;                      // Takes a kilowhup
+  dDmg /= g_laser_damage_mass_divisor;  // Takes a kilowhup
   double oldCargo = dCargo;
   dCargo -= dDmg;
   if (dCargo < 0.0) {

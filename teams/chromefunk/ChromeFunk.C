@@ -139,7 +139,7 @@ void Stalker::Decide() {
   // NEW TEAMS: Should use *pShip->DetectCollisionCourse(*pTarget) instead,
   // which is inherited from CThing.
   double dt = LegacyDetectCollisionCourse(*pTarget);
-  if (dt != NO_COLLIDE) {
+  if (dt != g_no_collide_sentinel) {
     pShip->SetOrder(O_THRUST, 0.0);  // Yup. Cancel thrust orders, if any
     return;                          // Our work here is done
   }
@@ -186,12 +186,12 @@ void Stalker::Decide() {
 //------------------------------------
 double Stalker::LegacyDetectCollisionCourse(const CThing& OthThing) const {
   if (OthThing == *pShip) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   CTraj VRel = pShip->RelativeVelocity(OthThing);  // Direction of vector
   if (VRel.rho <= 0.05) {
-    return NO_COLLIDE;  // Never gonna hit if effectively not moving
+    return g_no_collide_sentinel;  // Never gonna hit if effectively not moving
   }
 
   double flyred = pShip->GetSize() +
@@ -210,7 +210,7 @@ double Stalker::LegacyDetectCollisionCourse(const CThing& OthThing) const {
 
   double flyby = CHit.DistTo(CCoord(0.0, 0.0));
   if (flyby > flyred) {
-    return NO_COLLIDE;
+    return g_no_collide_sentinel;
   }
 
   // Pending collision
@@ -349,7 +349,7 @@ void Gatherer::AvoidCollide() {
 
     // Use legacy collision detection to preserve ChromeFunk's behavior
     dsec = LegacyDetectCollisionCourse(*pTh);
-    if (dsec == NO_COLLIDE) {
+    if (dsec == g_no_collide_sentinel) {
       continue;  // No collision pending
     }
     if (dsec > 15.0) {

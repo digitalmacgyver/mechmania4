@@ -17,10 +17,15 @@ MechMania IV is a 2D space resource collection and combat game where two teams c
   - Team 1: (256, 256) - top-right quadrant
 - **Asteroids:** Randomly distributed vinyl and uranium asteroids of varying sizes
 
+> **Developer note:** All of the numerical values above (team counts, asteroid
+> mass, ship defaults, etc.) originate from `team/src/GameConstants.h`. The
+> engine initialises them in `GameConstants.C`, so refer there if you need exact
+> numbers or plan to tweak the simulation locally.
+
 ## Ships
 
 ### Configuration
-At initialization, each team can allocate their ships' capacity between fuel and cargo:
+At initialization, each team can allocate their ships' capacity between fuel and cargo. Defaults come from `g_ship_total_stat_capacity`, `g_ship_default_fuel_capacity`, and `g_ship_default_cargo_capacity` in `GameConstants.h`:
 - **Total Capacity:** 60 tons per ship
 - **Default Split:** 30 tons fuel, 30 tons cargo
 - **Customizable:** Teams can adjust the fuel/cargo ratio at game start

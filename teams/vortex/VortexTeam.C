@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "GameConstants.h"
 #include "VortexTeam.h"
 
 // Factory function
@@ -238,7 +239,7 @@ void VortexCollector::NavigateToTarget() {
 
   // Check if already on collision course
   double impact = pShip->DetectCollisionCourse(*current_target);
-  if (impact != NO_COLLIDE && impact < 10.0) {
+  if (impact != g_no_collide_sentinel && impact < 10.0) {
     // Just coast
     return;
   }
@@ -336,7 +337,7 @@ void VortexCollector::AvoidCollisions() {
     }
 
     double impact = pShip->DetectCollisionCourse(*thing);
-    if (impact == NO_COLLIDE || impact > 3.0) {
+    if (impact == g_no_collide_sentinel || impact > 3.0) {
       continue;
     }
 

@@ -335,11 +335,11 @@ int Observer::plotWorld() {
 
         // Calculate the damage sprite
         // bIsColliding and bIsGettingShot now convey angles
-        if (aThing->bIsColliding != NO_DAMAGE) {
+        if (aThing->bIsColliding != g_no_damage_sentinel) {
           myViewer->plotThing(pX, pY, aThing->bIsColliding, 0, 0);
         }
 
-        if (aThing->bIsGettingShot != NO_DAMAGE) {
+        if (aThing->bIsGettingShot != g_no_damage_sentinel) {
           myViewer->plotThing(pX, pY, aThing->bIsGettingShot, 1, 0);
         }
       } else if (aThing->GetKind() == STATION) {
@@ -347,11 +347,11 @@ int Observer::plotWorld() {
                        teamcol[aThing->GetTeam()->GetWorldIndex()]);
         myViewer->plotThing(pX, pY, ang, type, thname);
 
-        if (aThing->bIsColliding != NO_DAMAGE) {
+        if (aThing->bIsColliding != g_no_damage_sentinel) {
           myViewer->plotThing(pX, pY, aThing->bIsColliding, 2, 0);
         }
 
-        if (aThing->bIsGettingShot != NO_DAMAGE) {
+        if (aThing->bIsGettingShot != g_no_damage_sentinel) {
           myViewer->plotThing(pX, pY, aThing->bIsGettingShot, 3, 0);
         }
       } else {

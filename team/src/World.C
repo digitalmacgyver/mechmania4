@@ -10,6 +10,7 @@
 #include <ctime>
 
 #include "Asteroid.h"
+#include "GameConstants.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
@@ -248,9 +249,11 @@ void CWorld::LaserModel() {
         TmpPos -= (CCoord)TmpTraj;
         LasThing.SetPos(TmpPos);
 
-        // Remaining beam power at impact: mass = 30 * (L - D)
+        // Remaining beam power at impact: mass =
+        // g_laser_mass_scale_per_remaining_unit * (L - D)
         dLasRng = TmpPos.DistTo(pShip->GetPos());
-        LasThing.SetMass(30.0 * (dLasPwr - dLasRng));
+        LasThing.SetMass(g_laser_mass_scale_per_remaining_unit *
+                         (dLasPwr - dLasRng));
         // Give the laser thing a small velocity bias based on target motion
         TarVel = pTarget->GetVelocity();
         TarVel.rho += 1.0;

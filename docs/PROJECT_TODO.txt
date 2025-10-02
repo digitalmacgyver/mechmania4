@@ -69,7 +69,7 @@ Lasers are modeled as colliding masses for damage purposes.
 
 ========================== ENGINE TODO ============================================
 
-1. Look around for other constants that would be better off handled in GlobalConstants.h.
+
 
 1. Get rid of Parser.C/.h - look for other unused files but be more careful with those as we want to preserve some of the stuff for historic interest.
 
@@ -89,6 +89,10 @@ Q. Our CONTEST_RULES.md says "Teams do NOT know:
 - Enemy ships' shield levels" Is that true?
 
 Q. Our CONTEST_RULES says there are tie breakers - are there?
+
+1. I have observed a race condition manifest in a match where both
+teams got 120 vinyl - an asteroid must have been collected twice (or
+something else happened!)
 
 Fix turning bug where we do for each dt tick:
 fuelcons = SetOrder( full_turn )

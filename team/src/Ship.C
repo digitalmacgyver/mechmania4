@@ -25,26 +25,30 @@ CShip::CShip(CCoord StPos, CTeam *pteam, unsigned int ShNum)
   pmyTeam = pteam;
   myNum = ShNum;
 
-  size = 12.0;
-  mass = 40.0;
+  size = g_ship_spawn_size;
+  mass = g_ship_spawn_mass;
   orient = 0.0;
   uImgSet = 0;
   pBrain = NULL;
 
   bDockFlag = true;
-  dDockDist = 30.0;
+  dDockDist = g_ship_default_docking_distance;
   dLaserDist = 0.0;
   omega = 0.0;
 
   for (unsigned int sh = (unsigned int)S_CARGO; sh < (unsigned int)S_ALL_STATS; ++sh) {
-    adStatMax[sh] = 30.0;
-    adStatCur[sh] = 30.0;
-    if (sh == (unsigned int)S_CARGO) {
-      adStatCur[sh] = 0.0;
-    }
+    adStatMax[sh] = 0.0;
+    adStatCur[sh] = 0.0;
   }
 
-  adStatMax[(unsigned int)S_SHIELD] = 8000.0;  // Arbitrarily large value
+  adStatMax[(unsigned int)S_CARGO] = g_ship_default_cargo_capacity;
+  adStatCur[(unsigned int)S_CARGO] = 0.0;
+
+  adStatMax[(unsigned int)S_FUEL] = g_ship_default_fuel_capacity;
+  adStatCur[(unsigned int)S_FUEL] = g_ship_default_fuel_capacity;
+
+  adStatMax[(unsigned int)S_SHIELD] = g_ship_default_shield_capacity;
+  adStatCur[(unsigned int)S_SHIELD] = g_ship_default_shield_amount;
   ResetOrders();
 }
 
@@ -113,8 +117,8 @@ double CShip::SetCapacity(ShipStat st, double val) {
   if (val < 0.0) {
     val = 0.0;
   }
-  if (val > dMaxStatTot) {
-    val = dMaxStatTot;
+  if (val > g_ship_total_stat_capacity) {
+    val = g_ship_total_stat_capacity;
   }
 
   adStatMax[(unsigned int)st] = val;
@@ -123,8 +127,8 @@ double CShip::SetCapacity(ShipStat st, double val) {
   tot += adStatMax[S_CARGO];
   tot += adStatMax[S_FUEL];
 
-  if (tot > dMaxStatTot) {
-    tot -= dMaxStatTot;
+  if (tot > g_ship_total_stat_capacity) {
+    tot -= g_ship_total_stat_capacity;
     if (st == S_CARGO) {
       adStatMax[(unsigned int)S_FUEL] -= tot;
     }
@@ -208,10 +212,10 @@ double CShip::SetOrder(OrderKind ord, double value) {
         value = (fWYMax - fWYMin) / 2.0;
       }
 
-      fuelcon = value / 50.0;
+      fuelcon = value / g_laser_range_per_fuel_unit;
       if (fuelcon > GetAmount(S_FUEL)) {  // Check for sufficient fuel
         fuelcon = GetAmount(S_FUEL);
-        value = fuelcon * 50.0;  // No, but here's how much we *can* do
+        value = fuelcon * g_laser_range_per_fuel_unit;  // No, but here's how much we *can* do
       }
 
       adOrders[(unsigned int)O_LASER] = value;
@@ -234,13 +238,16 @@ double CShip::SetOrder(OrderKind ord, double value) {
       adOrders[(unsigned int)O_JETTISON] = 0.0;
 
       // 1 ton of fuel rotates naked ship full-circle six times
-      fuelcon = fabs(value) * GetMass() / (6.0 * PI2 * mass);
+      fuelcon = fabs(value) * GetMass() /
+                (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
       if (IsDocked() == true) {
         fuelcon = 0.0;
       }
       if (fuelcon > maxfuel) {
         fuelcon = maxfuel;
-        valtmp = (mass * 6.0 * PI2 * fuelcon) / GetMass();
+        valtmp =
+            (mass * g_ship_turn_full_rotations_per_fuel * PI2 * fuelcon) /
+            GetMass();
         if (value <= 0.0) {
           value = -valtmp;
         } else {
@@ -257,7 +264,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
       double requestedAmount = fabs(value);
 
       // 1. Minimum mass threshold check
-      if (requestedAmount < minmass) {
+      if (requestedAmount < g_thing_minmass) {
         adOrders[(unsigned int)O_JETTISON] = 0.0;
         return 0.0;
       }
@@ -305,7 +312,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
       //  * if (maxfuel<value) is then if (5<-10) which is false, so we don't
       //    clamp the order to -5, and go ahead and add an O_JETTISON of -10.
 
-      if (fabs(value)<minmass) {
+      if (fabs(value) < g_thing_minmass) {
           value=0.0;
           adOrders[(unsigned int)O_JETTISON]=0.0;
           return 0.0;  // Jettisoning costs no fuel
@@ -387,8 +394,8 @@ void CShip::Drift(double dt) {
     return;
   }
 
-  bIsColliding = NO_DAMAGE;
-  bIsGettingShot = NO_DAMAGE;
+  bIsColliding = g_no_damage_sentinel;
+  bIsGettingShot = g_no_damage_sentinel;
 
   // Check for velocity clamping before applying it
   if (Vel.rho > g_game_max_speed) {
@@ -587,7 +594,7 @@ AsteroidKind CShip::StatToAst(ShipStat ShStat) const {
 void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   if (*pOthThing == *this ||  // Can't collide with yourself!
       IsDocked() == true) {   // Nothing can hurt you at a station
-    bIsColliding = NO_DAMAGE;
+    bIsColliding = g_no_damage_sentinel;
     return;
   }
   if (pWorld == NULL) {
@@ -598,7 +605,7 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
 
   if (OthKind == STATION) {
     dDockDist = Pos.DistTo(pOthThing->GetPos());
-    bIsColliding = NO_DAMAGE;
+    bIsColliding = g_no_damage_sentinel;
 
     Pos = pOthThing->GetPos();
     Vel = CTraj(0.0, 0.0);
@@ -635,7 +642,7 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   double msh, dshield = GetAmount(S_SHIELD);
   if (OthKind == GENTHING) {  // Laser object
     msh = (pOthThing->GetMass());
-    dshield -= (msh / 1000.0);
+    dshield -= (msh / g_laser_damage_mass_divisor);
 
     SetAmount(S_SHIELD, dshield);
     if (dshield < 0.0) {
@@ -651,7 +658,7 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     return;
   }
 
-  double damage = (RelativeMomentum(*pOthThing).rho) / 1000.0;
+  double damage = (RelativeMomentum(*pOthThing).rho) / g_laser_damage_mass_divisor;
   dshield -= damage;
   SetAmount(S_SHIELD, dshield);
 
@@ -758,7 +765,7 @@ void CShip::HandleJettison() {
 
   AsMat = URANIUM;
   dMass = GetOrder(O_JETTISON);
-  if (fabs(dMass) < minmass) {
+  if (fabs(dMass) < g_thing_minmass) {
     return;
   }
   if (dMass < 0.0) {

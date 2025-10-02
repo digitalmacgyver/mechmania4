@@ -10,12 +10,11 @@
 #define _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF
 
 #include "Asteroid.h"
+#include "GameConstants.h"
 #include "Thing.h"
 
 class CTeam;
 class CBrain;
-
-const double dMaxStatTot = 60.0;
 
 enum OrderKind {
   O_SHIELD,

@@ -11,12 +11,10 @@
 #define _THING_H_SFEFLKJEFLJESNFJLS
 
 #include "Coord.h"
+#include "GameConstants.h"
 #include "Sendable.h"
 #include "Traj.h"
 #include "stdafx.h"
-
-const double minmass = 3.0, minsize = 1.0,
-             NO_COLLIDE = -1.0, NO_DAMAGE = -123.45;
 
 #ifndef maxnamelen
 #define maxnamelen 14  // Thing names buffer: 14 bytes (13 characters + NUL)
@@ -49,12 +47,12 @@ class CThing : public CSendable {
   void SetName(const char* strsrc);
 
   void SetMass(double dm = 1.0) {
-    if (dm >= minmass)
+    if (dm >= g_thing_minmass)
       mass = dm;
   }
   void SetOrient(double ort = 0.0) { orient = ort; }
-  void SetSize(double sz = minsize) {
-    if (sz >= minsize)
+  void SetSize(double sz = g_thing_minsize) {
+    if (sz >= g_thing_minsize)
       size = sz;
   }
   void SetPos(CCoord& CPnew) { Pos = CPnew; }

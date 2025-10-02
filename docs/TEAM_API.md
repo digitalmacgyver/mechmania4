@@ -12,6 +12,7 @@ This document provides the programming interface for implementing team strategie
 7. [Resource Collection](#resource-collection)
 8. [Utility Functions](#utility-functions)
 9. [Hello World Example](#hello-world-example)
+10. [Global Constants](#global-constants)
 
 ## Team Setup
 
@@ -284,9 +285,11 @@ CTraj vector_to_target = my_pos.VectTo(target_pos);
 ### Collision Detection
 
 ```cpp
+#include "GameConstants.h"  // exposes g_no_collide_sentinel and other globals
+
 // Check if on collision course
 double time_to_impact = pShip->DetectCollisionCourse(*thing);
-if (time_to_impact == NO_COLLIDE) {
+if (time_to_impact == g_no_collide_sentinel) {
     // No collision predicted
 } else if (time_to_impact < 5.0) {
     // Collision in less than 5 seconds!
@@ -337,8 +340,8 @@ if (target && target->GetTeam() != team) {
 double shields = pShip->GetAmount(S_SHIELD);
 
 // Maintain minimum shields
-if (shields < 30.0) {
-    double needed = 30.0 - shields;
+if (shields < g_ship_default_shield_amount) {
+    double needed = g_ship_default_shield_amount - shields;
     double fuel = pShip->GetAmount(S_FUEL);
 
     // Add shields (limited by available fuel)
@@ -677,3 +680,25 @@ Teams can extend this foundation by adding:
 - Advanced pathfinding
 - Strategic decision making
 - Enemy tracking and avoidance
+## Global Constants
+
+The engine centralises every tuning value in `team/src/GameConstants.h`
+(`GameConstants.C` contains their default initialisation). Include that header
+from your team code whenever you need these knobs instead of hard-coding
+literals. Highlights:
+
+* Timing/physics: `g_game_turn_duration`, `g_physics_simulation_dt`,
+  `g_game_max_speed`, `g_game_max_thrust_order_mag`.
+* Ship configuration: `g_ship_total_stat_capacity`,
+  `g_ship_default_fuel_capacity`, `g_ship_default_cargo_capacity`,
+  `g_ship_default_shield_capacity`, `g_ship_default_shield_amount`,
+  `g_ship_spawn_size`, `g_ship_spawn_mass`, `g_ship_default_docking_distance`.
+* Combat tuning: `g_laser_range_per_fuel_unit`,
+  `g_laser_mass_scale_per_remaining_unit`, `g_laser_damage_mass_divisor`.
+* Collision helpers: `g_no_collide_sentinel` signals “no impact”, while
+  `g_no_damage_sentinel` indicates no incoming damage direction.
+* Object constraints: `g_thing_minmass`, `g_thing_minsize`, plus the asteroid
+  thresholds such as `g_asteroid_large_mass_threshold`.
+
+Consult `GameConstants.h` for the full catalogue; every value is documented in
+place so you can adjust behaviour confidently.

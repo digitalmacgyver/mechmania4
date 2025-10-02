@@ -13,7 +13,7 @@
 #include "ObserverSDL.h"
 #include "Ship.h"
 #include "Station.h"
-#include "Thing.h"      // For NO_DAMAGE
+#include "Thing.h"      // Provides ship/thing state and sentinel constants
 #include "World.h"      // For BAD_INDEX
 #include "XPMLoader.h"  // For loading logo
 
@@ -1141,7 +1141,7 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
   }
 
   // Draw damage overlays if being hit
-  if (ship->bIsColliding != NO_DAMAGE) {
+  if (ship->bIsColliding != g_no_damage_sentinel) {
     // Draw collision impact overlay
     int frame = spriteManager->AngleToFrame(ship->bIsColliding);
     SDL_Texture* impact = spriteManager->GetSprite(SPRITE_SHIP_IMPACT, frame);
@@ -1150,7 +1150,7 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
       SDL_RenderCopy(graphics->GetRenderer(), impact, nullptr, &dest);
     }
   }
-  if (ship->bIsGettingShot != NO_DAMAGE) {
+  if (ship->bIsGettingShot != g_no_damage_sentinel) {
     // Draw laser hit overlay
     int frame = spriteManager->AngleToFrame(ship->bIsGettingShot);
     SDL_Texture* laser = spriteManager->GetSprite(SPRITE_SHIP_LASER, frame);
@@ -1229,7 +1229,7 @@ void ObserverSDL::DrawStationSprite(CStation* station, int teamNum) {
   }
 
   // Draw damage overlays if being hit
-  if (station->bIsColliding != NO_DAMAGE) {
+  if (station->bIsColliding != g_no_damage_sentinel) {
     // Draw collision impact overlay
     int impactFrame = spriteManager->AngleToFrame(station->bIsColliding);
     SDL_Texture* impact =
@@ -1239,7 +1239,7 @@ void ObserverSDL::DrawStationSprite(CStation* station, int teamNum) {
       SDL_RenderCopy(graphics->GetRenderer(), impact, nullptr, &dest);
     }
   }
-  if (station->bIsGettingShot != NO_DAMAGE) {
+  if (station->bIsGettingShot != g_no_damage_sentinel) {
     // Draw laser hit overlay
     int laserFrame = spriteManager->AngleToFrame(station->bIsGettingShot);
     SDL_Texture* laser =

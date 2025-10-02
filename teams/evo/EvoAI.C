@@ -1,4 +1,5 @@
 #include "EvoAI.h"
+#include "GameConstants.h"
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
@@ -251,9 +252,9 @@ void EvoAI::Init() {
     if (cargoRatio < 0.1) cargoRatio = 0.1;
     if (cargoRatio > 0.9) cargoRatio = 0.9;
 
-    // dMaxStatTot is the total capacity constant.
-    double cargo_capacity = dMaxStatTot * cargoRatio;
-    double fuel_capacity = dMaxStatTot - cargo_capacity;
+    // g_ship_total_stat_capacity is the shared total cargo+fuel limit.
+    double cargo_capacity = g_ship_total_stat_capacity * cargoRatio;
+    double fuel_capacity = g_ship_total_stat_capacity - cargo_capacity;
 
     // Use unsigned int
     for (unsigned int i = 0; i < GetShipCount(); i++) {
@@ -659,7 +660,8 @@ void HarvesterBrain::UpdateState() {
             
             if (state_ == BREAKING) {
                 // Valid if still too large to fit and large enough to split (Rule 10: >= 3 tons / minmass)
-                if (!pShip->AsteroidFits(asteroid) && asteroid->GetMass() >= minmass) {
+                if (!pShip->AsteroidFits(asteroid) &&
+                    asteroid->GetMass() >= g_thing_minmass) {
                     target_valid = true;
                 }
             } else {
@@ -787,7 +789,7 @@ void HarvesterBrain::SelectTarget() {
             CAsteroid* asteroid = (CAsteroid*)pTh;
 
             // Ignore dust (< 3 tons / minmass)
-            if (asteroid->GetMass() < minmass) continue;
+            if (asteroid->GetMass() < g_thing_minmass) continue;
 
             bool too_large = false;
             double score = EvaluateAsteroid(asteroid, prioritizeFuel, too_large);
@@ -1113,7 +1115,8 @@ bool HarvesterBrain::AvoidCollisions(double& imminent_ttc) {
         // Use the public DetectCollisionCourse() method
         double ttc = pShip->DetectCollisionCourse(*pTh);
 
-        if (ttc != NO_COLLIDE && ttc < cache_.NAV_AVOIDANCE_HORIZON && ttc < min_ttc) {
+        if (ttc != g_no_collide_sentinel &&
+            ttc < cache_.NAV_AVOIDANCE_HORIZON && ttc < min_ttc) {
             min_ttc = ttc;
             threat = pTh;
         }
