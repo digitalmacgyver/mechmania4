@@ -155,6 +155,22 @@ unsigned int CWorld::PhysicsModel(double dt) {
 }
 
 void CWorld::LaserModel() {
+  // TODO: SECURITY VULNERABILITY - Time-of-check to time-of-use (TOCTOU) bug
+  // This function uses GetOrder(O_LASER) to determine laser power/damage BEFORE
+  // calling SetOrder(O_LASER) to validate and cap the value. A malicious client
+  // can bypass SetOrder() validation by directly manipulating the adOrders array
+  // (e.g., via KobayashiMaru exploit using C-style casts to access protected members).
+  // The exploit allows firing a massive laser while only paying fuel for the capped value.
+  //
+  // Attack scenario:
+  //   1. Client sets adOrders[O_LASER] = 999999 (bypassing SetOrder validation)
+  //   2. Server reads raw value via GetOrder() and fires 999999-unit laser
+  //   3. Server calls SetOrder() which caps to fuel available (~500 for 10 fuel)
+  //   4. Client gets 20x damage for same fuel cost
+  //
+  // Fix would be: Call SetOrder() FIRST to validate/cap, THEN use GetOrder() for damage.
+  // However, this is preserved as a historical 1998-era vulnerability for educational purposes.
+
   unsigned int nteam, nship;
   CTeam* pTeam;
   CShip* pShip;
@@ -194,6 +210,10 @@ void CWorld::LaserModel() {
       if (pShip == NULL) {
         continue;
       }
+      // TODO: VULNERABILITY - Reading raw client data before validation
+      // This GetOrder() returns the unvalidated adOrders[O_LASER] value that
+      // the client sent. A malicious client can set this to any value by
+      // directly manipulating the array, bypassing SetOrder() checks.
       dLasPwr = pShip->GetOrder(O_LASER);
       if (dLasPwr <= 0.0) {
         continue;
@@ -256,6 +276,11 @@ void CWorld::LaserModel() {
 
       double oldFuel = pShip->GetAmount(S_FUEL);
       dfuel = oldFuel;
+      // TODO: VULNERABILITY - Validation happens AFTER laser was already fired
+      // SetOrder() validates and caps the laser power based on fuel available,
+      // but the laser beam was already computed and fired using the raw dLasPwr
+      // value above. Client only pays for the validated amount, not what they used.
+      // This should be called BEFORE using dLasPwr for damage calculations.
       dfuel -= pShip->SetOrder(O_LASER, dLasPwr);
       pShip->SetAmount(S_FUEL, dfuel);
 

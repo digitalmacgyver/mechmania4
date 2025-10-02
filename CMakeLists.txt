@@ -180,6 +180,18 @@ add_executable(mm4team_noop
 target_link_libraries(mm4team_noop mm4_common pthread)
 target_include_directories(mm4team_noop PRIVATE teams/noop)
 
+# James Kirk team executable (demonstrates engine exploits)
+add_executable(mm4team_jameskirk
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/jameskirk/JamesKirk.C
+    teams/jameskirk/KobayashiMaru.C
+)
+target_link_libraries(mm4team_jameskirk mm4_common pthread)
+target_include_directories(mm4team_jameskirk PRIVATE teams/jameskirk)
+
 # Observer executable (only if graphics enabled)
 if(BUILD_WITH_GRAPHICS)
     if(USE_SDL2)

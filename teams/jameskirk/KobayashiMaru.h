@@ -27,10 +27,6 @@ public:
     // Copy constructor from CShip instance
     KobayashiMaru(const CShip& ship) : CShip(ship) {};
 
-    // Allow cheating on this object directly
-    double ForceOrder(OrderKind ord, double value) { this->adOrders[ord] = value; return value; }
-    double ForceStat(ShipStat st, double value) { this->adStatCur[st] = value; return value; }
-
     // The REAL cheat: expose protected array addresses (1998-style exploit)
     // Can manipulate ANY CShip by reinterpreting memory layout!
     static double* GetOrdersArray(CShip* ship) {
