@@ -860,6 +860,16 @@ static inline double ClampSingleImpulseS(double s_req,
   return s_star;
 }
 
+// Helper to clamp velocity to max speed and calculate overshoot
+static double ClampVelocityToMaxSpeed(CTraj& velocity) {
+  double overshoot = 0.0;
+  if (velocity.rho > g_game_max_speed + g_fp_error_epsilon) {
+    overshoot = velocity.rho - g_game_max_speed;
+    velocity.rho = g_game_max_speed;
+  }
+  return overshoot;
+}
+
 // Calculate cost and achieved delta-v for a single instantaneous thrust.
 CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
                                         CTraj v,
@@ -870,78 +880,88 @@ CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
   if (thrustamt == 0.0) {
     return ThrustCost{false, 0.0, 0.0, 0.0, CTraj(0.0, 0.0)};
   }
-  
-  // Clamp our thrustamt to the maximum possible order value.
+
+  // === Phase 1: Validate and clamp thrust command ===
   if (thrustamt > g_game_max_thrust_order_mag) {
     thrustamt = g_game_max_thrust_order_mag;
   } else if (thrustamt < -g_game_max_thrust_order_mag) {
     thrustamt = -g_game_max_thrust_order_mag;
   }
 
-  const double V = g_game_max_speed;
-  const double s_req = (thrustamt >= 0.0) ? thrustamt : -thrustamt;
-  // Command direction (flip 180 degrees if negative thrust).
-  double cmdAng = orient;
+  // === Phase 2: Calculate thrust parameters ===
+  const double thrust_magnitude = (thrustamt >= 0.0) ? thrustamt : -thrustamt;
+
+  // Command direction (flip 180 degrees if negative thrust)
+  double thrust_angle = orient;
   if (thrustamt < 0.0) {
-    cmdAng += PI;
+    thrust_angle += PI;
   }
-  const CCoord u = UnitFromAngle(cmdAng);
-  const CCoord vCart = v.ConvertToCoord();
+  const CCoord thrust_direction = UnitFromAngle(thrust_angle);
+  const CCoord velocity_cartesian = v.ConvertToCoord();
 
-  // Cost-per-unit-delta-v for this impulse (uses current total mass and hull mass `mass`).
-  const double c_per_dv = FuelPerDV(current_mass, mass);
-  // Budget in "dv-equivalent" units (so geometry & penalty share the same units).
-  const double Smax = is_docked ? 1.0e300
-                                : (c_per_dv > 0.0 ? (fuel_avail / c_per_dv)
-                                                  : 0.0);
+  // === Phase 3: Calculate fuel constraints ===
+  // Cost-per-unit-delta-v for this impulse (uses current total mass and hull mass `mass`)
+  const double fuel_cost_per_delta_v = FuelPerDV(current_mass, mass);
 
-  // Maximum delta-v magnitude we can actually apply this tick, respecting fuel.
-  double s_used = ClampSingleImpulseS(s_req, vCart, u, V, Smax);
-
-  // Build the attempted velocity and clip to the speed circle if needed.
-  const double s_signed = (thrustamt >= 0.0) ? s_used : -s_used;
-  CTraj dv_used(s_signed, orient);
-  CTraj v_des = v + dv_used;                    // pre-clamp ("desired")
-  double overshoot = 0.0;
-  if (v_des.rho > V + g_fp_error_epsilon) {
-    overshoot = v_des.rho - V;                  // how far past the circle
-    v_des.rho = V;                              // project onto circle
+  // Budget in "dv-equivalent" units (so geometry & penalty share the same units)
+  double max_delta_v_budget;
+  if (is_docked) {
+    max_delta_v_budget = 1.0e300;  // Effectively unlimited
+  } else if (fuel_cost_per_delta_v > 0.0) {
+    max_delta_v_budget = fuel_avail / fuel_cost_per_delta_v;
+  } else {
+    max_delta_v_budget = 0.0;
   }
-  CTraj dv_act = v_des - v;                     // actually applied delta-v
 
-  // Costs: thrust cost is on s_used; governor cost is on overshoot length.
-  double thrust_cost   = is_docked ? 0.0 : (c_per_dv * s_used);
-  double governor_cost = is_docked ? 0.0 : (c_per_dv * overshoot);
+  // === Phase 4: Calculate achievable thrust within constraints ===
+  // Maximum delta-v magnitude we can actually apply this tick, respecting fuel
+  double applied_thrust_mag = ClampSingleImpulseS(thrust_magnitude, velocity_cartesian,
+                                                   thrust_direction, g_game_max_speed,
+                                                   max_delta_v_budget);
+
+  // === Phase 5: Apply thrust and handle velocity clamping ===
+  // Build the attempted velocity and clip to the speed circle if needed
+  const double signed_thrust = (thrustamt >= g_fp_error_epsilon) ? applied_thrust_mag : -applied_thrust_mag;
+  CTraj delta_v_attempted(signed_thrust, orient);
+  CTraj desired_velocity = v + delta_v_attempted;  // pre-clamp ("desired")
+  double overshoot = ClampVelocityToMaxSpeed(desired_velocity);
+  CTraj actual_delta_v = desired_velocity - v;    // actually applied delta-v
+
+  // === Phase 6: Calculate initial costs ===
+  // Thrust cost is on applied_thrust_mag; governor cost is on overshoot length
+  double thrust_cost   = is_docked ? 0.0 : (fuel_cost_per_delta_v * applied_thrust_mag);
+  double governor_cost = is_docked ? 0.0 : (fuel_cost_per_delta_v * overshoot);
   double total_cost    = thrust_cost + governor_cost;
 
-  // Numeric safety: never exceed available fuel by rounding.
-  if (!is_docked && total_cost > fuel_avail + 1e-10) {
+  // === Phase 7: Handle fuel budget overflow (rescaling if needed) ===
+  // Numeric safety: never exceed available fuel by rounding
+  if (!is_docked && total_cost > fuel_avail + g_fp_error_epsilon) {
     const double scale = fuel_avail / total_cost;
-    double s2 = (scale > 0.0) ? (s_used * scale) : 0.0;
-    const double s2_signed = (thrustamt >= 0.0) ? s2 : -s2;
-    CTraj dv2(s2_signed, orient);
-    CTraj v_des2 = v + dv2;
-    double over2 = 0.0;
-    if (v_des2.rho > V + g_fp_error_epsilon) {
-      over2 = v_des2.rho - V;
-      v_des2.rho = V;
-    }
-    dv_act        = v_des2 - v;
-    thrust_cost   = c_per_dv * s2;
-    governor_cost = c_per_dv * over2;
-    total_cost    = thrust_cost + governor_cost;
-    s_used        = s2;
+    double scaled_thrust = (scale > g_fp_error_epsilon) ? (applied_thrust_mag * scale) : 0.0;
+    const double scaled_signed_thrust = (thrustamt >= g_fp_error_epsilon) ? scaled_thrust : -scaled_thrust;
+    CTraj scaled_delta_v(scaled_signed_thrust, orient);
+    CTraj scaled_desired_velocity = v + scaled_delta_v;
+    double scaled_overshoot = ClampVelocityToMaxSpeed(scaled_desired_velocity);
+
+    actual_delta_v  = scaled_desired_velocity - v;
+    thrust_cost     = fuel_cost_per_delta_v * scaled_thrust;
+    governor_cost   = fuel_cost_per_delta_v * scaled_overshoot;
+    total_cost      = thrust_cost + governor_cost;
+    applied_thrust_mag = scaled_thrust;
   }
 
+  // === Phase 8: Determine if thrust was fuel-limited ===
   const bool fuel_limited =
-      (!is_docked) && (s_req > s_used + g_fp_error_epsilon || total_cost + g_fp_error_epsilon >= fuel_avail);
+      (!is_docked) && (thrust_magnitude > applied_thrust_mag + g_fp_error_epsilon ||
+                       total_cost + g_fp_error_epsilon >= fuel_avail);
 
+  // === Phase 9: Build and return result structure ===
   ThrustCost out;
   out.fuel_limited = fuel_limited;
   out.thrust_cost = thrust_cost;
   out.governor_cost = governor_cost;
   out.total_cost = total_cost;
-  out.dv_achieved = dv_act;
+  out.dv_achieved = actual_delta_v;
   return out;
 }
 

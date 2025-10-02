@@ -70,8 +70,6 @@ Lasers are modeled as colliding masses for damage purposes.
 ========================== ENGINE TODO ============================================
 
   Q. Big cheats - can you get around fuel limits by:
-
-
     * Staging orders whose mutual demands exceed what is available (e.g. a thrust and a shield and a laser blast all using max fuel)
 
 1. Look around for other constants that would be better off handled in GlobalConstants.h.
@@ -94,6 +92,14 @@ Q. Our CONTEST_RULES.md says "Teams do NOT know:
 - Enemy ships' shield levels" Is that true?
 
 Q. Our CONTEST_RULES says there are tie breakers - are there?
+
+Fix turning bug where we do for each dt tick:
+fuelcons = SetOrder( full_turn )
+fuel -= fuelcons * dt
+omega = full_turn
+... many lines later
+rotateShip( omega*dt )
+This has bugs when we are low on fuel.
 
 Q. Physics engine: drift is called every 0.2 ticks, it looks to me like ship.Drift doesn't clear O_TURN and O_THURST orders when drifing and generally does the right stuff in terms of multiplying displacement and orientation changes by dt=0.2; however: Does the code in SetJettison do this propertly? Or are we getting ~5x the accelerated kick of out Set Jettison as we should?
 
@@ -686,7 +692,22 @@ undostats and order arrays for direct manipulation, however:
   * However, the original implementation of LaserModel does allow
     an exploit here - it powers the laser with whatever has been
     set in the order, and fires it with that amount, and only later
-    does it deduct fuel. 
+    does it deduct fuel.
+
+Q. Can you cheat by issuing multiple commands whose combined fuel cost
+exceeds available fuel but still get their benefits?
+
+A. Generally no - but there is again a special case with the Laser
+implementation. The legacy engine will effectively do this:
+1. Raise shields by full requested amount, deducting the fuel required.
+2. Do the first subtick (0.2) seconds of Thurst or Turn if one is specified, deducting the fuel required.
+3. Shoot lasers based on the input command value, then figure fuel.
+4. Do the remainin subticks of Thurst/Turn.
+In step 3 you can exceed your fuel alotment - especially if you raised
+shields. Lasers are effectively "free" on any turn where you'd run out
+of fuel before the 2nd physics tick anyway.
+
+
 
 ================== END Q&A ===========================================
 
