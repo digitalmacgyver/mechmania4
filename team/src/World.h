@@ -20,12 +20,35 @@
 #include "Sendable.h"
 #include "Thing.h"
 #include "stdafx.h"
+#include <vector>
+#include <algorithm>
+#include <random>
 
 #define MAX_THINGS 512
 
 const unsigned int BAD_INDEX = ((unsigned int)-1);
 
 class CTeam;
+
+// Structure to store collision events for two-phase processing
+struct CollisionEvent {
+  CThing* pThing1;      // First thing in collision (usually asteroid/world object)
+  CThing* pThing2;      // Second thing in collision (usually ship/station)
+  double distance;      // Distance between centers (for prioritization)
+
+  enum Type {
+    STATION_DOCK = 0,     // Highest priority - docking provides immunity
+    ASTEROID_CLAIM = 1,   // Resource collection
+    LASER_DAMAGE = 2,     // Combat damage
+    SHIP_COLLISION = 3    // Physical impacts (lowest priority)
+  } type;
+
+  // For sorting by priority then distance (deterministic mode)
+  bool operator<(const CollisionEvent& other) const {
+    if (type != other.type) return type < other.type;
+    return distance < other.distance;  // Closest wins ties
+  }
+};
 
 class CWorld : public CSendable {
  public:
@@ -84,6 +107,14 @@ class CWorld : public CSendable {
   unsigned int KillDeadThings();
   unsigned int CollisionEvaluation();
   void ReLinkList();
+
+  // Two-phase collision system methods
+  unsigned int CollisionEvaluationFair();  // New fair collision system
+  unsigned int CollisionEvaluationLegacy();  // Original collision system
+  void DetectCollisions(std::vector<CollisionEvent>& events);
+  CollisionEvent::Type DetermineCollisionType(CThing* pThing1, CThing* pThing2);
+  void ProcessCollisionEvent(const CollisionEvent& event);
+  bool ValidateCollision(const CollisionEvent& event);
 
   double gametime;
   unsigned int numTeams;

@@ -404,6 +404,16 @@ void CWorld::RemoveIndex(unsigned int index) {
 }
 
 unsigned int CWorld::CollisionEvaluation() {
+  // Dispatch to fair or legacy collision system based on feature flag
+  extern CParser* g_pParser;
+  if (g_pParser && g_pParser->UseNewFeature("fair-collisions")) {
+    return CollisionEvaluationFair();
+  } else {
+    return CollisionEvaluationLegacy();
+  }
+}
+
+unsigned int CWorld::CollisionEvaluationLegacy() {
   CThing *pTItr, *pTTm;
   unsigned int i, j, iteam, iship, numtmth, URes = 0;
   CTeam* pTeam;
@@ -450,19 +460,8 @@ unsigned int CWorld::CollisionEvaluation() {
       }
 
       pTItr->Collide(pTTm, this);  // Asteroid(?) shattered by ship
-
-      // ALWAYS let the ship process its collision to collect cargo and apply physics
       if (pTTm->Collide(pTItr, this) ==  true) {  // Ship deflected by asteroid(?)
         URes++;
-      }
-
-      // Defense layer 3: Stop processing dead things AFTER current ship handled it
-      // This prevents OTHER ships from colliding with the dead asteroid
-      extern CParser* g_pParser;
-      if (g_pParser && g_pParser->UseNewFeature("fair-collisions")) {
-        if (!pTItr->IsAlive()) {
-          break;  // No more collisions for this dead asteroid
-        }
       }
     }
   }
@@ -775,4 +774,129 @@ CThing* CWorld::CreateNewThing(ThingKind TKind, unsigned int iTm) {
     delete pThOld;
   }
   return pTh;
+}
+
+// ============================================================================
+// TWO-PHASE FAIR COLLISION SYSTEM
+// ============================================================================
+
+unsigned int CWorld::CollisionEvaluationFair() {
+  std::vector<CollisionEvent> events;
+
+  // PHASE 1: Detect all collisions without changing state
+  DetectCollisions(events);
+
+  // PHASE 2: Randomize order for fairness (removes systematic bias)
+  static std::random_device rd;
+  static std::mt19937 gen(rd());
+  std::shuffle(events.begin(), events.end(), gen);
+
+  // PHASE 3: Process collisions in random order
+  unsigned int collisionCount = 0;
+  for (const auto& event : events) {
+    if (ValidateCollision(event)) {
+      ProcessCollisionEvent(event);
+      collisionCount++;
+    }
+  }
+
+  return collisionCount;
+}
+
+void CWorld::DetectCollisions(std::vector<CollisionEvent>& events) {
+  // Build list of team-controlled things (ships and stations)
+  static CThing* apTTmTh[MAX_THINGS];
+  unsigned int numtmth = 0;
+
+  for (unsigned int iteam = 0; iteam < GetNumTeams(); ++iteam) {
+    CTeam* pTeam = GetTeam(iteam);
+    if (pTeam == NULL) continue;
+
+    // Add station
+    CThing* pStation = pTeam->GetStation();
+    if (pStation) {
+      apTTmTh[numtmth++] = pStation;
+    }
+
+    if (bGameOver) continue;  // Ships invisible after game ends
+
+    // Add ships
+    for (unsigned int iship = 0; iship < pTeam->GetShipCount(); ++iship) {
+      CThing* pShip = pTeam->GetShip(iship);
+      if (pShip) {
+        apTTmTh[numtmth++] = pShip;
+      }
+    }
+  }
+
+  // Detect all overlapping pairs
+  for (unsigned int i = UFirstIndex; i != BAD_INDEX; i = GetNextIndex(i)) {
+    CThing* pTItr = GetThing(i);
+    if (!pTItr || !pTItr->IsAlive()) continue;
+
+    for (unsigned int j = 0; j < numtmth; ++j) {
+      CThing* pTTm = apTTmTh[j];
+      if (!pTTm) continue;
+
+      if (pTItr->Overlaps(*pTTm)) {
+        CollisionEvent event;
+        event.pThing1 = pTItr;
+        event.pThing2 = pTTm;
+        event.distance = pTItr->GetPos().DistTo(pTTm->GetPos());
+        event.type = DetermineCollisionType(pTItr, pTTm);
+        events.push_back(event);
+      }
+    }
+  }
+}
+
+CollisionEvent::Type CWorld::DetermineCollisionType(CThing* pThing1, CThing* pThing2) {
+  ThingKind kind1 = pThing1->GetKind();
+  ThingKind kind2 = pThing2->GetKind();
+
+  // Station docking has highest priority
+  if (kind2 == STATION) {
+    return CollisionEvent::STATION_DOCK;
+  }
+
+  // Asteroid claiming
+  if (kind1 == ASTEROID && kind2 == SHIP) {
+    return CollisionEvent::ASTEROID_CLAIM;
+  }
+
+  // Laser damage (GENTHING represents laser beams)
+  if (kind1 == GENTHING) {
+    return CollisionEvent::LASER_DAMAGE;
+  }
+
+  // Everything else is physical collision
+  return CollisionEvent::SHIP_COLLISION;
+}
+
+bool CWorld::ValidateCollision(const CollisionEvent& event) {
+  // Check both things still exist and are alive
+  if (!event.pThing1 || !event.pThing2) return false;
+  if (!event.pThing1->IsAlive() || !event.pThing2->IsAlive()) return false;
+
+  // Check they still overlap (things might have moved due to earlier collisions)
+  if (!event.pThing1->Overlaps(*event.pThing2)) return false;
+
+  // Special validation for asteroid claims
+  if (event.type == CollisionEvent::ASTEROID_CLAIM) {
+    CAsteroid* pAst = (CAsteroid*)event.pThing1;
+    // Check if asteroid already claimed
+    if (pAst->EatenBy() != nullptr) {
+      CShip* pShip = (CShip*)event.pThing2;
+      // Only allow if this ship is the claimant
+      return (pAst->EatenBy() == pShip);
+    }
+  }
+
+  return true;
+}
+
+void CWorld::ProcessCollisionEvent(const CollisionEvent& event) {
+  // Process both sides of the collision
+  event.pThing1->Collide(event.pThing2, this);
+  event.pThing2->Collide(event.pThing1, this);
 }
