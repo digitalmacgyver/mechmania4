@@ -29,6 +29,8 @@
 const unsigned int BAD_INDEX = ((unsigned int)-1);
 
 class CTeam;
+class CShip;
+class CAsteroid;
 
 // Structure to store collision events for two-phase processing
 struct CollisionEvent {
@@ -83,6 +85,9 @@ class CWorld : public CSendable {
   unsigned SerialUnpack(char* buf, unsigned buflen);
   CThing* CreateNewThing(ThingKind TKind, unsigned int iTm);
 
+  // Legacy mode asteroid claim tracking (must be public for Ship access)
+  void RecordLegacyAsteroidClaim(CAsteroid* pAst, CShip* pShip);
+
   // For internal use only
   double GetTimeStamp();  // Returns #sec, to 1msec res
   double* atstamp;
@@ -115,6 +120,17 @@ class CWorld : public CSendable {
   CollisionEvent::Type DetermineCollisionType(CThing* pThing1, CThing* pThing2);
   void ProcessCollisionEvent(const CollisionEvent& event);
   bool ValidateCollision(const CollisionEvent& event);
+
+  // Legacy mode bookkeeping for preserving double-claim bug
+  struct LegacyAsteroidClaim {
+    CAsteroid* pAsteroid;
+    CShip* pShip;
+    AsteroidKind material;
+    double mass;
+    bool fits;
+  };
+  std::vector<LegacyAsteroidClaim> legacyAsteroidClaims;
+  void ProcessLegacyAsteroidClaims();
 
   double gametime;
   unsigned int numTeams;

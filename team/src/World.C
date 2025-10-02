@@ -414,6 +414,9 @@ unsigned int CWorld::CollisionEvaluation() {
 }
 
 unsigned int CWorld::CollisionEvaluationLegacy() {
+  // Clear legacy claim tracking for this physics tick
+  legacyAsteroidClaims.clear();
+
   CThing *pTItr, *pTTm;
   unsigned int i, j, iteam, iship, numtmth, URes = 0;
   CTeam* pTeam;
@@ -465,6 +468,9 @@ unsigned int CWorld::CollisionEvaluationLegacy() {
       }
     }
   }
+
+  // Process legacy asteroid claims to preserve double-claiming bug
+  ProcessLegacyAsteroidClaims();
 
   return URes;
 }
@@ -899,4 +905,47 @@ void CWorld::ProcessCollisionEvent(const CollisionEvent& event) {
   // Process both sides of the collision
   event.pThing1->Collide(event.pThing2, this);
   event.pThing2->Collide(event.pThing1, this);
+}
+
+// ============================================================================
+// LEGACY MODE SUPPORT - Preserves original double-claiming bug
+// ============================================================================
+
+void CWorld::RecordLegacyAsteroidClaim(CAsteroid* pAst, CShip* pShip) {
+  if (!pAst || !pShip) return;
+
+  LegacyAsteroidClaim claim;
+  claim.pAsteroid = pAst;
+  claim.pShip = pShip;
+  claim.material = pAst->GetMaterial();
+  claim.mass = pAst->GetMass();
+  claim.fits = pShip->AsteroidFits(pAst);
+
+  legacyAsteroidClaims.push_back(claim);
+}
+
+void CWorld::ProcessLegacyAsteroidClaims() {
+  // Process all recorded claims, allowing multiple ships to get the same asteroid's resources
+  // This recreates the original bug where phantom vinyl could be created
+
+  for (const auto& claim : legacyAsteroidClaims) {
+    // Skip if ship is now dead (could have died from another collision)
+    if (!claim.pShip || !claim.pShip->IsAlive()) continue;
+
+    // Grant resources if it fits (recreating the original bug behavior)
+    if (claim.fits) {
+      switch (claim.material) {
+        case VINYL:
+          claim.pShip->SetAmount(S_CARGO,
+                                 claim.pShip->GetAmount(S_CARGO) + claim.mass);
+          break;
+        case URANIUM:
+          claim.pShip->SetAmount(S_FUEL,
+                                claim.pShip->GetAmount(S_FUEL) + claim.mass);
+          break;
+        default:
+          break;
+      }
+    }
+  }
 }

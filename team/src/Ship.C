@@ -694,10 +694,21 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   }
 
   if (OthKind == ASTEROID) {
-    CThing *pEat = ((CAsteroid *)pOthThing)->EatenBy();
-    if (pEat != NULL && !(*pEat == *this)) {
-      // Already taken by another ship
-      return;
+    // In legacy mode, record all claims for later processing
+    extern CParser* g_pParser;
+    if (pWorld && g_pParser && !g_pParser->UseNewFeature("fair-collisions")) {
+      // Legacy mode: Record this claim for batch processing
+      // This preserves the double-claiming bug where multiple ships
+      // can get resources from the same asteroid
+      pWorld->RecordLegacyAsteroidClaim((CAsteroid*)pOthThing, this);
+      // Still do physics but skip resource collection (done later)
+    } else {
+      // Fair collision mode: Check ownership normally
+      CThing *pEat = ((CAsteroid *)pOthThing)->EatenBy();
+      if (pEat != NULL && !(*pEat == *this)) {
+        // Already taken by another ship
+        return;
+      }
     }
 
     // Update ship velocity with conservation of linear momentum for a perfectly
@@ -710,16 +721,20 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
       Vel.rho = g_game_max_speed;
     }
 
-    if (AsteroidFits((CAsteroid *)pOthThing)) {
-      switch (((CAsteroid *)pOthThing)->GetMaterial()) {
-        case VINYL:
-          adStatCur[(unsigned int)S_CARGO] += othmass;
-          break;
-        case URANIUM:
-          adStatCur[(unsigned int)S_FUEL] += othmass;
-          break;
-        default:
-          break;
+    // In fair mode, add resources immediately
+    // In legacy mode, resources added later to preserve double-claiming
+    if (!pWorld || !g_pParser || g_pParser->UseNewFeature("fair-collisions")) {
+      if (AsteroidFits((CAsteroid *)pOthThing)) {
+        switch (((CAsteroid *)pOthThing)->GetMaterial()) {
+          case VINYL:
+            adStatCur[(unsigned int)S_CARGO] += othmass;
+            break;
+          case URANIUM:
+            adStatCur[(unsigned int)S_FUEL] += othmass;
+            break;
+          default:
+            break;
+        }
       }
     }
   }
