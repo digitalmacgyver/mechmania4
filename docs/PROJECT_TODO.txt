@@ -73,7 +73,6 @@ Lasers are modeled as colliding masses for damage purposes.
 
 
     * Staging orders whose mutual demands exceed what is available (e.g. a thrust and a shield and a laser blast all using max fuel)
-      * Check the World.C laser logic where dLasPwr is gotten from GetOrder, but the fuel adjustment happenns based on SetOrder
 
 1. Look around for other constants that would be better off handled in GlobalConstants.h.
 
