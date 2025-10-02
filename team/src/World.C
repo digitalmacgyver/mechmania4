@@ -171,6 +171,15 @@ void CWorld::LaserModel() {
   // Fix would be: Call SetOrder() FIRST to validate/cap, THEN use GetOrder() for damage.
   // However, this is preserved as a historical 1998-era vulnerability for educational purposes.
 
+  // TODO: Accuracy of fuel consumption. In our game loop effectively this
+  // happens:
+  // 1. Shileds order is processed.
+  // 2. The first physics step is done.
+  // 3. The laser order is processed - using GetOrder to determine magnitude. In
+  //    addition to the exploit above, this can also cause us to spend more fuel
+  //    than we have - the fix to both is to make LaserModel respect the
+  //    SetOrder guardrails.
+
   unsigned int nteam, nship;
   CTeam* pTeam;
   CShip* pShip;

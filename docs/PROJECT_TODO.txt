@@ -69,9 +69,6 @@ Lasers are modeled as colliding masses for damage purposes.
 
 ========================== ENGINE TODO ============================================
 
-  Q. Big cheats - can you get around fuel limits by:
-    * Staging orders whose mutual demands exceed what is available (e.g. a thrust and a shield and a laser blast all using max fuel)
-
 1. Look around for other constants that would be better off handled in GlobalConstants.h.
 
 1. Get rid of Parser.C/.h - look for other unused files but be more careful with those as we want to preserve some of the stuff for historic interest.
@@ -300,6 +297,8 @@ In Ship.c, line 592 what is going on with the pointer checks against NULL and th
 ####################### END ENGINE TODO ##########################################
 
 ========================== Groonew TODO ============================================
+
+0. Is there a hard coded shield max of 30? If so don't add to shields if that would push us over 30? (maybe it's OK as it's effectively a way to jettison fuel before colliding with an asteroid? Or does it clamp us and sometimes we crash into an assteroid?)
 
 0. Consider optimizing initial base launch so we don't all bonk into
 each other. Consider initial facing and if it matters which base
@@ -689,10 +688,10 @@ undostats and order arrays for direct manipulation, however:
     SetOrders which enforces the rules. It is possible you could
     trigger a corner case here, but the design of SetOrders is
     intended to be robust against this.
-  * However, the original implementation of LaserModel does allow
-    an exploit here - it powers the laser with whatever has been
-    set in the order, and fires it with that amount, and only later
-    does it deduct fuel.
+  * However, the legacy engine implementation of LaserModel does allow
+    an exploit here - it powers the laser with whatever has been set
+    in the order, and fires it with that amount, and only later does
+    it deduct fuel.
 
 Q. Can you cheat by issuing multiple commands whose combined fuel cost
 exceeds available fuel but still get their benefits?
