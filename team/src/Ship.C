@@ -696,9 +696,9 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   if (OthKind == ASTEROID) {
     CThing *pEat = ((CAsteroid *)pOthThing)->EatenBy();
     if (pEat != NULL && !(*pEat == *this)) {
+      // Already taken by another ship
       return;
     }
-    // Already taken by another ship
 
     // Update ship velocity with conservation of linear momentum for a perfectly
     // inelastic collision, clamped by maxspeed.

@@ -449,8 +449,7 @@ unsigned int CWorld::CollisionEvaluation() {
       }
 
       pTItr->Collide(pTTm, this);  // Asteroid(?) shattered by ship
-      if (pTTm->Collide(pTItr, this) ==
-          true) {  // Ship deflected by asteroid(?)
+      if (pTTm->Collide(pTItr, this) ==  true) {  // Ship deflected by asteroid(?)
         URes++;
       }
     }

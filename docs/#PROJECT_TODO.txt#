@@ -73,6 +73,17 @@ Lasers are modeled as colliding masses for damage purposes.
 * Game fix of collision eat bug - colliding with an asteroid you can
   eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
 
+
+============= RACE CONDITION COLLISIONS / double yum=====================
+
+A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it possible thinking this through there are other such races, like what if a ship gets hit by 2 asteroids in one turn, does the engine correctly handle managing total cargo area in the ship under multiple collisions?
+
+Or what if a ship collides with a base and a laser the same turn - nothing can hurt you while docked, how does the system determine which event happened first?
+
+It almost seems like iteration with a stable order is causing a lot of problems, and we might want to move to an approach of detecting all collisions, building a list of them, randomizing the list (for fairness with regard to nonsystemic biases) and then processing the collisions one by one in order.
+
+BUT ASTEROIDS ARE DEFINITELY BORKED ALLOWING DOUBLE CAPTURE.
+
 Here's the exact sequence when Ship A and Ship B collide with the same asteroid:
 
 Line 451: pTItr->Collide(pTTm, this) where pTItr = Asteroid, pTTm = Ship A

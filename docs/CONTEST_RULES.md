@@ -168,8 +168,8 @@ Consider these examples:
 - **Same as your station:** THIS MEANS YOU CAN GIVE VINYL TO THE ENEMY STATION!
 
 ### Station-Asteroid Collisions
-- **Damage:** Station takes minor damage to vinyl stores
-- **Physics:** Asteroid bounces off
+- **Damage:** No damage - stations are indestructible to asteroid impacts
+- **Physics:** Asteroid bounces off (perfectly elastic collision)
 
 ## Orders and Actions
 
@@ -193,19 +193,19 @@ Consider these examples:
 ## Information Available to Teams
 
 ### Complete Knowledge
-Teams have access to:
+Teams have **complete visibility** of the entire game state through all public methods on world objects:
 - Position and velocity of all objects (ships, asteroids, stations)
 - Type and size of all asteroids
-- Own ships' fuel, cargo, and shields
-- All teams' stations and vinyl scores
+- **All ships' fuel, cargo, and shield levels** (via `GetAmount(S_FUEL)`, `GetAmount(S_CARGO)`, `GetAmount(S_SHIELD)`)
+- All ships' team affiliations (via `GetTeam()`)
+- All stations' vinyl stores (via `GetVinylStore()`)
+- All teams' total vinyl scores
 - Total game time elapsed
+- Prior turn orders for all ships (via `GetOrder(O_THRUST)`, `GetOrder(O_SHOOT)`, etc.)
 
 ### Limited Knowledge
 Teams do NOT know:
-- Enemy ships' fuel levels
-- Enemy ships' cargo contents
-- Enemy ships' shield levels
-- Enemy ships' planned orders
+- Enemy ships' **current turn** planned orders (orders are only visible after they execute)
 
 ### Communication
 - Teams can print text messages visible to observers
@@ -222,11 +222,11 @@ Teams do NOT know:
 - **Primary Score:** Total vinyl stored at team's station
 - **Measurement:** In tons (floating point)
 - **Winner:** Team with highest vinyl score when time expires
+- **Note:** The server (mm4serv) only prints final scores - it does not announce a winner. Determining the winner is left to observers/judges.
 
-### Tiebreakers
-1. Most vinyl at station
-2. Most ships surviving
-3. Total mass of team's ships (fuel + cargo + base mass)
+### Ties
+- **No tiebreaker logic exists in the code** - determining the winner in case of a tie would be left to human judges
+- In practice, ties are extremely unlikely due to floating-point vinyl values
 
 ## Strategic Considerations
 
