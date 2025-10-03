@@ -145,7 +145,7 @@ void Groonew::PopulateMagicBag() {
       }
 
       if (athing->GetKind() == GENTHING) {
-        continue;  // Skip generic things (laser beams, etc)
+        continue;  // Skip generic things (laser beams, etc.)
       }
 
       // Track global resource availability

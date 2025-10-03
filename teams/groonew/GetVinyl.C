@@ -31,9 +31,6 @@ void GetVinyl::Decide() {
   unsigned int shipnum = pShip->GetShipNumber();
   MagicBag *mbp = ((Groonew *)pmyTeam)->mb;
 
-  Entry *e;
-  Entry *best_e = NULL;
-
   double cur_shields = pShip->GetAmount(S_SHIELD);
   double cur_fuel = pShip->GetAmount(S_FUEL);
   double cur_cargo = pShip->GetAmount(S_CARGO);
@@ -181,22 +178,21 @@ void GetVinyl::Decide() {
     }
   }
 
-  // get vinyl or fuel
+  // If we've not locked orders due to collision logic above, decide on orders.
   if (!lock_orders) {
-    AsteroidKind prefered_asteroid;
-    if (!(((cur_fuel <= 5.0) &&
-           ((((Groonew *)pmyTeam)->uranium_left > 0.0))) ||
-          ((((Groonew *)pmyTeam)->vinyl_left < 0.01) &&
-           (((Groonew *)pmyTeam)->uranium_left > 0.0)))) {
-      prefered_asteroid = VINYL;
-    } else {
+    AsteroidKind prefered_asteroid = VINYL;
+    // TODO: Add some logic for when neither is available - e.g. return to base
+    // with cargo or attack enemy station/ship with cargo.
+    bool uranium_available = (((Groonew *)pmyTeam)->uranium_left > 0.0);
+    bool vinyl_available = (((Groonew *)pmyTeam)->vinyl_left > 0.0);
+    if (!vinyl_available || (cur_fuel <= 5.0 && uranium_available)) {
       prefered_asteroid = URANIUM;
     }
 
-    if ((pShip->GetAmount(S_CARGO) > 13.01) ||
-        ((((Groonew *)pmyTeam)->vinyl_left < 0.01) &&
-         (pShip->GetAmount(S_CARGO) > 0.01))) {
-      // make the return to station better
+    if ((pShip->GetAmount(S_CARGO) >= (2*40/3 - g_fp_error_epsilon)) ||
+        (!vinyl_available && pShip->GetAmount(S_CARGO) > 0.01)) {
+      // Return to base if we've got at least 2 medium sized asteroids in cargo,
+      // or if there's no vinyl available and we've got any cargo.
       if (g_pParser && g_pParser->verbose) {
         printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
       }
@@ -214,30 +210,48 @@ void GetVinyl::Decide() {
           break;
         }
       }
-
     } else {
+      // Harvest resources case.
+
+      // Our best target.
+      Entry *best_e = NULL;
+    
+
+      
+      // TODO: Our basic deconflicting logic doesn't work, because it's
+      // deconflicting on Entries, which aren't share anyway - it needs to
+      // deconflict on targets.
+
+      // Targets can only be uniquely identified by their operator==/!=, so we
+      // need to save the targets we're trying to deconflict, or dynamically pull
+      // them out of Entry->thing.
+
       unsigned int i = 0;
-      for (e = mbp->getEntry(shipnum, 0); e != NULL;
+      for (Entry* e = mbp->getEntry(shipnum, 0); e != NULL;
            e = mbp->getEntry(shipnum, i), i++) {
         if (e->thing != NULL) {
-          if ((e->thing->GetKind()) != ASTEROID) {
-            continue;
-          } else if (((CAsteroid *)(e->thing))->GetMaterial() !=
-                     prefered_asteroid) {
+          // TODO: This is the simplest of deconfliction - we just greedily hand
+          // out claims. Next refinements: 
+          // A. Give claim to ship with shortest time to intercept preferentially.
+          // B. Do some kind of planning stability so ships don't switch targets
+          // unless there is a clearly better (e.g. 1 turn sooner or better size
+          // option).
+          // DEBUG this doesn't work yet.
+          bool already_claimed = false; //(e->claimed_by_mech == 1);
+          bool is_asteroid = (e->thing->GetKind() == ASTEROID);
+          // Note: Can't call GetMaterial on non-asteroids.
+          bool is_prefered_asteroid = (is_asteroid && (static_cast<CAsteroid*>(e->thing)->GetMaterial() == prefered_asteroid));
+ 
+          if (already_claimed || !is_asteroid || !is_prefered_asteroid) {
             continue;
           }
 
-          //	  if(e->claimed_by_mech == 1) {
-          // continue;
-          //}
-
-          //	if((best_e == NULL) || ((e->fueltraj).traj.rho <
-          //(best_e->fueltraj).traj.rho)) {
           if ((best_e == NULL) || (e->turns_total < best_e->turns_total)) {
             best_e = e;
           }
         }
       }
+
       if (best_e != NULL) {
         if (g_pParser && g_pParser->verbose) {
           CThing* target = best_e->thing;
@@ -267,9 +281,18 @@ void GetVinyl::Decide() {
                  ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other/none",
                  (best_e->fueltraj).order_mag);
         }
+
         pShip->SetOrder((best_e->fueltraj).order_kind,
                         (best_e->fueltraj).order_mag);
-        // best_e->claimed_by_mech=1;
+
+        // TODO: This is the simplest of deconfliction - we just greedily hand
+        // out claims. Next refinements: 
+        // A. Give claim to ship with shortest time to intercept preferentially.
+        // B. Do some kind of planning stability so ships don't switch targets
+        // unless there is a clearly better (e.g. 1 turn sooner or better size
+        // option).
+        // DEBUG this doesn't work yet.
+        // best_e->claimed_by_mech = 1;
       }
     }
   }

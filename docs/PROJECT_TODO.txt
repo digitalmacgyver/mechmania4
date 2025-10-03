@@ -73,6 +73,49 @@ Lasers are modeled as colliding masses for damage purposes.
 * Game fix of collision eat bug - colliding with an asteroid you can
   eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
 
+NOTE - THe current fix on our branch isn't really good / working - I
+don't think it preserves the dual harvesting bug exactly for instance,
+it just tries to add the claim mass to the ship, but in the old world
+I bet even crazier things could happen like ship 1 breaks asteroid in
+3 and ship 2 claims it - here if a ship claims 2 asteroids in one tick
+it just gets tightly backed which probably isn't what happened in the
+old engine.
+
+Maybe my side-by-side idea here is a stupid one. Maybe instead I
+should take a branched approach of:
+
+team/src <- working code
+team/legacy <- old code
+
+And then build 2 binaries? but then teams can't run against either
+probably if I change anything about an interface... and it loses the
+per-feature switch.
+
+For the collisions and similar things I might have to just make a
+distinction in some cases about whehter the juice is worth the squeeze
+or just fix bugs and say - hey - check out branch "total legacy 001"
+if you want to play with _all_ legacy behaviors, and only preserve the
+ones that make sense.
+
+What makes sense to preserve:
+ * NO Old collision detection? Nope - who wants broken collision detection (other than Chromefunk)
+ * NO This buggy double claim unfair collision system? Nope.
+
+* Velcoity clamping - maybe / yes - I could see people with old teams who want to compete but don't want different thrust semantics.
+
+
+
+
+============= RACE CONDITION COLLISIONS / double yum=====================
+
+A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it possible thinking this through there are other such races, like what if a ship gets hit by 2 asteroids in one turn, does the engine correctly handle managing total cargo area in the ship under multiple collisions?
+
+Or what if a ship collides with a base and a laser the same turn - nothing can hurt you while docked, how does the system determine which event happened first?
+
+It almost seems like iteration with a stable order is causing a lot of problems, and we might want to move to an approach of detecting all collisions, building a list of them, randomizing the list (for fairness with regard to nonsystemic biases) and then processing the collisions one by one in order.
+
+BUT ASTEROIDS ARE DEFINITELY BORKED ALLOWING DOUBLE CAPTURE.
+
 Here's the exact sequence when Ship A and Ship B collide with the same asteroid:
 
 Line 451: pTItr->Collide(pTTm, this) where pTItr = Asteroid, pTTm = Ship A
@@ -338,6 +381,11 @@ In Ship.c, line 592 what is going on with the pointer checks against NULL and th
 ####################### END ENGINE TODO ##########################################
 
 ========================== Groonew TODO ============================================
+
+0000DO FIRST000 - Our ships definitely just swarm around everything
+now - need to implement blocking on same resource:
+  * version 1 - just mark a claim and prevent others from taking it
+  * version 2 - "auction" or othrewise find an optimal claim.
 
 0. Consider optimizing initial base launch so we don't all bonk into
 each other. Consider initial facing and if it matters which base
