@@ -37,7 +37,7 @@ static const bool DEBUG_MODE = false;
 //////////////////////////////////////////
 // Groonew class implementation
 
-Groonew::Groonew() {
+Groonew::Groonew() : calculator_ship(NULL) {
   // Constructor - no initialization needed here
 }
 
@@ -58,6 +58,12 @@ Groonew::~Groonew() {
     }
     // Clean up after ourselves
   }
+
+    // Clean up the calculator ship.
+    if (calculator_ship != NULL) {
+      delete calculator_ship;
+      calculator_ship = NULL;
+    }
 }
 
 void Groonew::Init() {
@@ -82,14 +88,26 @@ void Groonew::Init() {
     GetShip(i)->SetCapacity(S_CARGO, 40.0);  // Large 40 ton cargo hold
     GetShip(i)->SetBrain(new GetVinyl);      // Assign GetVinyl AI brain
   }
+
+  // Initialize the calculator ship.
+  // NOTE: We assume CShip has an accessible default constructor (as suggested by Entry.C). 
+  if (calculator_ship == NULL) {
+    calculator_ship = new CShip();
+  }
+
+  // Configure the simulator ship to match the fleet configuration (20/40 split).
+  // This is crucial if capacities affect mass or fuel usage rules.
+  calculator_ship->SetCapacity(S_FUEL, 20.0);
+  calculator_ship->SetCapacity(S_CARGO, 40.0);
 }
 
 void Groonew::Turn() {
   CShip* pSh;
 
-  // PHASE 1: Calculate optimal paths to all objects for all ships
-  // Creates new MagicBag and fills it with precalculated trajectories
-  PopulateMagicBag();  // Allocates new Groonew::mb
+  // PHASE 1: Calculate paths to all objects for all ships
+  // Creates new MagicBag and fills it with orders for
+  // fast time to intercept considering a planning horizon of 1-3 turns.
+  PopulateMagicBag();
 
   // PHASE 2: Each ship's AI uses the MagicBag to make decisions
   for (unsigned int i = 0; i < GetShipCount(); ++i) {
@@ -114,14 +132,11 @@ void Groonew::Turn() {
     brain->Decide();
 
   }
-
-  // PHASE 3: Clean up - MagicBag is recreated fresh each turn
-  delete mb;
 }
 
 void Groonew::PopulateMagicBag() {
-  // Create MagicBag: 4 ships × 100 potential targets each
-  mb = new MagicBag(4, 100);
+  // Create MagicBag
+  MagicBag mb;
   CWorld* worldp = GetWorld();
 
   // Reset global resource counters
@@ -171,10 +186,10 @@ void Groonew::PopulateMagicBag() {
       // We try each time and take the first valid solution
       for (unsigned int turn_i = 1; turn_i < max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
-        FuelTraj fueltraj = determine_orders(athing, turn_i, ship);
-        // TODO: Maybe clean this up so determine_orders has no side effects.
-        // determine_orders may have set some orders in planning mode, we clear them here.
-        ship->ResetOrders();  // Clear orders (we're just calculating, not executing)
+        FuelTraj fueltraj = determine_orders(ship, athing, turn_i);
+
+        // IMPORTANT CHANGE: We no longer need the side-effect/reset pattern.
+        // determine_orders now uses the calculator and has no side effects on the real ship.
 
         // TODO: Calculate actual fuel cost (currently returns 5.0)
         double fuel_cost = determine_probable_fuel_cost(athing, turn_i, ship);
@@ -184,16 +199,17 @@ void Groonew::PopulateMagicBag() {
 
         // If we found a valid trajectory, save it and move to next object
         if (fueltraj.path_found) {
-          Entry* entry = new Entry;
-          entry->thing = athing;          // Target object
-          entry->turns_total = turn_i;    // Time to reach
-          entry->fueltraj = fueltraj;     // How to get there
-          entry->total_fuel = fuel_cost;  // Fuel required (TODO: fix)
-          entry->collision = collision;   // Obstacles (TODO: fix)
-          entry->claimed_by_mech = 0;  // TODO: Ship coordination not implemented
+          DEBUG - make this a smart pointer of some kind.
+          PathInfo* path = new PathInfo;
+          path->traveler = ship;
+          path->dest = athing;          // Target object
+          path->turns_total = turn_i;    // Time to reach
+          path->fueltraj = fueltraj;     // How to get there
+          path->total_fuel = fuel_cost;  // Fuel required (TODO: fix)
+          path->collision = collision;   // Obstacles (TODO: fix)
 
           // Add to this ship's list of possible targets
-          mb->addEntry(ship_i, entry);
+          mb->addEntry(ship_i, athing, path);
           break;  // Found valid path, move to next object
         }
       }
@@ -201,8 +217,128 @@ void Groonew::PopulateMagicBag() {
   }
 }
 
-//Helper functions.
+//Helper functions, context and return value management.
 namespace {
+
+  // Represents a failure case for pathfinding
+  const FuelTraj FAILURE_TRAJ = FuelTraj(false, -1.0, O_SHIELD, 0.0);
+
+  // Lightweight struct representing the essential state of a ship for simulation.
+struct ShipState {
+  // Physics
+  CCoord pos;
+  CTraj velocity;
+  double orient;
+
+  // Key Resources (Must include everything that affects mass or fuel usage)
+  double fuel;
+  double cargo;
+};
+
+// Utility to capture the current state from a ship.
+ShipState CaptureState(const CShip* ship) {
+  ShipState state;
+  state.pos = ship->GetPos();
+  state.velocity = ship->GetVelocity();
+  state.orient = ship->GetOrient();
+  state.fuel = ship->GetAmount(S_FUEL);
+  state.cargo = ship->GetAmount(S_CARGO);
+  return state;
+}
+
+// The core calculation function. It guarantees synchronization before calculation.
+double CalculateAccurateFuelCost(CShip* calculator, const ShipState& state, OrderKind kind, double magnitude) {  
+  // 1. Synchronize State (Apply Memento)
+  // NOTE: This relies on the availability of setters (SetPos, SetVelocity, etc.).
+  calculator->SetPos(state.pos);
+  calculator->SetVelocity(state.velocity);
+  calculator->SetOrient(state.orient);
+  calculator->SetAmount(S_FUEL, state.fuel);
+  calculator->SetAmount(S_CARGO, state.cargo);
+  
+  // Crucial: Clear any lingering orders from previous simulations.
+  calculator->ResetOrders();
+
+  // 2. Calculate Cost (Use authoritative game logic)
+  double cost = calculator->SetOrder(kind, magnitude);
+
+  return cost;
+}
+
+  // --- Pathfinding Context ---
+
+  // Struct to hold the context of the pathfinding attempt for a specific ship and target.
+  struct PathfindingContext {
+    CThing* thing;
+    CShip* ship;
+    double time;
+    CShip* calculator_ship;
+    ShipState state_t0;
+
+    CCoord destination; // Predicted position of the target at 'time'.
+
+    // State and vectors at t0 (now)
+    CCoord ship_pos_t0;
+    CTraj ship_vel_t0;
+    double ship_orient_t0;
+    CTraj ship_orient_vec_t0; // Unit vector of orientation.
+    // The ship's trajectory on t0 - either ship_vel_t0 or ship_orient_vec_t0 when velocity ~= 0.
+    CTraj ship_trajectoty_t0; 
+
+    CTraj dest_vec_t0;        // Vector from ship to destination.
+    CTraj intercept_vec_t0;   // Required velocity to reach destination in 'time'.
+
+    // Vectors at t1 (after 1 turn drift)
+    CTraj intercept_vec_t1;   // Required velocity to reach destination in 'time - 1'.
+    CTraj thrust_vec_t1;      // Required change in velocity at t1.
+    bool t1_intercept_feasible;
+  };
+
+  // TODO: Is tere a way to do this with a return rather than an in/out parameter?
+  // Initializes the pathfinding context based on the current state and target.
+  void InitializeContext(PathfindingContext& ctx, CShip* ship, CThing* thing, double time, Ship* calculator_ship) {
+    ctx.thing = thing;
+    ctx.ship = ship;
+    ctx.time = time;
+
+    // Calculate where target will be in 'time' seconds
+    // TODO: This doesn't account for collisions.
+    ctx.destination = thing->PredictPosition(time);
+
+    // Initialize T0 state
+    ctx.ship_pos_t0 = ship->GetPos();
+    ctx.ship_orient_t0 = ship->GetOrient();
+    ctx.ship_orient_vec_t0 = CTraj(1.0, ctx.ship_orient_t0);
+    ctx.ship_vel_t0 = ship->GetVelocity();
+
+    // If our ship isn't moving, consider our trajectory for the purposes of
+    // trajectory matching to be along the direction of our orientation.
+    ctx.ship_trajectory_t0 = ctx.ship_vel_t0;
+    if (ctx.ship_vel_t0.rho <= g_fp_error_epsilon) {
+      ctx.ship_trajectory_t0 = ctx.ship_orient_vec_t0;
+    }
+
+    // T0 Calculations
+    ctx.dest_vec_t0 = ctx.ship_pos_t0.VectTo(ctx.destination);  // Vector to target
+    ctx.intercept_vec_t0 = ctx.dest_vec_t0;
+    ctx.intercept_vec_t0.rho /= time;  // Velocity needed to reach target in time
+    // So now intercep_vec_t0 represents the ideal velocity starting now.
+
+    // T1 Calculations (if we let the ship drift for 1 turn)
+    CCoord ship_pos_t1 = ship->PredictPosition(g_game_turn_duration);
+    CTraj dest_vec_t1 = ship_pos_t1.VectTo(ctx.destination);
+    ctx.intercept_vec_t1 = dest_vec_t1;
+    ctx.t1_intercept_feasible = false;
+    if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
+      ctx.t1_intercept_feasible = true;
+      ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
+      ctx.thrust_vec_t1 = ctx.intercept_vec_t1 - ctx.ship_vel_t0; // Note - ship_vel hasn't changed since T0
+    }
+
+    ctx.calculator_ship = calculator;
+    ctx.state_t0 = CaptureState(ship); // Capture T0 state
+  }
+
   // Returns true if the game engine will clamp us as a result sending a thrust
   // order with rho for this ship.
   bool is_speeding(CShip* ship, double rho, double maxspeed = -1.0) {
@@ -242,170 +378,90 @@ namespace {
   bool mostly_parallel(CTraj vtraj, CTraj vtarget, double dist=724.1, double epsilon = 8.9) {
     return (on_target(vtraj, vtarget, dist, epsilon) || on_target(-vtraj, vtarget, dist, epsilon));
   }
-}
 
-// This will be the first thing we refine:
-// Step 0: As I'm checking the stuff below, I want to validate with hello world style code checks, for instance that VectTo does what I expect.
+  // --- Maneuver Helpers ---
 
-// Step 0: Try is facing fix below once my greedy nav is online.
+  // Helper to create a successful FuelTraj and calculate fuel usage via SetOrder.
+  FuelTraj CreateSuccessTraj(CShip* ship, OrderKind kind, double mag) {
+    FuelTraj fj;
+    fj.path_found = true;
+    fj.order_kind = kind;
+    fj.order_mag = mag;
 
-// Step 0: Rudimetnary collision fixes below - our collision detection doesn't
-//         consider the closest bonk to us - which is the only relevant one.
-//         CONSIDER USING A NEW SHIP, SETTING IT'S POSITION AND VELOCITY, AND
-//         USING DETECT COLLISION OR OTHER METHODS TO DO THE NON-POINT MASS
-//         ANALYSI MAYBE WE CAN USE DETECTCOLISIONCOURSE INSTEAD OF THETA <= 0.1
+    // TODO: Fuel awareness - check if our order was reduced due to fuel limits.
+    // Calculate the accurate fuel cost using the T0 state and the calculator.
+        fj.fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, kind, mag);
 
-// Step 1: Check and validate the logic below is correct and optimal for point masses and dt=1.
-//         * Account for max velocity - we'll get clamped to 30 so don't chase stuff we can't catch - if our resulting vel > 30 to get there in time t fail or limit to 30.
-//         * Double check engine behavior - it seems it allows us to acclerate to > 30, by going up to 30 in each dimension or soemthing - this will quickly get capped later but understand current behavior for that tick.
-//         * After making some fixes, it seems we're chasing things - is there an off by 1 error where we're 1 second behind? Or a failure to recognize when we're on maxspeed?
-//           IT'S PROBABLY A MAXSPEED ISSUE - NEED HELLO WORLD DIAGNOSIS OF TRYING TO CHASE SOMETHING JUST AHEAD OF US GOING AT MAXSPEED.
-//           IT MAY ALSO BE A FACING ISSUE - WHEN WE ARE CLOSE WE MAY NOT BE COMPLETELY DEAD ON BUT WE MAY WASTE TURNS DOING TINY MICRO ADJUSTMENTS INSTEAD OF THRUSTING.
-//           THE OLD LOGIC OF DIVIDING BY TIME INSTEAD OF (TIME-1) MAY HAVE MASKED THIS ISSUE BY OVERSHOOTING THE TARGET ON APPROACH.
-// Step 1: Think about our treatment of time as a double below - are we creating signpost problems where we are cutting things too close and are going to be 1 turn late on stuff (or 1 turn early?)
-// Step 3: Consider how to prevent two ships going after the same target, and making the one who can get there best (e.g. fastest and with least fuel) the one who gets it.
-// Step 3: Consider how to make planning stable so we don't pingping between targets with equal distance from us, e.g. we pick asteroid A that is 4 turns away this turn (but B is also 4 turns away) and plan to intercept A, but next round we pick asteroid B (both A and B now 3 turns away) and turn again, etc. and never execute on a plan for either.0
-// Step 3: Consider how to make the logic toroid aware and relative velocity aware - e.g. ship at -200, asteroid at 200, ship going 30 left, asteroid going 30 right - if we do nothing we'll collide in ~624/60 = 11 turns. But if we chase it by turning to the right we'll never cath it.
-// Step 3: Consider how to adapt the logic for the actual collision detection accounting for object radius.
-// Step 3: Consider where we need to special case things below for IsDocked for optimal handling (already have a check in the Case 1a because nothing collides with us while docked.)
-// Step 4: Think about how to decide if 2aii or 2b is better.
-// Step 2: Adapt the logic given that the underlying simulation uses dt=0.2.
-// Step 3: Consider how to make our estimates fuel aware, and our order selections fuel aware.
-// Step 4: Consider how to adapt logic to be collision aware.
-FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
-  /*
-    The idea in this part of the code is to implement a sort of greedy
-    pathfinding algorithm.
-
-    We consider exhastively (I think?) the cases for a 2 turn planniing horizon
-    to arrive at thing at or before time.
-
-    Time is an upper bound. Normally we aim to arrive exaclty in time, because
-    our architecture calls this function iteratively for lower times, so we
-    don't need to worry about doing better than time here. That being said, for
-    case 1a and 2ai we might arrive early.
-
-    Note that this approach will not, in general, produce optimal shortest time
-    paths in all scenarios. That is something to refine later.
-
-    It differs from legacy Groogroo in that legacy Groogroo more or less ignored
-    the engine limits and just assumed any thrust up to 30 was obtainable, and
-    course corrected en route for any game engine interference with those plans.
-
-    Here we explicitly consider how the overthrust mechanics work and try to use
-    them to get on desired trajectories. We ignore for now the implementation
-    details of the 5 engine subticks and plan at the turn level, leaving subtick
-    analysis for future enhancement.
-  */
-  // Initialize our return value with the failure case.
-  FuelTraj fj = FuelTraj(false, -1.0, O_SHIELD, 0.0);
-
-  // Overview:
-  // Case 0: Even at the game's max speed we can't get there in time.
-  // Case 1: We're already on an intercept trajectory.
-  // Case 1a: And we'll drift into it at or before the desired time. => No order.
-  // Case 1b: We won't, but our orient is also on the trajectory and we can trust
-  //          to arrive on time. => O_THURST
-  // Case 1c: We won't, and our orient is not on the trajectory, but we can turn
-  //          and thrust to arrive on time. => O_TURN (and plan to thrust next turn)
-  // Case 2: We're not on the intercept trajectory.
-  // Case 2a: There is a thrust we can issue this turn that will get us on the 
-  //          intercept trajectory.
-  //          NOTE: Sometimes this thrust will actually put us further away from
-  //          the target, and increase our relative velocity. This is not a bug
-  //          - we are choosing to do that being on a line where we can thrust
-  //          straight at the target lets us get there in time.
-  // Case 2ai: With final velocity such that we reduce to case 1a in 1 turn.
-  //           => O_THRUST
-  // Case 2aii: With final velocity such that we reduce to case 1c in 1 turn.
-  //           => O_THRUST (and plan to turn next turn and thrust the turn after that)
-  //            NOTE: Logically we can't go from case 2a to case 1b without an external event so it's not considered in planning.
-  // Case 2b: There is a turn we can issue that will get us onto case 2ai in 1 turn.
-  //          => O_TURN (and plan to thrust next turn)
-
-  // Calculate where target will be in 'time' seconds
-  // TODO: This doesn't account for collisions.
-  CCoord destination = thing->PredictPosition(time);
-
-  // Calculate thrust vector needed if we thrust right now
-  CCoord ship_pos_t0 = ship->GetPos();
-  double ship_orient_t0 = ship->GetOrient();
-  CTraj ship_orient_vec_t0 = CTraj(1.0, ship_orient_t0);
-  CTraj ship_vel_t0 = ship->GetVelocity();
-  CCoord ship_pos_t1 = ship->PredictPosition(g_game_turn_duration);
-
-  CTraj dest_vec_t0 = ship_pos_t0.VectTo(destination);  // Vector to target
-  CTraj intercept_vec_t0 = dest_vec_t0;
-  intercept_vec_t0.rho /= time;  // Velocity needed to reach target in time
-  CTraj thrust_vec_t0 = intercept_vec_t0 - ship_vel_t0;  // Required change
-  // So now intercep_vec_t0 = ship_vel_t0 + thrust_vec_t0, e.g. if we
-  // apply thrust_vec to our current velocity, we should arrive at 
-  // destination in around ~time seconds.
-
-  // Figure similar variables for if we let the ship drift for 1 turn.
-  CTraj dest_vec_t1 = ship_pos_t1.VectTo(destination);
-  CTraj intercept_vec_t1 = dest_vec_t1;
-  intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
-  CTraj thrust_vec_t1 = intercept_vec_t1 - ship_vel_t0; // Note - ship_vel hasn't changed
-
-  // Case 0: Even at the game's max speed we can't get there in time.
-  if (intercept_vec_t0.rho > g_game_max_speed) {
     return fj;
   }
 
   // Case 1a: And we'll drift into it at or before the desired time. => No order.
-  //
+  FuelTraj TryDriftIntercept(const PathfindingContext& ctx) {
+    CShip* ship = ctx.ship;
+    CThing* thing = ctx.thing;
+    double time = ctx.time;
+
   // NOTE: Since our obects aren't point masses, we don't need to be on an
-  // intercept trajectory always to collide - so we do this test before checking
-  // if we're on a (point mass) intercept trajectory.
+  // intercept trajectory always to collide - so case 1a shouldn't be guarded by a check of weather we're on an intercept trajectory.
   double its_coming_right_for_us = ship->DetectCollisionCourse(*thing);
   if (!ship-> IsDocked() && its_coming_right_for_us != g_no_collide_sentinel &&
       its_coming_right_for_us <= time) {
     // TODO: We have to issue some kind of order in FuelTraj but we don't actually
     // want our planner to take note of the order - O_SHIELD seems the safest bet,
     // but we should clean this up.
-    fj.path_found = true;
-    fj.fuel_used = 0.0;
-    fj.order_kind = O_SHIELD;
-    fj.order_mag = 0.0;
-    return fj;
-  }    
-
-  // Case 1: We're already on an intercept trajectory.
-  //
-  // If our ship isn't moving, consider our trajectory for the purposes of
-  // trajectory matching to be along the direction of our orientation.
-  CTraj ship_trajectory_t0 = ship_vel_t0;
-  if (ship_vel_t0.rho <= g_fp_error_epsilon) {
-    ship_trajectory_t0 = ship_orient_vec_t0;
+          // Use the default FuelTraj (path_found=false, fuel_used=0.0, O_SHIELD, mag=0.0) and set path_found=true.
+          FuelTraj fj;
+          fj.path_found = true;
+          return fj;
+  } 
+  return FAILURE_TRAJ;
   }
-  if (mostly_parallel(ship_trajectory_t0, dest_vec_t0, dest_vec_t0.rho)) {
-    // Case 1a: Handled above to catch corner cases where we collide even
-    // without being on a point mass intercept trajectory.
 
-    // Case 1b: We won't arrive in time as is, but our orient is also on the 
-    //          trajectory and we can trust to arrive on time. => O_THURST
-    if (mostly_parallel(ship_orient_vec_t0, dest_vec_t0, dest_vec_t0.rho)) {
-      // Note - above we checked if the ships velocity was heading towards dest
-      // - here we're checking if this ships thrusters are pointed that way.
-      double thrust_order_amt = thrust_vec_t0.rho;
+// Case 1b: On trajectory, aligned orientation, needs thrust.
+FuelTraj TryAlignedThrust(const PathfindingContext& ctx) {
+  const CTraj& dest_vec_t0 = ctx.dest_vec_t0;
+  const CTraj& ship_orient_vec_t0 = ctx.ship_orient_vec_t0;
+  const CTraj& ship_vel_t0 = ctx.ship_vel_t0;
+  const CTraj& ship_trajectory_t0  = ctx.ship_trajectory_t0;
+  const CTraj& intercept_vec_t0 = ctx.intercept_vec_t0;
+  CShip* ship = ctx.ship;
+
+  bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, dest_vec_t0.rho);
+  bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, dest_vec_t0.rho);
+
+  if (correct_heading && correct_facing) {
+    // Calculate required thrust (Required change in velocity).
+    CTraj thrust_vec_t0 = intercept_vec_t0 - ship_vel_t0;
+    double thrust_order_amt = thrust_vec_t0.rho;
+
+    // Do we need forward or reverse thrust?
       if (fabs(ship_orient_vec_t0.theta - dest_vec_t0.theta) > PI) {
         thrust_order_amt *= -1.0;
       }
       if (!is_speeding(ship, thrust_order_amt)) {
-        fj.path_found = true;
-        // TODO: Fuel awareness - check if our order was reduced due to fuel limits.
-        fj.fuel_used = ship->SetOrder(O_THRUST, thrust_order_amt);
-        fj.order_kind = O_THRUST;
-        fj.order_mag = thrust_order_amt;
-        return fj;
+        return CreateSuccessTraj(ship, O_THRUST, thrust_order_amt);
       }
-    }
-    
-    // Case 1c: We won't arrive on time as it is, and our orient is not on the
-    //          trajectory, but we can turn and thrust to arrive on time. =>
-    //          O_TURN (should reduce to Case 1b next turn)
-    if (intercept_vec_t1.rho <= g_game_max_speed) {
+  }
+  return FAILURE_TRAJ;
+}
+
+// Case 1c: On trajectory, misaligned orientation, needs turn (reduces to Case 1b next turn).
+FuelTraj TryTurnToAlign(const PathfindingContext& ctx) {
+  const CTraj& intercept_vec_t1 = ctx.intercept_vec_t1;
+  const CTraj& thrust_vec_t1 = ctx.thrust_vec_t1;
+  CShip* ship = ctx.ship;
+  double ship_orient_t0 = ctx.ship_orient_t0;
+  bool t1_intercept_feasible = ctx.t1_intercept_feasible;
+
+    // We won't arrive on time as it is, and our orient is not on the
+    // trajectory, but we can turn and thrust to arrive on time. =>
+    // O_TURN (should reduce to Case 1b next game turn)
+    //
+    // TODO: Clean up this opaque interface around t1_intercept_feasible;
+    //
+    // Note: intercept_vec_t1.rho and thrust_vec_t1 are only valid if
+    // ti_intercept_feasible.
+    if (t1_intercept_feasible && (intercept_vec_t1.rho <= g_game_max_speed)) {
       // Even through we can thrust forward and backward, prefer to be facing our
       // target so we can shoot it if we want to.
 
@@ -415,17 +471,71 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
       }
 
       double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
-      fj.path_found = true;
-      fj.fuel_used = ship->SetOrder(O_TURN, turn_order_amt);
-      fj.order_kind = O_TURN;
-      fj.order_mag = turn_order_amt;
-      return fj;
+      return CreateSuccessTraj(ship, O_TURN, turn_order_amt);
     }
-  } else {
-    // Case 2: We're not on the intercept trajectory.
+    return FAILURE_TRAJ;
+}
+
+  // Case 2b: Misaligned trajectory, turn now to enable thrust next turn (reduces to Case 2ai/1b).
+  FuelTraj TryTurnThenThrust(const PathfindingContext& ctx) {
+    CShip* ship = ctx.ship;
+    double time = ctx.time;
+    const CTraj& thrust_vec_t1 = ctx.thrust_vec_t1;
+    double ship_orient_t0 = ctx.ship_orient_t0;
+
+    // TODO: Case 2b is not always optimal - it may be better to do some
+    // thrust->overthrust->turn sequence instead. Consider the case where we are
+    // oriented right, and are trying to get to something mostly right and
+    // slightly up. We can thrust right on turn 1, rotate slightly up and on turn
+    // 2, and thrust up/right on turn 3, having benefitted from our initial
+    // thrus's velocity on both turns 1 and 2 to reduce the desired distance to
+    // our object for our thurst onto intercept on turn 3.
+    //
+    // TODO: Actually - the comment above gave me an idea - maybe we should
+    // analyze our current thrust options in terms of decompositon of parallel to,
+    // and perpendicualr to, our desired thurst, and consider strongly thrusting
+    // where the parallel to dimension is high.
+    //
+    // TODO: Definitely fix this kind of comparison - we're never calling this
+    // function with time = 1.5, so here due to FP rounding errors we might be
+    // saying we don't have time to issue orders, or we do have time - in here we
+    // are reasoning about turns, not tie durations - see us_later for example!
+    if (t1_intercept_feasible && (time >= (g_game_turn_duration - g_fp_error_epsilon))) {
+      if (!is_speeding(ship, thrust_vec_t1.rho)) {
+        if (g_pParser && g_pParser->verbose) {
+          printf("t=%.1f\t%s:\n\tO_TURN FROM CASE 2B\n", pmyWorld->GetGameTime(), ship->GetName());
+        }
+        double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
+
+        return CreateSuccessTraj(ship, O_TURN, turn_order_amt);
+      }
+    }
+    return FAILURE_TRAJ;
+  }
+
+
+  // --- Case 2a Analysis ---
 
     // Case 2a: There is a thrust we can issue this turn that will get us on the 
     //          intercept trajectory.
+
+    // This struct holds the results of the analysis for Case 2a maneuvers.
+  struct Case2aResult {
+    FuelTraj fj_2ai = FAILURE_TRAJ;   // 2ai: Thrust and drift (preferred)
+    FuelTraj fj_2aii = FAILURE_TRAJ;  // 2aii: Thrust-Turn-Thrust (fallback)
+  };
+
+  // Analyzes potential maneuvers where we thrust now to align with the target trajectory.
+  Case2aResult AnalyzeThrustToAlign(const PathfindingContext& ctx) {
+    Case2aResult result;
+    CShip* ship = ctx.ship;
+    CThing* thing = ctx.thing;
+    double time = ctx.time;
+    const CCoord& ship_pos_t0 = ctx.ship_pos_t0;
+    const CTraj& ship_vel_t0 = ctx.ship_vel_t0;
+    double ship_orient_t0 = ctx.ship_orient_t0;
+    const CTraj& dest_vec_t0 = ctx.dest_vec_t0;
+    const CCoord& destination = ctx.destination;
     
     // Via trigonometry we can figure out the thrust amount on our current
     // orientation that would convert our current trajectory onto our desired
@@ -465,8 +575,6 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
     // Below we'll consider case 2aii and compute our orders for 2aii, however if
     // our preference for orders is: 2ai > 2b > 2aii, so we save any computed
     // 2aii order here but only use it if 2b fails.
-    FuelTraj fj_thurst_turn_thrust = fj;
-    {
       double denominator = sin(ship_orient_t0 - dest_vec_t0.theta);
       if (denominator != 0.0) {
         // TODO - What if ship_vel_t0.rho is zero - as it will be when we're
@@ -489,9 +597,7 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
           }
           CCoord t_ship_pos_t1 = ship_pos_t0 + t_ship_vel_t1.ConvertToCoord();
           CTraj t_dest_vec_t1 = t_ship_pos_t1.VectTo(destination);
-          // TODO - delete these 2 lines if we don't need them.
-          //t_intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
-          //CTraj t_thrust_vec_t1 = t_intercept_vec_t1 - t_ship_vel_t1;
+
           // TODO - we're about to do math here to see basically if we reduce to
           // some of the aligned cases above - we should break out that code
           // into a function.
@@ -502,8 +608,8 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
           // Check if we'll reach the target next turn due to this thrust.
           bool thrust_reaches_target = (t_dest_vec_t1.rho <= (ship->GetSize() + thing->GetSize() / 2.0));
 
-          // It is logically possible, if perhaps not geometrically possible,
-          // that our thrust would push us throug the position of the object -
+          // TODO: It is logically possible, if perhaps not geometrically possible,
+          // that our thrust would push us through the position of the destomation -
           // if so we'd expect the game engine to register a collision and so
           // that's a thrust we'd like to execute. For now figuring that out
           // seems hard so we'll leave that for future enhancement.
@@ -523,13 +629,10 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
           );
 
           if (thrust_reaches_target || thrusted_through || thrust_and_drift) {
-            // Check if we're heading the right way fast enough.
-            fj.path_found = true;
-            // TODO: Fuel awareness
-            fj.fuel_used = ship->SetOrder(O_THRUST, k);
-            fj.order_kind = O_THRUST;
-            fj.order_mag = k;
-            return fj;
+          // Check if we're heading the right way fast enough.
+          result.fj_2ai = CreateSuccessTraj(ship, O_THRUST, k);
+          // If 2ai is found, we stop analysis as it's the preferred outcome.
+          return result;
           }
 
           // Case 2aii: With final velocity such that we reduce to case 1c in 1 turn.
@@ -542,59 +645,186 @@ FuelTraj Groonew::determine_orders(CThing* thing, double time, CShip* ship) {
             CTraj t_thrust_vec_t2 = t_intercept_vec_t2 - t_ship_vel_t1;
             if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho) 
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
-              fj_thurst_turn_thrust.path_found = true;
-              // TODO: Fuel awareness
-              fj_thurst_turn_thrust.fuel_used = ship->SetOrder(O_THRUST, k);
-              fj_thurst_turn_thrust.order_kind = O_THRUST;
-              fj_thurst_turn_thrust.order_mag = k;
-              // Fall through to case 2b - only use this order if 2b fails.
+              result.fj_2aii = CreateSuccessTraj(ship, O_THRUST, k);
             }
           }
         }
       }
-    }
+      return result;
+  }
+  
+  
+} // End Namespace
 
-    // Case 2b: There is a turn we can issue that will get us onto case 2ai in 1 turn.
-    //          => O_TURN (and plan to thrust next turn)
-    // TODO: Case 2b is not always optimal - it may be better to do some
-    // thrust->overthrust->turn sequence instead. Consider the case where we are
-    // oriented right, and are trying to get to something mostly right and
-    // slightly up. We can thrust right on turn 1, rotate slightly up and on turn
-    // 2, and thrust up/right on turn 3, having benefitted from our initial
-    // thrus's velocity on both turns 1 and 2 to reduce the desired distance to
-    // our object for our thurst onto intercept on turn 3.
-    //
-    // TODO: Actually - the comment above gave me an idea - maybe we should
-    // analyze our current thrust options in terms of decompositon of parallel to,
-    // and perpendicualr to, our desired thurst, and consider strongly thrusting
-    // where the parallel to dimension is high.
-    //
-    // TODO: Definitely fix this kind of comparison - we're never calling this
-    // function with time = 1.5, so here due to FP rounding errors we might be
-    // saying we don't have time to issue orders, or we do have time - in here we
-    // are reasoning about turns, not tie durations - see us_later for example!
-    if (time > g_game_turn_duration) {
-      if (!is_speeding(ship, thrust_vec_t1.rho)) {
-        if (g_pParser && g_pParser->verbose) {
-          printf("t=%.1f\t%s:\n\tO_TURN FROM CASE 2B\n", pmyWorld->GetGameTime(), ship->GetName());
-        }
-        double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
-        // Rotate to face target this turn.
-        fj.path_found = true;
-        // TODO: Fuel awareness - check if our order was reduced due to fuel limits.
-        fj.fuel_used = ship->SetOrder(O_TURN, turn_order_amt);
-        fj.order_kind = O_TURN;
-        fj.order_mag = turn_order_amt;
-        return fj;
-      }
-    } else if(fj_thurst_turn_thrust.path_found) {
-      return fj_thurst_turn_thrust;
-    }
+// This will be the first thing we refine:
+// Step 0: As I'm checking the stuff below, I want to validate with hello world style code checks, for instance that VectTo does what I expect.
+
+// Step 0: Rudimetnary collision fixes below - our collision detection doesn't
+//         consider the closest bonk to us - which is the only relevant one.
+//         CONSIDER USING A NEW SHIP, SETTING IT'S POSITION AND VELOCITY, AND
+//         USING DETECT COLLISION OR OTHER METHODS TO DO THE NON-POINT MASS
+//         ANALYSI MAYBE WE CAN USE DETECTCOLISIONCOURSE INSTEAD OF THETA <= 0.1
+
+// Step 1: Check and validate the logic below is correct and optimal for point masses and dt=1.
+//         * Account for max velocity - we'll get clamped to 30 so don't chase stuff we can't catch - if our resulting vel > 30 to get there in time t fail or limit to 30.
+//         * Double check engine behavior - it seems it allows us to acclerate to > 30, by going up to 30 in each dimension or soemthing - this will quickly get capped later but understand current behavior for that tick.
+//         * After making some fixes, it seems we're chasing things - is there an off by 1 error where we're 1 second behind? Or a failure to recognize when we're on maxspeed?
+//           IT'S PROBABLY A MAXSPEED ISSUE - NEED HELLO WORLD DIAGNOSIS OF TRYING TO CHASE SOMETHING JUST AHEAD OF US GOING AT MAXSPEED.
+//           IT MAY ALSO BE A FACING ISSUE - WHEN WE ARE CLOSE WE MAY NOT BE COMPLETELY DEAD ON BUT WE MAY WASTE TURNS DOING TINY MICRO ADJUSTMENTS INSTEAD OF THRUSTING.
+//           THE OLD LOGIC OF DIVIDING BY TIME INSTEAD OF (TIME-1) MAY HAVE MASKED THIS ISSUE BY OVERSHOOTING THE TARGET ON APPROACH.
+// Step 1: Think about our treatment of time as a double below - are we creating signpost problems where we are cutting things too close and are going to be 1 turn late on stuff (or 1 turn early?)
+// Step 3: Consider how to prevent two ships going after the same target, and making the one who can get there best (e.g. fastest and with least fuel) the one who gets it.
+// Step 3: Consider how to make planning stable so we don't pingping between targets with equal distance from us, e.g. we pick asteroid A that is 4 turns away this turn (but B is also 4 turns away) and plan to intercept A, but next round we pick asteroid B (both A and B now 3 turns away) and turn again, etc. and never execute on a plan for either.0
+// Step 3: Consider how to make the logic toroid aware and relative velocity aware - e.g. ship at -200, asteroid at 200, ship going 30 left, asteroid going 30 right - if we do nothing we'll collide in ~624/60 = 11 turns. But if we chase it by turning to the right we'll never cath it.
+// Step 3: Consider how to adapt the logic for the actual collision detection accounting for object radius.
+// Step 3: Consider where we need to special case things below for IsDocked for optimal handling (already have a check in the Case 1a because nothing collides with us while docked.)
+// Step 4: Think about how to decide if 2aii or 2b is better.
+// Step 2: Adapt the logic given that the underlying simulation uses dt=0.2.
+// Step 3: Consider how to make our estimates fuel aware, and our order selections fuel aware.
+// Step 4: Consider how to adapt logic to be collision aware.
+FuelTraj Groonew::determine_orders(CShip* ship, CThing* thing, double time) {
+  /*
+    The idea in this part of the code is to implement a sort of greedy
+    pathfinding algorithm.
+
+    We consider exhastively (I think?) the cases for a 2 turn planniing horizon
+    to intercept thing.
+
+    Time is an upper bound. Normally we aim to arrive exaclty in time, because
+    our architecture calls this function iteratively for lower times, so we
+    don't need to worry about doing better than time here. That being said, for
+    case 1a and 2ai we might arrive early.
+
+    Note that this approach will not, in general, produce optimal shortest time
+    paths in all scenarios. That is something to refine later.
+
+    It differs from legacy Groogroo in that legacy Groogroo more or less ignored
+    the engine limits and just assumed any thrust up to 30 was obtainable, and
+    course corrected en route for any game engine interference with those plans.
+
+    Here we explicitly consider how the overthrust mechanics work and try to use
+    them to get on desired trajectories. We ignore for now the implementation
+    details of the 5 engine subticks and plan at the turn level, leaving subtick
+    analysis for future enhancement.
+  */
+  PathfindingContext ctx;
+
+  // Populates context as an in/out parameter.
+  InitializeContext(ctx, ship, thing, time, this->calculator_ship);
+
+  // Overview:
+  
+  // Case 0: Even at the game's max speed we can't get there in time.
+  
+  // Case 1: We're already on an intercept trajectory.
+  // Case 1a: And we'll drift into it at or before the desired time. => No order.
+  // Case 1b: We won't, but our orient is also on the trajectory and we can trust
+  //          to arrive on time. => O_THURST
+  // Case 1c: We won't, and our orient is not on the trajectory, but we can turn
+  //          and thrust to arrive on time. => O_TURN (and plan to thrust next turn)
+
+  // Case 2: We're not on the intercept trajectory.
+  // Case 2a: There is a thrust we can issue this turn that will get us on the 
+  //          intercept trajectory.
+  //          NOTE: Sometimes this thrust will actually put us further away from
+  //          the target, and increase our relative velocity. This is not a bug
+  //          - we are choosing to do that being on a line where we can thrust
+  //          straight at the target lets us get there in time.
+  // Case 2ai: With final velocity such that we reduce to case 1a in the following turn.
+  //           => O_THRUST
+  // Case 2aii: With final velocity such that we reduce to case 1c in the followimg turn.
+  //           => O_THRUST (and plan to turn next turn and thrust the turn after that)
+  //            NOTE: Logically we can't go from case 2a to case 1b without an external event so it's not considered in planning.
+  // Case 2b: There is a turn we can issue that will get us onto case 2ai in the following turn.
+  //          => O_TURN (and plan to thrust next turn)
+
+  // Case 0: Even at the game's max speed we can't get there in time.
+  if (intercept_vec_t0.rho > g_game_max_speed) {
+    return FAILURE_TRAJ;
   }
 
-  // If we got down here we couldn't find any way to intercept in time, return
-  // our initial failure indicating fj.
-  return fj;
+  // Case 1a: Check for drift collision (handled outside the intercept trajectory check because our nonpoint massess can collide even when not on an (point mass) intercept trajectory.
+  FuelTraj fj = TryDriftIntercept(ctx);
+  if (fj.path_found) {
+    return fj;
+  }
+
+// Determine if we are currently on an intercept trajectory.
+// If our ship isn't moving, consider our trajectory for the purposes of
+// this check to be along the direction of our orientation.
+bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.dest_vec_t0.rho);
+
+if (on_intercept_trajectory) {
+  // Case 1: We're already on an intercept trajectory.
+
+  // Case 1b: We are aligned and can thrust now.
+  fj = TryAlignedThrust(ctx);
+  if (fj.path_found) {
+    return fj;
+  }
+  
+  // Case 1c: We are misaligned and can turn now (and thrust next turn).
+  fj = TryTurnToAlign(ctx);
+  if (fj.path_found) {
+    return fj;
+  }
+
+} else {
+  // Case 2: We're not on the intercept trajectory.
+
+  // TODO: We have two possible ways of getting on the target heading with a
+  // specific speed under consideration here:
+
+  // Aproach (2a) which thrusts now,
+  // and then will probably turn and thrust again on later turns, and the
+  // approach below (2b) where we turn now and thrust next turn.
+
+  // We should think
+  // about how to choose between these approaches when they are both possible
+  // - e.g. fuel use, whether we think that ending up oriented towards the
+  // target on the approach is important, etc.
+  
+  // For now our preference for paths is: 2ai is better than 2b, which is better than 2aii.
+  // This is motivated by 2ai and 2b both being 2 order plans and 2aii being a 3 order plan, so 2ai and 2b are thought to be less speculative than 2aii. We prefer 2ai over 2b somewhat arbitrarily.
+
+  // TODO: Among other considerations - beark ties between 2ai and 2b bo forecasting which approach will have less distance to the target after 1 turn. (e.g. prefer 2ai over 2b if thrusting towards target, and vice versa).
+
+  // Case 2a: Analyze thrusting now to align trajectory.
+  Case2aResult result_2a = AnalyzeThrustToAlign(ctx);
+
+  // Case 2ai check (Thrust and drift):
+  if (result_2a.fj_2ai.path_found) {
+    return result_2a.fj_2ai;
+  }
+
+  // Case 2b: Try turning now to thrust next turn.
+  
+  // TODO: Case 2b is not always optimal - it may be better to do some
+  // thrust->overthrust->turn sequence instead. Consider the case where we are
+  // oriented right, and are trying to get to something mostly right and
+  // slightly up. We can thrust right on turn 1, rotate slightly up and on turn
+  // 2, and thrust up/right on turn 3, having benefitted from our initial
+  // thrus's velocity on both turns 1 and 2 to reduce the desired distance to
+  // our object for our thurst onto intercept on turn 3.
+  //
+  // TODO: Actually - the comment above gave me an idea - maybe we should
+  // analyze our current thrust options in terms of decompositon of parallel to,
+  // and perpendicualr to, our desired thurst, and consider strongly thrusting
+  // where the parallel to dimension is high.  
+  fj = TryTurnThenThrust(ctx);
+  if (fj.path_found) {
+    return fj;
+  }
+
+  // Case 2aii fallback (Thrust-Turn-Thrust):
+  if (result_2a.fj_2aii.path_found) {
+    return result_2a.fj_2aii;
+  }
+}
+
+// If we got down here we couldn't find any way to intercept in time.
+return FAILURE_TRAJ;
+
 }  
 
 /*

@@ -1,5 +1,5 @@
-#include "Entry.h"
+#include "PathInfo.h"
 
-Entry::Entry() {}
+PathInfo::PathInfo() {}
 
-Entry::~Entry() {}
+PathInfo::~PathInfo() {}

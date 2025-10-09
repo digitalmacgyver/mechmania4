@@ -7,29 +7,40 @@
 #include "Thing.h"
 #include "Traj.h"
 
-class Entry {
- public:
-  // The thing to which this entry refers
-  CThing *thing;
+// TODO - rename file to PathInfo.h/C
 
-  // The velocity trajectory we eventually want to be on and the fuel
-  // of the current move.
+// A budnle of useful data which we'll store as entries in our MagicBag for
+// navigation data.
+
+class PathInfo {
+ public:
+  // The thing moving along this path.
+  CThing* traveler;
+
+  // The destination for this path.
+  CThing* dest;
+
+  // The number of navigtaion orders planned along this path.
+  // TODO - populate this.
+  unsigned int order_count;
+
+  // The first order along our path. 
   FuelTraj fueltraj;
-  // The amount of fuel the trip to the thing is likely to take
+
+  // The estimate for all navigation orders planned along this path.
+  // TODO - populate this.
   double total_fuel;
 
   // The number of turns the trip is likely to take
+  // TODO - populate this.
   double turns_total;
 
-  // The first collision on the way
+  // TODO: This is here for future development - use it or remove it. The
+  // first collision on the way
   Collision collision;
 
-  // The ship number of the mech which is going after this object this
-  // turn.
-  int claimed_by_mech;
-
-  Entry();
-  ~Entry();
+  PathInfo();
+  ~PathInfo();
 };
 
 #endif

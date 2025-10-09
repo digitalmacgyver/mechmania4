@@ -214,9 +214,7 @@ void GetVinyl::Decide() {
       // Harvest resources case.
 
       // Our best target.
-      Entry *best_e = NULL;
-    
-
+      Entry* best_e = NULL;
       
       // TODO: Our basic deconflicting logic doesn't work, because it's
       // deconflicting on Entries, which aren't share anyway - it needs to

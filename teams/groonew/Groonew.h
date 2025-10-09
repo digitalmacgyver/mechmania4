@@ -18,6 +18,8 @@
 #include "Team.h"
 #include "Traj.h"
 
+#include <map>
+
 //////////////////////////////////////
 // Main class: Groonew team
 // Uses centralized planning with biological/hive-mind naming theme
@@ -35,15 +37,19 @@ class Groonew : public CTeam {
   double uranium_left;  // Total uranium in world
   double vinyl_left;    // Total vinyl in world
 
+    // Scratchpad ship used for accurate fuel simulations.
+  // Initialized once and reused throughout the game.
+  CShip* calculator_ship;
+
   void Init();  // Configure ships with 20 fuel/40 cargo split
   void Turn();  // Main turn logic - populate MagicBag then execute
 
-  // Fills MagicBag with optimal paths to all objects for each ship
-  // Calculates up to 28 turns into the future
+  // Fills MagicBag with path orders and related information to all objects
+  // for each ship.
   void PopulateMagicBag();
 
   // Path planning functions for individual targets
-  // Calculate optimal order (thrust/turn) to reach target in given time
+  // Calculate orders (thrust/turn) to reach target in given time
   FuelTraj determine_orders(CThing* thing, double time, CShip* ship);
 
   // TODO: Currently returns hardcoded 5.0 - should calculate actual fuel cost
@@ -51,6 +57,11 @@ class Groonew : public CTeam {
 
   // TODO: Currently returns dummy collision - should check path for obstacles
   Collision detect_collisions_on_path(CThing* thing, double time, CShip* ship);
+
+  private:
+    // TODO:
+    // We need a way to store and retrieve the prior targets we had last turn.
+    std::map<CShip*,CThing*> PriorTargets();
 };
 
 /////////////////////////////////////

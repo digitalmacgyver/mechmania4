@@ -3,6 +3,52 @@
 
 ===
 
+Team groogroo planning deconflicting design notes:
+
+To properly deconflict we want to assign optimal orders - e.g. the "Assignment Problem" in CS. We'll do so by using an off the shelf linear programming algorithm, which is provably optimal for the assignment problem as long as our utility functions are linear.
+* Utility functions TBD, but a sketch would be:
+  * If ship wants vinyl: eatable mass / time to get there +/- some adjustment for fuel cost, else -1
+  * If a ship wants uranium: "" + some adjustment for breaking down asteroids maybe?, else -1
+  * If ship wants home base: Handle outside of this mechanism, no contention here.
+  * If ship wants enemy ship: Handle outside, teaming up might be beneficial.
+  * If ship wants enemy base: Handle outside, no contention here.
+
+Prerequisites:
+
+TODO:
+  * Fix formatting of the files we edited
+  * Rename Entry.h/C 
+  * Get compiling
+  * Validte behavior is working.
+  * Clean up comments in code.
+  * Factor pathfunding into it's own file / compile / validate / comments
+  * Break up GetVinyl - put bulk of logic into subroutine of Turn():
+    * Do phase 0 deconflicting before implementing optimal assignment so I can see it working / get a feel for how much optimal assignment helps (maybe make a mm4team_groonew_basicdecon and bake off those teams.)
+
+We're going to move most of the GetVinyl ship based decision logic into Groogroo team scope reasoning in turn: For optimal play largely our decision engine will want to know global stuff and coordinate ships - it doesn't make sense for most of our decision making logic to reside in the ship.
+  * We could even just move _all_ the logic into turn, but for now we'll keep a model of:
+     * Team assigns high level coordinated orders
+     * Ships can override or augment those order with their particular context, notably for now that will be:
+       * Opportunistic shooting of stuff that is in their sights (enemy ships, enemy stations, asteroids they are about to collide with that are too big to eat)
+       * Shield management (e.g. topping up to safety margin if we have enough fuel, and dumping fuel to shields before collisions with eatable asteroids that won't fit presently)
+       * Rotate and dumping vinyl before enemy base colisions (note - our actual logic here is pretty good - I'm not sure if this was on accident or not but because base langhes are free, rotating to a theta, jettisoning cargo, and then being in a position to launch from base right at that cargo next turn is much better than burning fuel trying to turn and manouver away)
+  * OPTIONAL We're going to add a bunch of helpful state to Team (or maybe Team's Brain)
+    * world vinyl and uranium (done), vector or map of all vinyl in the world, uranium, enemy ships, pointer to our and enemy station.
+
+If two ships want the same Asteroid, break ties like this:
+
+Version 0:
+1. Break ties arbitrarily just keep things from going after the same taret.
+
+Version 1: Optimal Assignment with Utility function which accounts for:
+1. The one with the shortest time to intercept.
+2. The one who previously had this target.
+3. The one can get their with the least fuel.
+
+In the future we could get fancier with it - for example in going after vinyl we could choose the one with the most cargo space, or for uranium the one with the most fuel space, etc.
+
+===
+
 Major old behaviors changed:
 
   * 5x costing error for Ship Thurst orders than documented (although
@@ -382,6 +428,8 @@ In Ship.c, line 592 what is going on with the pointer checks against NULL and th
 
 ========================== Groonew TODO ============================================
 
+FOR EVOAI - Give it groogroo as a base, and then have the evoai compete against groonew? Once Groonew is conistently beating groogroo!
+
 0000DO FIRST000 - Our ships definitely just swarm around everything
 now - need to implement blocking on same resource:
   * version 1 - just mark a claim and prevent others from taking it
@@ -405,9 +453,7 @@ perhaps action econmy of getting to smaller chunks a tick earlier?)
 how much fuel does it take to break it up, versus how much shield do
 you lose and how much fuel to restore shield?
 
-How does our n_turns_vector / n_turns thing actually work?
-
-If we're moving to the right at 1 unit/sec and we want to be at -5 in
+How does our n_turns_vector / n_turns thing actually work?, e.g. If we're moving to the right at 1 unit/sec and we want to be at -5 in
 5 seconds, then we need to change our velocity to -1 this turn, or
 -6/5 next turn, a change of -2 or -11/5, not a change of -5 (or -6) /
 5?
@@ -417,8 +463,6 @@ How much shields do you need? what is the max damage due to a single collision?
 How do lasers work, if you put X fuel in how much damage do you to do something N away?
 
 How do collisions and carried over momentum work?
-
-
 
 TOROIDTOROIDTOROID
   Q. General nagivation / logic quersions - what happens near edges -
@@ -460,6 +504,8 @@ to send to the server for physics resolution!
 
 * See extensive todos and "Steps" in the documentation of determine
   order in Groonew.C and GetVinyl.C for team Groonew.
+
+Consider if a better build out for team groonew involves a hunter ship with 60 fuel who tries to shoot enemy ships in the early game and base late game.
 
 * Perfect navigation in Groogroo/MattMatt:
   * Phase 2 - fixes related to 0.2 micro tics between game turns.
