@@ -3,6 +3,7 @@
 #include "GetVinyl.h"
 #include "Groonew.h"
 #include "MagicBag.h"
+#include "Pathfinding.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
@@ -197,8 +198,8 @@ void GetVinyl::Decide() {
         printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
       }
       for (unsigned int j = 0; j < 50; ++j) {
-        FuelTraj ft = ((Groonew *)pmyTeam)
-                          ->determine_orders(pShip, pmyTeam->GetStation(), j);
+        FuelTraj ft = Pathfinding::DetermineOrders(pShip, pmyTeam->GetStation(), j,
+                                                     ((Groonew *)pmyTeam)->calculator_ship);
         if (ft.path_found) {
           // DEBUG - fix this - this is a hack were using right now when we want
           // to drift, we set the order to O_SHIELD with mag 0.
