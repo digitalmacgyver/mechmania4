@@ -29,10 +29,12 @@ class MagicBag {
 
   // Get specific entry for ship 'drone' path to dest - returns NULL if no path
   // information exists.
-  Entry *getEntry(unsigned int drone, const CThing* dest);
+  const PathInfo* getEntry(unsigned int drone, CThing* dest) const;
 
-  // Add new entry to ship's list (appends to end)
-  void addEntry(unsigned int drone, CThing* dest, PathInfo* path);
+  const std::unordered_map<CThing*, PathInfo>& getShipPaths(unsigned int drone) const;
+
+  // Add new entry to ship's list
+  void addEntry(unsigned int drone, CThing* dest, const PathInfo& path);
 };
 
 #endif

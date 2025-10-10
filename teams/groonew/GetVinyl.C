@@ -198,7 +198,7 @@ void GetVinyl::Decide() {
       }
       for (unsigned int j = 0; j < 50; ++j) {
         FuelTraj ft = ((Groonew *)pmyTeam)
-                          ->determine_orders(pmyTeam->GetStation(), j, pShip);
+                          ->determine_orders(pShip, pmyTeam->GetStation(), j);
         if (ft.path_found) {
           // DEBUG - fix this - this is a hack were using right now when we want
           // to drift, we set the order to O_SHIELD with mag 0.
@@ -214,45 +214,46 @@ void GetVinyl::Decide() {
       // Harvest resources case.
 
       // Our best target.
-      Entry* best_e = NULL;
-      
+      const PathInfo* best_e = NULL;
+
       // TODO: Our basic deconflicting logic doesn't work, because it's
       // deconflicting on Entries, which aren't share anyway - it needs to
       // deconflict on targets.
 
       // Targets can only be uniquely identified by their operator==/!=, so we
       // need to save the targets we're trying to deconflict, or dynamically pull
-      // them out of Entry->thing.
+      // them out of PathInfo->dest.
 
-      unsigned int i = 0;
-      for (Entry* e = mbp->getEntry(shipnum, 0); e != NULL;
-           e = mbp->getEntry(shipnum, i), i++) {
-        if (e->thing != NULL) {
+      const auto& ship_paths = mbp->getShipPaths(shipnum);
+      for (const auto& pair : ship_paths) {
+        const PathInfo& e = pair.second;  // pair.second is the PathInfo
+
+        if (e.dest != NULL) {
           // TODO: This is the simplest of deconfliction - we just greedily hand
-          // out claims. Next refinements: 
+          // out claims. Next refinements:
           // A. Give claim to ship with shortest time to intercept preferentially.
           // B. Do some kind of planning stability so ships don't switch targets
           // unless there is a clearly better (e.g. 1 turn sooner or better size
           // option).
           // DEBUG this doesn't work yet.
           bool already_claimed = false; //(e->claimed_by_mech == 1);
-          bool is_asteroid = (e->thing->GetKind() == ASTEROID);
+          bool is_asteroid = (e.dest->GetKind() == ASTEROID);
           // Note: Can't call GetMaterial on non-asteroids.
-          bool is_prefered_asteroid = (is_asteroid && (static_cast<CAsteroid*>(e->thing)->GetMaterial() == prefered_asteroid));
- 
+          bool is_prefered_asteroid = (is_asteroid && (static_cast<CAsteroid*>(e.dest)->GetMaterial() == prefered_asteroid));
+
           if (already_claimed || !is_asteroid || !is_prefered_asteroid) {
             continue;
           }
 
-          if ((best_e == NULL) || (e->turns_total < best_e->turns_total)) {
-            best_e = e;
+          if ((best_e == NULL) || (e.turns_total < best_e->turns_total)) {
+            best_e = &e;
           }
         }
       }
 
       if (best_e != NULL) {
         if (g_pParser && g_pParser->verbose) {
-          CThing* target = best_e->thing;
+          CThing* target = best_e->dest;
           CAsteroid* ast = (CAsteroid*)target;
           printf("\t→ Following %s asteroid %u:\n",
                  (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",

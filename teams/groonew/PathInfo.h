@@ -1,5 +1,5 @@
-#ifndef _ENTRY_H_
-#define _ENTRY_H_
+#ifndef _PATHINFO_H_
+#define _PATHINFO_H_
 
 #include "Collision.h"
 #include "FuelTraj.h"
@@ -7,7 +7,6 @@
 #include "Thing.h"
 #include "Traj.h"
 
-// TODO - rename file to PathInfo.h/C
 
 // A budnle of useful data which we'll store as entries in our MagicBag for
 // navigation data.

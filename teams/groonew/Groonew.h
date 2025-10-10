@@ -50,7 +50,7 @@ class Groonew : public CTeam {
 
   // Path planning functions for individual targets
   // Calculate orders (thrust/turn) to reach target in given time
-  FuelTraj determine_orders(CThing* thing, double time, CShip* ship);
+  FuelTraj determine_orders(CShip* ship, CThing* thing, double time);
 
   // TODO: Currently returns hardcoded 5.0 - should calculate actual fuel cost
   double determine_probable_fuel_cost(CThing* thing, double time, CShip* ship);

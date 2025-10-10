@@ -12,27 +12,29 @@
 
 MagicBag::MagicBag() {}
 
-MagicBag::~MagicBag() {
-  // TODO: Make sure wherever we stick Entry's into the Magic Bag we use std::shared
-  // or static pointers.
+MagicBag::~MagicBag() {}
+
+const PathInfo* MagicBag::getEntry(unsigned int drone, CThing* target) const {
+  auto ship_it = ship_paths.find(drone);
+  if (ship_it != ship_paths.end()) {
+    auto path_it = ship_it->second.find(target);
+    if (path_it != ship_it->second.end()) {
+      return &(path_it->second);
+    }
+  }
+  return NULL;
 }
 
-Entry* MagicBag::getEntry(unsigned int drone, CThing* target) {
-  try {
-    return ship_paths.at(drone).at(target);
-  } catch (const std::out_of_range& e) {
-    return NULL;
+const std::unordered_map<CThing*, PathInfo>& MagicBag::getShipPaths(unsigned int drone) const {
+  static const std::unordered_map<CThing*, PathInfo> empty_map;
+  auto it = ship_paths.find(drone);
+  if (it != ship_paths.end()) {
+    return it->second;
   }
+  return empty_map;
 }
 
-void MagicBag::addEntry(unsigned int drone, CThing* target, PathInfo* path) {
-  try {
-    ship_paths.at(drone)
-  } catch (const std::out_of_range& e) {
-    std::cerr << "ERROR: Trying to add an entry to an undefined ship (" << drone
-         << ")" << std::endl;
-    return;
-  }
+void MagicBag::addEntry(unsigned int drone, CThing* target, const PathInfo& path) {
+  // Just add the entry - if the ship doesn't exist, it will be created
   ship_paths[drone][target] = path;
-  return;
 }
