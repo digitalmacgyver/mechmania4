@@ -344,6 +344,9 @@ void Groonew::PopulateMagicBag() {
       CTraj dest_vec_t1 = ship_pos_t1.VectTo(ctx.destination);
       ctx.intercept_vec_t1 = dest_vec_t1;
       ctx.t1_intercept_feasible = false;
+      // TODO: This condition is really trying to represent "we have at least 2
+      // game turns to intercept - because we wish to issue 2 orders to arrive on
+      // an intercept course."
       if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
         ctx.t1_intercept_feasible = true;
         ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
@@ -515,8 +518,8 @@ void Groonew::PopulateMagicBag() {
       // TODO: Definitely fix this kind of comparison - we're never calling this
       // function with time = 1.5, so here due to FP rounding errors we might be
       // saying we don't have time to issue orders, or we do have time - in here we
-      // are reasoning about turns, not tie durations - see us_later for example!
-      if (t1_intercept_feasible && (time >= (g_game_turn_duration - g_fp_error_epsilon))) {
+      // are reasoning about turns, not time durations!
+      if (t1_intercept_feasible) {
         if (!is_speeding(ship, thrust_vec_t1.rho)) {
           // TODO: Either fix or remove these verbose logs with pmyWorld.
           //if (g_pParser && g_pParser->verbose) {
@@ -623,10 +626,10 @@ void Groonew::PopulateMagicBag() {
           //           or early. => O_THRUST
           
           // Check if we'll reach the target next turn due to this thrust.
-          bool thrust_reaches_target = (t_dest_vec_t1.rho <= (ship->GetSize() + thing->GetSize() / 2.0));
+          bool thrust_reaches_target = (t_dest_vec_t1.rho <= ((ship->GetSize() + thing->GetSize()) / 2.0));
           
           // TODO: It is logically possible, if perhaps not geometrically possible,
-          // that our thrust would push us through the position of the destomation -
+          // that our thrust would push us through the position of the destination -
           // if so we'd expect the game engine to register a collision and so
           // that's a thrust we'd like to execute. For now figuring that out
           // seems hard so we'll leave that for future enhancement.
@@ -640,13 +643,13 @@ void Groonew::PopulateMagicBag() {
           // time.
           double time_left = time - g_game_turn_duration;
           bool thrust_and_drift = (
-            on_target(t_ship_vel_t1, t_dest_vec_t1)
+            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho)
             && time_left > 0.0
             && t_ship_vel_t1.rho >= (t_dest_vec_t1.rho / time_left)
           );
           
+          // Check if we're heading the right way fast enough.
           if (thrust_reaches_target || thrusted_through || thrust_and_drift) {
-            // Check if we're heading the right way fast enough.
             result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k);
             // If 2ai is found, we stop analysis as it's the preferred outcome.
             return result;
@@ -654,14 +657,16 @@ void Groonew::PopulateMagicBag() {
           
           // Case 2aii: With final velocity such that we reduce to case 1c in 1 turn.
           //           => O_THRUST (and plan to turn next turn and thrust the turn after that)
-          if (time > 2*g_game_turn_duration) {
+          // NOTE: This condition is really trying to represent "we have at least 3
+          // game turns to intercept - because we wish to issue 3 orders to arrive on
+          // an intercept course."
+          if (time > (2*g_game_turn_duration + g_fp_error_epsilon)) {
             CCoord t_ship_pos_t2 = t_ship_pos_t1 + t_ship_vel_t1.ConvertToCoord();
             CTraj t_dest_vec_t2 = t_ship_pos_t2.VectTo(destination);
             CTraj t_intercept_vec_t2 = t_dest_vec_t2;
             t_intercept_vec_t2.rho /= (time - 2*g_game_turn_duration);  // Note - we have 2 turns less to get there
-            CTraj t_thrust_vec_t2 = t_intercept_vec_t2 - t_ship_vel_t1;
             if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho) 
-            && t_intercept_vec_t2.rho <= g_game_max_speed) {
+                && t_intercept_vec_t2.rho <= g_game_max_speed) {
               result.fj_2aii = CreateSuccessTraj(ctx, ship, O_THRUST, k);
             }
           }
@@ -834,6 +839,10 @@ void Groonew::PopulateMagicBag() {
       }
       
       // Case 2aii fallback (Thrust-Turn-Thrust):
+
+      // NOTE: We have seen a behavior change here since before the refactoring,
+      // due to a bug in the refactored code where this case never could be
+      // returned - so now we do return this case when all else fails. 
       if (result_2a.fj_2aii.path_found) {
         return result_2a.fj_2aii;
       }
