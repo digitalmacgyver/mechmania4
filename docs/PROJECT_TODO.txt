@@ -5,7 +5,11 @@
 
 Team groogroo planning deconflicting design notes:
 
-To properly deconflict we want to assign optimal orders - e.g. the "Assignment Problem" in CS. We'll do so by using an off the shelf linear programming algorithm, which is provably optimal for the assignment problem as long as our utility functions are linear.
+To properly deconflict we want to assign optimal orders - e.g. the
+"Assignment Problem" in CS. We'll do so by using an off the shelf
+linear programming algorithm, which is provably optimal for the
+assignment problem as long as our utility functions are linear.
+
 * Utility functions TBD, but a sketch would be:
   * If ship wants vinyl: eatable mass / time to get there +/- some adjustment for fuel cost, else -1
   * If a ship wants uranium: "" + some adjustment for breaking down asteroids maybe?, else -1
@@ -16,17 +20,22 @@ To properly deconflict we want to assign optimal orders - e.g. the "Assignment P
 Prerequisites:
 
 TODO:
-  * Fix formatting of the files we edited
-  * Rename Entry.h/C 
-  * Get compiling
-  * Validte behavior is working.
-  * Clean up comments in code.
   * Factor pathfunding into it's own file / compile / validate / comments
   * Break up GetVinyl - put bulk of logic into subroutine of Turn():
-    * Do phase 0 deconflicting before implementing optimal assignment so I can see it working / get a feel for how much optimal assignment helps (maybe make a mm4team_groonew_basicdecon and bake off those teams.)
+  
+    * Do phase 0 deconflicting before implementing optimal assignment
+      so I can see it working / get a feel for how much optimal
+      assignment helps (maybe make a mm4team_groonew_basicdecon and
+      bake off those teams.)
+  * Clean up comments in code.
 
-We're going to move most of the GetVinyl ship based decision logic into Groogroo team scope reasoning in turn: For optimal play largely our decision engine will want to know global stuff and coordinate ships - it doesn't make sense for most of our decision making logic to reside in the ship.
-  * We could even just move _all_ the logic into turn, but for now we'll keep a model of:
+We're going to move most of the GetVinyl ship based decision logic
+into Groogroo team scope reasoning in turn: For optimal play largely
+our decision engine will want to know global stuff and coordinate
+ships - it doesn't make sense for most of our decision making logic to
+reside in the ship.
+
+* We could even just move _all_ the logic into turn, but for now we'll keep a model of:
      * Team assigns high level coordinated orders
      * Ships can override or augment those order with their particular context, notably for now that will be:
        * Opportunistic shooting of stuff that is in their sights (enemy ships, enemy stations, asteroids they are about to collide with that are too big to eat)
