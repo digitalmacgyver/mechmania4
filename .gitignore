@@ -13,6 +13,9 @@ mm4serv
 mm4obs
 mm4team
 
+# Team binaries directory
+team_binaries/
+
 # IDE files
 .vscode/
 .idea/

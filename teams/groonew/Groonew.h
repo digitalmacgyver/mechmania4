@@ -48,6 +48,10 @@ class Groonew : public CTeam {
   // for each ship.
   void PopulateMagicBag();
 
+  // Centralized target selection and order assignment for all ships
+  // Called after PopulateMagicBag to assign base orders based on strategic planning
+  void AssignShipOrders();
+
   private:
     // TODO:
     // We need a way to store and retrieve the prior targets we had last turn.

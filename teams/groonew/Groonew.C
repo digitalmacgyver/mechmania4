@@ -12,6 +12,8 @@
 #include "ParserModern.h"
 #include "Pathfinding.h"
 
+#include <set>
+
 // External reference to global parser instance
 extern CParser* g_pParser;
 
@@ -112,34 +114,37 @@ void Groonew::Init() {
 
 void Groonew::Turn() {
   CShip* pSh;
-  
+
   // PHASE 1: Calculate paths to all objects for all ships
   // Creates new MagicBag and fills it with orders for
   // fast time to intercept considering a planning horizon of 1-3 turns.
   PopulateMagicBag();
-  
-  // PHASE 2: Each ship's AI uses the MagicBag to make decisions
+
+  // PHASE 2: Centralized strategic planning - assign base orders to all ships
+  AssignShipOrders();
+
+  // PHASE 3: Tactical overrides - let each ship's Brain handle emergencies
   for (unsigned int i = 0; i < GetShipCount(); ++i) {
     pSh = GetShip(i);
     if (pSh == NULL) {
       continue;  // Skip dead ships
     }
-    
+
     CBrain* brain = pSh->GetBrain();
     if (brain == NULL) {
       continue;
     }
-    
+
     // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
     if (DEBUG_MODE && strcmp(pSh->GetName(), "Gold Leader") != 0) {
       // All the other ships do nothing, we let gold leader's brain decide.
       pSh->ResetOrders();
       continue;
     }
-    
-    // GetVinyl::Decide() will access the MagicBag to choose targets
+
+    // GetVinyl::Decide() will now only handle tactical overrides (collisions, shields)
     brain->Decide();
-    
+
   }
 }
 
@@ -224,6 +229,137 @@ void Groonew::PopulateMagicBag() {
           mb->addEntry(ship_i, athing, path);
           break;  // Found valid path, move to next object
         }
+      }
+    }
+  }
+}
+
+void Groonew::AssignShipOrders() {
+  std::set<CThing*> claimed_targets;
+
+  // Process each ship and assign base orders for target interception
+  for (unsigned int shipnum = 0; shipnum < GetShipCount(); ++shipnum) {
+    CShip* pShip = GetShip(shipnum);
+    if (pShip == NULL || !pShip->IsAlive()) {
+      continue;  // Skip dead ships
+    }
+
+    // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
+    if (DEBUG_MODE && strcmp(pShip->GetName(), "Gold Leader") != 0) {
+      // Skip other ships in debug mode
+      continue;
+    }
+
+    CWorld* pmyWorld = GetWorld();
+
+    // Verbose logging header
+    if (g_pParser && g_pParser->verbose) {
+      printf("t=%.1f\t%s [strategic planning]:\n", pmyWorld->GetGameTime(), pShip->GetName());
+    }
+
+    double cur_fuel = pShip->GetAmount(S_FUEL);
+    double cur_cargo = pShip->GetAmount(S_CARGO);
+    double max_fuel = pShip->GetCapacity(S_FUEL);
+    double max_cargo = pShip->GetCapacity(S_CARGO);
+
+    // Determine preferred asteroid type based on current state
+    AsteroidKind prefered_asteroid = VINYL;
+    bool uranium_available = (uranium_left > 0.0);
+    bool vinyl_available = (vinyl_left > 0.0);
+    if (!vinyl_available || (cur_fuel <= 5.0 && uranium_available)) {
+      prefered_asteroid = URANIUM;
+    }
+
+    // Check if we should return to base
+    if ((pShip->GetAmount(S_CARGO) >= (2*40/3 - g_fp_error_epsilon)) ||
+        (!vinyl_available && pShip->GetAmount(S_CARGO) > 0.01)) {
+      // Return to base if we've got at least 2 medium sized asteroids in cargo,
+      // or if there's no vinyl available and we've got any cargo.
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
+      }
+      for (unsigned int j = 0; j < 50; ++j) {
+        FuelTraj ft = Pathfinding::DetermineOrders(pShip, GetStation(), j, calculator_ship);
+        if (ft.path_found) {
+          // DEBUG - fix this - this is a hack were using right now when we want
+          // to drift, we set the order to O_SHIELD with mag 0.
+          if (ft.order_kind != O_SHIELD) {
+            pShip->SetOrder(ft.order_kind, ft.order_mag);
+          }
+          // Either we set the order above, or we didn't need an order this turn
+          // to achieve our goal.
+          break;
+        }
+      }
+    } else {
+      // Harvest resources case - select best target from MagicBag
+
+      // Our best target.
+      const PathInfo* best_e = NULL;
+
+      // TODO: Targets can only be uniquely identified by their operator==/!=, so we
+      // need to save the targets we're trying to deconflict, or dynamically pull
+      // them out of PathInfo->dest.
+
+      const auto& ship_paths = mb->getShipPaths(shipnum);
+      for (const auto& pair : ship_paths) {
+        const PathInfo& e = pair.second;  // pair.second is the PathInfo
+
+        if (claimed_targets.find(e.dest) != claimed_targets.end()) {
+          continue;
+        }
+
+        if (e.dest != NULL) {
+          bool is_asteroid = (e.dest->GetKind() == ASTEROID);
+          // Note: Can't call GetMaterial on non-asteroids.
+          bool is_prefered_asteroid = (is_asteroid && (static_cast<CAsteroid*>(e.dest)->GetMaterial() == prefered_asteroid));
+
+          if (!is_asteroid || !is_prefered_asteroid) {
+            continue;
+          }
+
+          if ((best_e == NULL) || (e.turns_total < best_e->turns_total)) {
+            best_e = &e;
+          }
+        }
+      }
+
+      if (best_e != NULL) {
+        if (g_pParser && g_pParser->verbose) {
+          CThing* target = best_e->dest;
+          CAsteroid* ast = (CAsteroid*)target;
+          printf("\t→ Following %s asteroid %u:\n",
+                 (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",
+                 target->GetWorldIndex());
+
+          // Ship state
+          CCoord ship_pos = pShip->GetPos();
+          CTraj ship_vel = pShip->GetVelocity();
+          double ship_orient = pShip->GetOrient();
+          printf("\t  Ship:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\n",
+                 ship_pos.fX, ship_pos.fY, ship_vel.rho, ship_vel.theta, ship_orient);
+
+          // Asteroid state
+          CCoord ast_pos = target->GetPos();
+          CTraj ast_vel = target->GetVelocity();
+          double ast_orient = target->GetOrient();
+          printf("\t  Asteroid:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\tmass %.1f\n",
+                 ast_pos.fX, ast_pos.fY, ast_vel.rho, ast_vel.theta, ast_orient, target->GetMass());
+
+          // Trajectory info
+          printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                 best_e->turns_total,
+                 ((best_e->fueltraj).order_kind == O_THRUST) ? "thrust" :
+                 ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other/none",
+                 (best_e->fueltraj).order_mag);
+        }
+
+        claimed_targets.insert(best_e->dest);
+
+        pShip->SetOrder((best_e->fueltraj).order_kind,
+                        (best_e->fueltraj).order_mag);
+
+
       }
     }
   }

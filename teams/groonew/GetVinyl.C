@@ -18,7 +18,11 @@ GetVinyl::GetVinyl() {}
 GetVinyl::~GetVinyl() {}
 
 void GetVinyl::Decide() {
-  pShip->ResetOrders();
+  // Strategic planning has already been done in Groonew::AssignShipOrders()
+  // Only override orders if we locked them due to collision handling above We
+  // rely on these properties of SetOrder/SetJettison: they clear incompatible
+  // thurst/turn/jettison orders. We rely on the fact that shooting and shields
+  // can happen in parallel with navigational orders.
 
   // can't fire and drive cause of alcohol breath
   CTeam *pmyTeam = pShip->GetTeam();
@@ -28,9 +32,6 @@ void GetVinyl::Decide() {
   if (g_pParser && g_pParser->verbose) {
     printf("t=%.1f\t%s:\n", pmyWorld->GetGameTime(), pShip->GetName());
   }
-
-  unsigned int shipnum = pShip->GetShipNumber();
-  MagicBag *mbp = ((Groonew *)pmyTeam)->mb;
 
   double cur_shields = pShip->GetAmount(S_SHIELD);
   double cur_fuel = pShip->GetAmount(S_FUEL);
@@ -144,6 +145,10 @@ void GetVinyl::Decide() {
         if (g_pParser && g_pParser->verbose) {
           printf("\t→ Turning away from enemy station (π radians)\n");
         }
+        // NOTE: Actually this is a pretty good heursitc for old groogroo and
+        // even groonew. Usually we travel "forward" and we want to eject, dock,
+        // and then relaunch right into it so we want to hit the station back
+        // first probably.
         pShip->SetOrder(O_TURN, PI);  // should check where we are pointing
         lock_orders = true;
       } else if (kind == ASTEROID) {
@@ -179,123 +184,6 @@ void GetVinyl::Decide() {
     }
   }
 
-  // If we've not locked orders due to collision logic above, decide on orders.
-  if (!lock_orders) {
-    AsteroidKind prefered_asteroid = VINYL;
-    // TODO: Add some logic for when neither is available - e.g. return to base
-    // with cargo or attack enemy station/ship with cargo.
-    bool uranium_available = (((Groonew *)pmyTeam)->uranium_left > 0.0);
-    bool vinyl_available = (((Groonew *)pmyTeam)->vinyl_left > 0.0);
-    if (!vinyl_available || (cur_fuel <= 5.0 && uranium_available)) {
-      prefered_asteroid = URANIUM;
-    }
-
-    if ((pShip->GetAmount(S_CARGO) >= (2*40/3 - g_fp_error_epsilon)) ||
-        (!vinyl_available && pShip->GetAmount(S_CARGO) > 0.01)) {
-      // Return to base if we've got at least 2 medium sized asteroids in cargo,
-      // or if there's no vinyl available and we've got any cargo.
-      if (g_pParser && g_pParser->verbose) {
-        printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
-      }
-      for (unsigned int j = 0; j < 50; ++j) {
-        FuelTraj ft = Pathfinding::DetermineOrders(pShip, pmyTeam->GetStation(), j,
-                                                     ((Groonew *)pmyTeam)->calculator_ship);
-        if (ft.path_found) {
-          // DEBUG - fix this - this is a hack were using right now when we want
-          // to drift, we set the order to O_SHIELD with mag 0.
-          if (ft.order_kind != O_SHIELD) {
-            pShip->SetOrder(ft.order_kind, ft.order_mag);
-          }
-          // Either we set the order above, or we didn't need an order this turn
-          // to achieve our goal.
-          break;
-        }
-      }
-    } else {
-      // Harvest resources case.
-
-      // Our best target.
-      const PathInfo* best_e = NULL;
-
-      // TODO: Our basic deconflicting logic doesn't work, because it's
-      // deconflicting on Entries, which aren't share anyway - it needs to
-      // deconflict on targets.
-
-      // Targets can only be uniquely identified by their operator==/!=, so we
-      // need to save the targets we're trying to deconflict, or dynamically pull
-      // them out of PathInfo->dest.
-
-      const auto& ship_paths = mbp->getShipPaths(shipnum);
-      for (const auto& pair : ship_paths) {
-        const PathInfo& e = pair.second;  // pair.second is the PathInfo
-
-        if (e.dest != NULL) {
-          // TODO: This is the simplest of deconfliction - we just greedily hand
-          // out claims. Next refinements:
-          // A. Give claim to ship with shortest time to intercept preferentially.
-          // B. Do some kind of planning stability so ships don't switch targets
-          // unless there is a clearly better (e.g. 1 turn sooner or better size
-          // option).
-          // DEBUG this doesn't work yet.
-          bool already_claimed = false; //(e->claimed_by_mech == 1);
-          bool is_asteroid = (e.dest->GetKind() == ASTEROID);
-          // Note: Can't call GetMaterial on non-asteroids.
-          bool is_prefered_asteroid = (is_asteroid && (static_cast<CAsteroid*>(e.dest)->GetMaterial() == prefered_asteroid));
-
-          if (already_claimed || !is_asteroid || !is_prefered_asteroid) {
-            continue;
-          }
-
-          if ((best_e == NULL) || (e.turns_total < best_e->turns_total)) {
-            best_e = &e;
-          }
-        }
-      }
-
-      if (best_e != NULL) {
-        if (g_pParser && g_pParser->verbose) {
-          CThing* target = best_e->dest;
-          CAsteroid* ast = (CAsteroid*)target;
-          printf("\t→ Following %s asteroid %u:\n",
-                 (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",
-                 target->GetWorldIndex());
-
-          // Ship state
-          CCoord ship_pos = pShip->GetPos();
-          CTraj ship_vel = pShip->GetVelocity();
-          double ship_orient = pShip->GetOrient();
-          printf("\t  Ship:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\n",
-                 ship_pos.fX, ship_pos.fY, ship_vel.rho, ship_vel.theta, ship_orient);
-
-          // Asteroid state
-          CCoord ast_pos = target->GetPos();
-          CTraj ast_vel = target->GetVelocity();
-          double ast_orient = target->GetOrient();
-          printf("\t  Asteroid:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\tmass %.1f\n",
-                 ast_pos.fX, ast_pos.fY, ast_vel.rho, ast_vel.theta, ast_orient, target->GetMass());
-
-          // Trajectory info
-          printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                 best_e->turns_total,
-                 ((best_e->fueltraj).order_kind == O_THRUST) ? "thrust" :
-                 ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other/none",
-                 (best_e->fueltraj).order_mag);
-        }
-
-        pShip->SetOrder((best_e->fueltraj).order_kind,
-                        (best_e->fueltraj).order_mag);
-
-        // TODO: This is the simplest of deconfliction - we just greedily hand
-        // out claims. Next refinements: 
-        // A. Give claim to ship with shortest time to intercept preferentially.
-        // B. Do some kind of planning stability so ships don't switch targets
-        // unless there is a clearly better (e.g. 1 turn sooner or better size
-        // option).
-        // DEBUG this doesn't work yet.
-        // best_e->claimed_by_mech = 1;
-      }
-    }
-  }
 
   // PHASE 3: SHIELD MAINTENANCE
   // Calculate total fuel that will be used this turn
