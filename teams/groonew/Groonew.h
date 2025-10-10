@@ -48,15 +48,9 @@ class Groonew : public CTeam {
   // for each ship.
   void PopulateMagicBag();
 
-  // Path planning functions for individual targets
-  // Calculate orders (thrust/turn) to reach target in given time
-  FuelTraj determine_orders(CShip* ship, CThing* thing, double time);
-
-  // TODO: Currently returns hardcoded 5.0 - should calculate actual fuel cost
-  double determine_probable_fuel_cost(CThing* thing, double time, CShip* ship);
-
-  // TODO: Currently returns dummy collision - should check path for obstacles
-  Collision detect_collisions_on_path(CThing* thing, double time, CShip* ship);
+  // Centralized target selection and order assignment for all ships
+  // Called after PopulateMagicBag to assign base orders based on strategic planning
+  void AssignShipOrders();
 
   private:
     // TODO:
