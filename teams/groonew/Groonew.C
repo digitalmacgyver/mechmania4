@@ -28,6 +28,7 @@ Feature change log:
 2025-09-29: Reduced magic bag horizon to 21 turns. (Shouldn't reduce game outcomes, we should be able to get anywhere in around 20 turns - there are some low velocity paths but we're not optimizing for that now).
 2025-10-01: Pathing updates to consider overthrust aware thrust-turning to get on desired trajectory as an option.
 2025-10-09: Refactored code and used modern containers in MagicBag.
+2025-10-10: Reorganized code: Pathfinding into its own module, most planning into Groonew, implemented basic target contention prevention.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */

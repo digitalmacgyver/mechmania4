@@ -188,7 +188,7 @@ namespace Pathfinding {
     // --- Maneuver Helpers ---
 
     // Helper to create a successful FuelTraj and calculate fuel usage via SetOrder.
-    FuelTraj CreateSuccessTraj(const PathfindingContext& ctx, CShip* ship, OrderKind kind, double mag) {
+    FuelTraj CreateSuccessTraj(const PathfindingContext& ctx, CShip* ship, OrderKind kind, double mag, const char* case_label) {
       FuelTraj fj;
       fj.path_found = true;
       fj.order_kind = kind;
@@ -197,6 +197,27 @@ namespace Pathfinding {
       // TODO: Fuel awareness - check if our order was reduced due to fuel limits.
       // Calculate the accurate fuel cost using the T0 state and the calculator.
       fj.fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, kind, mag);
+
+      // Verbose logging of successful paths
+      if (g_pParser && g_pParser->verbose) {
+        const char* order_name = (kind == O_THRUST) ? "THRUST" :
+                                (kind == O_TURN) ? "TURN" :
+                                (kind == O_SHIELD) ? "DRIFT" : "OTHER";
+
+        // Get target velocity
+        CTraj target_vel = ctx.thing->GetVelocity();
+
+        printf("[Pathfinding] Case %s: %s %.3f (fuel=%.1f)\n",
+               case_label, order_name, mag, fj.fuel_used);
+        printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f) orient=%.2f\n",
+               ctx.ship_pos_t0.fX, ctx.ship_pos_t0.fY,
+               ctx.ship_vel_t0.rho, ctx.ship_vel_t0.theta,
+               ctx.ship_orient_t0);
+        printf("  Target: pos(%.1f,%.1f) vel(%.1f,%.2f) dest(%.1f,%.1f)\n",
+               ctx.thing->GetPos().fX, ctx.thing->GetPos().fY,
+               target_vel.rho, target_vel.theta,
+               ctx.destination.fX, ctx.destination.fY);
+      }
 
       return fj;
     }
@@ -212,6 +233,22 @@ namespace Pathfinding {
       double its_coming_right_for_us = ship->DetectCollisionCourse(*thing);
       if (!ship->IsDocked() && its_coming_right_for_us != g_no_collide_sentinel &&
       its_coming_right_for_us <= time) {
+        // Verbose logging for drift intercept
+        if (g_pParser && g_pParser->verbose) {
+          CTraj target_vel = thing->GetVelocity();
+
+          printf("[Pathfinding] Case 1a: DRIFT (collision in %.1f turns)\n",
+                 its_coming_right_for_us);
+          printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f) orient=%.2f\n",
+                 ctx.ship_pos_t0.fX, ctx.ship_pos_t0.fY,
+                 ctx.ship_vel_t0.rho, ctx.ship_vel_t0.theta,
+                 ctx.ship_orient_t0);
+          printf("  Target: pos(%.1f,%.1f) vel(%.1f,%.2f) dest(%.1f,%.1f)\n",
+                 thing->GetPos().fX, thing->GetPos().fY,
+                 target_vel.rho, target_vel.theta,
+                 ctx.destination.fX, ctx.destination.fY);
+        }
+
         // TODO: We have to issue some kind of order in FuelTraj but we don't actually
         // want our planner to take note of the order - O_SHIELD seems the safest bet,
         // but we should clean this up.
@@ -245,7 +282,7 @@ namespace Pathfinding {
           thrust_order_amt *= -1.0;
         }
         if (!is_speeding(ship, thrust_order_amt)) {
-          return CreateSuccessTraj(ctx, ship, O_THRUST, thrust_order_amt);
+          return CreateSuccessTraj(ctx, ship, O_THRUST, thrust_order_amt, "1b");
         }
       }
       return FAILURE_TRAJ;
@@ -277,7 +314,7 @@ namespace Pathfinding {
         //}
 
         double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
-        return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt);
+        return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, "1c");
       }
       return FAILURE_TRAJ;
     }
@@ -315,7 +352,7 @@ namespace Pathfinding {
          // }
           double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
 
-          return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt);
+          return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, "2b");
         }
       }
       return FAILURE_TRAJ;
@@ -438,7 +475,7 @@ namespace Pathfinding {
 
           // Check if we're heading the right way fast enough.
           if (thrust_reaches_target || thrusted_through || thrust_and_drift) {
-            result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k);
+            result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k, "2ai");
             // If 2ai is found, we stop analysis as it's the preferred outcome.
             return result;
           }
@@ -455,7 +492,7 @@ namespace Pathfinding {
             t_intercept_vec_t2.rho /= (time - 2*g_game_turn_duration);  // Note - we have 2 turns less to get there
             if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho)
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
-              result.fj_2aii = CreateSuccessTraj(ctx, ship, O_THRUST, k);
+              result.fj_2aii = CreateSuccessTraj(ctx, ship, O_THRUST, k, "2aii");
             }
           }
         }
