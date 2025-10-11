@@ -493,6 +493,33 @@ namespace Pathfinding {
             if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho)
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
               result.fj_2aii = CreateSuccessTraj(ctx, ship, O_THRUST, k, "2aii");
+
+              // Diagnostic logging for Case 2aii orientation analysis
+              if (g_pParser && g_pParser->verbose && result.fj_2aii.path_found) {
+                if (ship_vel_t0.rho > 1.0) {
+                  // Calculate angle between ship orientation and velocity direction
+                  double angle_diff = fabs(ship_orient_t0 - ship_vel_t0.theta);
+                  // Normalize to [0, PI]
+                  while (angle_diff > 2*PI) angle_diff -= 2*PI;
+                  if (angle_diff > PI) angle_diff = 2*PI - angle_diff;
+
+                  const char* facing_dir;
+                  if (angle_diff <= PI/4) {
+                    facing_dir = "FORWARD";  // Within 45 degrees of velocity
+                  } else if (angle_diff >= 3*PI/4) {
+                    facing_dir = "BACKWARD"; // Within 45 degrees of opposite velocity
+                  } else {
+                    facing_dir = "SIDEWAYS"; // In the 90 degree arcs to either side
+                  }
+
+                  printf("[Case 2aii Analysis] Thrust: %.2f, Facing: %s, Speed: %.1f/%.1f, Orient-Vel angle: %.2f rad\n",
+                         k, facing_dir, ship_vel_t0.rho, g_game_max_speed, angle_diff);
+                } else {
+                  // Low velocity case - ship is essentially stationary
+                  printf("[Case 2aii Analysis] Thrust: %.2f, LOW_VELOCITY (%.2f), Orient: %.2f rad\n",
+                         k, ship_vel_t0.rho, ship_orient_t0);
+                }
+              }
             }
           }
         }
