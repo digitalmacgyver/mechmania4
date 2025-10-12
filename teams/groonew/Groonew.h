@@ -19,6 +19,7 @@
 #include "Traj.h"
 
 #include <map>
+#include <vector>
 
 // Ship wants are a high level goal for the ship.
 enum ShipWants { HOME, POINTS, FUEL, VIOLENCE, NOTHING };
@@ -62,6 +63,15 @@ class Groonew : public CTeam {
 
     // Calculate the utility of a given path.
     double CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e);
+
+    // Helper function to apply orders and log the decision.
+    void ApplyOrders(CShip* pShip, const PathInfo& best_e);
+
+    // Solves the assignment problem for resource collection using a lightweight
+    // brute-force approach.
+    void SolveResourceAssignment(
+        const std::vector<CShip*>& agents,
+        const std::map<CShip*, unsigned int>& ship_ptr_to_shipnum);
 };
 
 /////////////////////////////////////

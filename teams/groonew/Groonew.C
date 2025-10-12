@@ -5,7 +5,11 @@
  * based on Sample file by Misha Voloshin 9/26/98
  */
 
-
+#include <algorithm>  // Required for std::max
+#include <cmath>      // Required for std::pow, std::min
+#include <map>
+#include <set>
+#include <vector>
 
 #include "Asteroid.h"
 #include "GameConstants.h"
@@ -14,14 +18,8 @@
 #include "ParserModern.h"
 #include "Pathfinding.h"
 
-#include <cmath>  // Required for std::pow, std::min
-#include <map>
-#include <memory>  // Required for std::unique_ptr
-#include <set>
-#include <string>  // Required for std::to_string
-#include <vector>
-
-#include "ortools/linear_solver/linear_solver.h"
+// NOTE: OR-Tools includes are removed as we are replacing the solver.
+// #include "ortools/linear_solver/linear_solver.h"
 
 // External reference to global parser instance
 extern CParser* g_pParser;
@@ -30,21 +28,16 @@ extern CParser* g_pParser;
 
 Feature change log:
 
-2025-09-26: Fixed off by one error in in calculating thrust vector for next turn
-thrusts. 2025-09-26: Improved collision detection (from the engine). 2025-09-26:
-Don't break the speed limit (Note: worsened performace due to engine behavior).
+2025-09-26: Fixed off by one error in in calculating thrust vector for next turn thrusts. 
+2025-09-26: Improved collision detection (from the engine). 
+2025-09-26: Don't break the speed limit (Note: worsened performace due to engine behavior).
 2025-09-28: Allow no-order turns when we're drifting into a target in MagicBag.
-2025-09-29: Reduced magic bag horizon to 21 turns. (Shouldn't reduce game
-outcomes, we should be able to get anywhere in around 20 turns - there are some
-low velocity paths but we're not optimizing for that now). 2025-10-01: Pathing
-updates to consider overthrust aware thrust-turning to get on desired trajectory
-as an option. 2025-10-09: Refactored code and used modern containers in
-MagicBag. 2025-10-10: Reorganized code: Pathfinding into its own module, most
-planning into Groonew, implemented basic target contention prevention.
-2025-10-12: Implemented optimal resource assignment using Google OR-Tools Linear
-Solver. TBD: Change magic bag population to gracefully handle floating point
-rounding errors when reasoning about how many "turns" we have left to get our
-orders in for intercept.
+2025-09-29: Reduced magic bag horizon to 21 turns. (Shouldn't reduce game outcomes, we should be able to get anywhere in around 20 turns - there are some low velocity paths but we're not optimizing for that now). 
+2025-10-01: Pathing updates to consider overthrust aware thrust-turning to get on desired trajectory as an option. 
+2025-10-09: Refactored code and used modern containers in MagicBag. 
+2025-10-10: Reorganized code: Pathfinding into its own module, most planning into Groonew, implemented basic target contention prevention.
+2025-10-12: Implemented optimal resource assignment using lightweight Brute Force Optimization (Removed LP Solver dependency). 
+TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
 
@@ -134,8 +127,6 @@ void Groonew::Turn() {
   CShip* pSh;
 
   // PHASE 1: Calculate paths to all objects for all ships
-  // Creates new MagicBag and fills it with orders for
-  // fast time to intercept considering a planning horizon of 1-3 turns.
   PopulateMagicBag();
 
   // PHASE 2: Centralized strategic planning - assign base orders to all ships
@@ -210,18 +201,9 @@ void Groonew::PopulateMagicBag() {
         }
       }
 
-      // How far out in the future should we search for intercepts? Considering
-      // on our toroidal world we're never more than 512 units away from
-      // anything, and our max speed is 30, so we can get there in 18 turns. Add
-      // 2 turns for planning and 1 for slop.
       unsigned int max_intercept_turns = 21;
 
-      // TODO: Rewrite this to use global world time steps instead of assuming
-      // it's 1 sec per turn.
-      //
       // Calculate optimal intercept time
-      // We try each time and take the first valid solution
-
       for (unsigned int turn_i = 1; turn_i < max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
         FuelTraj fueltraj = Pathfinding::DetermineOrders(ship, athing, turn_i,
@@ -295,8 +277,76 @@ void Groonew::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
   pShip->SetOrder((best_e.fueltraj).order_kind, (best_e.fueltraj).order_mag);
 }
 
-// Solves the assignment problem for resource collection using OR-Tools LP
-// Solver.
+namespace {
+// Helper struct to manage the state of the brute-force search.
+struct AssignmentResult {
+  double max_utility = -1.0;
+  // Stores the task index assigned to each agent index. -1 means unassigned.
+  std::vector<int> best_assignments;
+};
+
+// Recursive function (Backtracking search) to find the maximum utility
+// assignment. agent_idx: The current agent we are trying to assign. used_tasks:
+// A boolean vector tracking which tasks are already assigned. current_utility:
+// The utility accumulated so far in this path. utilities: The utility matrix.
+// result: The structure storing the overall best result found so far.
+// current_assignment: The assignments made so far in this path.
+void FindMaxAssignment(int agent_idx, std::vector<bool>& used_tasks,
+                       double current_utility,
+                       const std::vector<std::vector<double>>& utilities,
+                       AssignmentResult& result,
+                       std::vector<int>& current_assignment) {
+  const int num_agents = utilities.size();
+  const int num_tasks = used_tasks.size();
+
+  // Base Case: All agents have been considered.
+  if (agent_idx == num_agents) {
+    if (current_utility > result.max_utility) {
+      result.max_utility = current_utility;
+      result.best_assignments = current_assignment;
+    }
+    return;
+  }
+
+  // Recursive Step: Try assigning this agent to any available task.
+  bool assignment_attempted = false;
+  for (int task_idx = 0; task_idx < num_tasks; ++task_idx) {
+    if (!used_tasks[task_idx]) {
+      // Optimization: Skip if utility is non-positive.
+      if (utilities[agent_idx][task_idx] <= 0.0)
+        continue;
+
+      assignment_attempted = true;
+
+      // 1. Choose
+      used_tasks[task_idx] = true;
+      current_assignment[agent_idx] = task_idx;
+      double utility_gain = utilities[agent_idx][task_idx];
+
+      // 2. Explore
+      FindMaxAssignment(agent_idx + 1, used_tasks,
+                        current_utility + utility_gain, utilities, result,
+                        current_assignment);
+
+      // 3. Unchoose (Backtrack)
+      current_assignment[agent_idx] = -1;  // Reset assignment
+      used_tasks[task_idx] = false;
+    }
+  }
+
+  // Handle the case where the agent is not assigned to any task
+  // (e.g., fewer tasks than agents, or no positive utility tasks available).
+  // If we didn't find a positive utility assignment to attempt for this agent,
+  // we must still proceed to the next agent.
+  if (!assignment_attempted) {
+    FindMaxAssignment(agent_idx + 1, used_tasks, current_utility, utilities,
+                      result, current_assignment);
+  }
+}
+}  // namespace
+
+// Solves the assignment problem for resource collection using a lightweight
+// brute-force approach.
 void Groonew::SolveResourceAssignment(
     const std::vector<CShip*>& agents,
     const std::map<CShip*, unsigned int>& ship_ptr_to_shipnum) {
@@ -354,97 +404,56 @@ void Groonew::SolveResourceAssignment(
     }
   }
 
-  // 2. Create the solver.
-  // We use the OR-Tools Linear Solver abstraction.
-  using namespace operations_research;
-  // Using GLOP as requested in the prompt example.
-  std::unique_ptr<MPSolver> solver(MPSolver::CreateSolver("GLOP"));
-  if (!solver) {
-    printf("ERROR: Could not create GLOP solver.\n");
-    return;
-  }
+  // 2. Solve the problem using recursive brute-force (Backtracking).
+  AssignmentResult result;
+  // Initialize state for the search.
+  std::vector<bool> used_tasks(num_tasks, false);
+  std::vector<int> current_assignment(num_agents,
+                                      -1);  // -1 indicates unassigned.
 
-  // 3. Create decision variables.
-  // x[i][j] is 1 if agent i is assigned to task j, 0 otherwise.
-  std::vector<std::vector<MPVariable*>> x(num_agents,
-                                          std::vector<MPVariable*>(num_tasks));
-  for (int i = 0; i < num_agents; ++i) {
-    for (int j = 0; j < num_tasks; ++j) {
-      x[i][j] = solver->MakeBoolVar("x_" + std::to_string(i) + "_" +
-                                    std::to_string(j));
-    }
-  }
+  // Start the recursive search from the first agent (index 0).
+  FindMaxAssignment(0, used_tasks, 0.0, utilities, result, current_assignment);
 
-  // 4. Define Constraints.
-  // C1: Each agent (ship) is assigned to at most one task (asteroid).
-  for (int i = 0; i < num_agents; ++i) {
-    LinearExpr agent_sum;
-    for (int j = 0; j < num_tasks; ++j) {
-      agent_sum += x[i][j];
-    }
-    solver->MakeRowConstraint(agent_sum <= 1.0);
-  }
-  // C2: Each task (asteroid) is assigned to at most one agent (ship).
-  for (int j = 0; j < num_tasks; ++j) {
-    LinearExpr task_sum;
-    for (int i = 0; i < num_agents; ++i) {
-      task_sum += x[i][j];
-    }
-    solver->MakeRowConstraint(task_sum <= 1.0);
-  }
-
-  // 5. Define the objective function (Maximize total utility).
-  MPObjective* const objective = solver->MutableObjective();
-  for (int i = 0; i < num_agents; ++i) {
-    for (int j = 0; j < num_tasks; ++j) {
-      objective->SetCoefficient(x[i][j], utilities[i][j]);
-    }
-  }
-  objective->SetMaximization();
-
-  // 6. Solve the problem.
-  const MPSolver::ResultStatus result_status = solver->Solve();
-
-  // 7. Process results and assign orders.
-  if (result_status == MPSolver::OPTIMAL ||
-      result_status == MPSolver::FEASIBLE) {
+  // 3. Process results and assign orders.
+  if (result.max_utility > 0.0 && !result.best_assignments.empty()) {
     if (g_pParser && g_pParser->verbose) {
       CWorld* pmyWorld = GetWorld();
-      printf("t=%.1f\t[Optimal Assignment]: Total utility = %.2f\n",
-             pmyWorld->GetGameTime(), objective->Value());
+      printf(
+          "t=%.1f\t[Optimal Assignment (Brute Force)]: Total utility = %.2f\n",
+          pmyWorld->GetGameTime(), result.max_utility);
     }
 
     for (int i = 0; i < num_agents; ++i) {
-      CShip* pShip = agents[i];
-      for (int j = 0; j < num_tasks; ++j) {
-        // Check if assignment occurred (use > 0.5 for float tolerance on
-        // boolean variables).
-        if (x[i][j]->solution_value() > 0.5) {
-          CThing* target = tasks[j];
+      int task_idx = result.best_assignments[i];
 
-          // Retrieve the pre-calculated path info from the MagicBag.
-          unsigned int shipnum = ship_ptr_to_shipnum.at(pShip);
-          // We use .at() for safe access as the entry must exist if the solver
-          // chose it.
-          const PathInfo& best_e = mb->getShipPaths(shipnum).at(target);
+      if (task_idx != -1) {
+        CShip* pShip = agents[i];
+        CThing* target = tasks[task_idx];
 
-          // Apply the orders and log the decision.
-          ApplyOrders(pShip, best_e);
-          break;  // Assignment found for this agent, move to the next.
-        }
+        // Retrieve the pre-calculated path info from the MagicBag.
+        unsigned int shipnum = ship_ptr_to_shipnum.at(pShip);
+        // We use .at() for safe access as the entry must exist if the solver
+        // chose it.
+        const PathInfo& best_e = mb->getShipPaths(shipnum).at(target);
+
+        // Apply the orders and log the decision.
+        ApplyOrders(pShip, best_e);
       }
     }
   } else {
-    printf("ERROR: No optimal solution found for resource assignment!\n");
-    // Fallback strategy could be implemented here if necessary (e.g., the
-    // previous greedy approach).
+    // This should generally not happen if there were positive utilities, but
+    // serves as a safety check.
+    if (g_pParser && g_pParser->verbose) {
+      CWorld* pmyWorld = GetWorld();
+      printf(
+          "t=%.1f\t[Optimal Assignment]: No positive utility assignments "
+          "found.\n",
+          pmyWorld->GetGameTime());
+    }
   }
 }
 
 void Groonew::AssignShipOrders() {
-  // The previous greedy approach used `claimed_targets`. This is replaced by
-  // the LP solver.
-
   // Data structures to map ships to the assignment problem agents.
   std::vector<CShip*> ships_seeking_resources;
   // Map Ship Ptr to the internal ship number (index in GetShip()).
@@ -583,21 +592,8 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
   // 2. All things being equal after that we prefer fewer orders
   // (e.g. more certain plans).
   //
-  // We approach this with the "big Multiplier" method where we multiply
-  // each teir of the utility by a number which is larger than the sum
-  // of all assigned utilities in the lower tier.
-  //
-  // We have 4 ships, and our utilities naturally fall in these ranges:
-  // Materials: 40 units next turn = 40
-  // Fuel: 0 to 60
-  // Orders: 1 to 3 but in the future we might plan further, up to time.
-  //
-  // So we have 4 tiers, we cap each utility at 250 and multiply by 4 for the
-  // number of agents to get an Multiplier of 1000 per tier, so:
-  //
-  // Materials *= 1000^2
-  // Fuel *= 1000^1
-  // Orders = base value
+  // We approach this with the "big Multiplier" method...
+  // ...
   // Total utilitiy = Materials - Fuel - Orders
   double multiplier = 1000.0;
 
@@ -663,4 +659,4 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
   return utility;
 }
 
-///////////////////////////////////////////////
+//////////////////////////////////////////////
