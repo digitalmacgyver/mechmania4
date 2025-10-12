@@ -550,30 +550,41 @@ namespace Pathfinding {
   } // End anonymous namespace
 
   // This will be the first thing we refine:
-  // Step 0: As I'm checking the stuff below, I want to validate with hello world style code checks, for instance that VectTo does what I expect.
 
-  // Step 0: Rudimetnary collision fixes below - our collision detection doesn't
-  //         consider the closest bonk to us - which is the only relevant one.
-  //         CONSIDER USING A NEW SHIP, SETTING IT'S POSITION AND VELOCITY, AND
-  //         USING DETECT COLLISION OR OTHER METHODS TO DO THE NON-POINT MASS
-  //         ANALYSI MAYBE WE CAN USE DETECTCOLISIONCOURSE INSTEAD OF THETA <= 0.1
+  // Step 0: As I'm checking the stuff below, I want to validate with hello
+  // world style code checks, for instance that VectTo does what I expect.
 
-  // Step 1: Check and validate the logic below is correct and optimal for point masses and dt=1.
-  //         * Account for max velocity - we'll get clamped to 30 so don't chase stuff we can't catch - if our resulting vel > 30 to get there in time t fail or limit to 30.
-  //         * Double check engine behavior - it seems it allows us to acclerate to > 30, by going up to 30 in each dimension or soemthing - this will quickly get capped later but understand current behavior for that tick.
-  //         * After making some fixes, it seems we're chasing things - is there an off by 1 error where we're 1 second behind? Or a failure to recognize when we're on maxspeed?
-  //           IT'S PROBABLY A MAXSPEED ISSUE - NEED HELLO WORLD DIAGNOSIS OF TRYING TO CHASE SOMETHING JUST AHEAD OF US GOING AT MAXSPEED.
-  //           IT MAY ALSO BE A FACING ISSUE - WHEN WE ARE CLOSE WE MAY NOT BE COMPLETELY DEAD ON BUT WE MAY WASTE TURNS DOING TINY MICRO ADJUSTMENTS INSTEAD OF THRUSTING.
-  //           THE OLD LOGIC OF DIVIDING BY TIME INSTEAD OF (TIME-1) MAY HAVE MASKED THIS ISSUE BY OVERSHOOTING THE TARGET ON APPROACH.
-  // Step 1: Think about our treatment of time as a double below - are we creating signpost problems where we are cutting things too close and are going to be 1 turn late on stuff (or 1 turn early?)
-  // Step 3: Consider how to prevent two ships going after the same target, and making the one who can get there best (e.g. fastest and with least fuel) the one who gets it.
-  // Step 3: Consider how to make planning stable so we don't pingping between targets with equal distance from us, e.g. we pick asteroid A that is 4 turns away this turn (but B is also 4 turns away) and plan to intercept A, but next round we pick asteroid B (both A and B now 3 turns away) and turn again, etc. and never execute on a plan for either.0
-  // Step 3: Consider how to make the logic toroid aware and relative velocity aware - e.g. ship at -200, asteroid at 200, ship going 30 left, asteroid going 30 right - if we do nothing we'll collide in ~624/60 = 11 turns. But if we chase it by turning to the right we'll never cath it.
-  // Step 3: Consider how to adapt the logic for the actual collision detection accounting for object radius.
-  // Step 3: Consider where we need to special case things below for IsDocked for optimal handling (already have a check in the Case 1a because nothing collides with us while docked.)
-  // Step 4: Think about how to decide if 2aii or 2b is better.
+  // Step 0: in case 1a We don't check if anything is going to collide with us
+  //         in the case where we plan a drift intercept. If we're planning to
+  //         drift we should see if anything will collide with us _before_ our
+  //         target does. More broadly for all case where we drift for a turn we
+  //         should check if anything other than what we're trying to hit
+  //         collides first and return failure.
+  
+  // Step 1: Think about our treatment of time as a double below - are we
+  // creating signpost problems where we are cutting things too close and are
+  // going to be 1 turn late on stuff (or 1 turn early?)
+
+  // Step 3: Consider how to make planning stable so we don't pingping between
+  // targets with equal distance from us, e.g. we pick asteroid A that is 4
+  // turns away this turn (but B is also 4 turns away) and plan to intercept A,
+  // but next round we pick asteroid B (both A and B now 3 turns away) and turn
+  // again, etc. and never execute on a plan for either.0
+
+  // Step 3: Consider how to make the logic toroid aware and relative velocity
+  // aware - e.g. ship at -200, asteroid at 200, ship going 30 left, asteroid
+  // going 30 right - if we do nothing we'll collide in ~624/60 = 11 turns. But
+  // if we chase it by turning to the right we'll never cath it.
+
+  // Step 3: Consider how to adapt the logic for the actual collision detection
+  // accounting for object radius.
+
+  // Step 3: Consider where we need to special case things below for IsDocked
+  // for optimal handling (already have a check in the Case 1a because nothing
+  // collides with us while docked.)
+
   // Step 2: Adapt the logic given that the underlying simulation uses dt=0.2.
-  // Step 3: Consider how to make our estimates fuel aware, and our order selections fuel aware.
+
   // Step 4: Consider how to adapt logic to be collision aware.
   FuelTraj DetermineOrders(CShip* ship, CThing* thing, double time, CShip* calculator) {
     /*
