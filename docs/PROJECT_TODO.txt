@@ -3,61 +3,6 @@
 
 ===
 
-Team groogroo planning deconflicting design notes:
-
-To properly deconflict we want to assign optimal orders - e.g. the
-"Assignment Problem" in CS. We'll do so by using an off the shelf
-linear programming algorithm, which is provably optimal for the
-assignment problem as long as our utility functions are linear.
-
-* Utility functions TBD, but a sketch would be:
-  * If ship wants vinyl: eatable mass / time to get there +/- some adjustment for fuel cost, else -1
-  * If a ship wants uranium: "" + some adjustment for breaking down asteroids maybe?, else -1
-  * If ship wants home base: Handle outside of this mechanism, no contention here.
-  * If ship wants enemy ship: Handle outside, teaming up might be beneficial.
-  * If ship wants enemy base: Handle outside, no contention here.
-
-Prerequisites:
-
-TODO:
-  * Factor pathfunding into it's own file / compile / validate / comments
-  * Break up GetVinyl - put bulk of logic into subroutine of Turn():
-  
-    * Do phase 0 deconflicting before implementing optimal assignment
-      so I can see it working / get a feel for how much optimal
-      assignment helps (maybe make a mm4team_groonew_basicdecon and
-      bake off those teams.)
-  * Clean up comments in code.
-
-We're going to move most of the GetVinyl ship based decision logic
-into Groogroo team scope reasoning in turn: For optimal play largely
-our decision engine will want to know global stuff and coordinate
-ships - it doesn't make sense for most of our decision making logic to
-reside in the ship.
-
-* We could even just move _all_ the logic into turn, but for now we'll keep a model of:
-     * Team assigns high level coordinated orders
-     * Ships can override or augment those order with their particular context, notably for now that will be:
-       * Opportunistic shooting of stuff that is in their sights (enemy ships, enemy stations, asteroids they are about to collide with that are too big to eat)
-       * Shield management (e.g. topping up to safety margin if we have enough fuel, and dumping fuel to shields before collisions with eatable asteroids that won't fit presently)
-       * Rotate and dumping vinyl before enemy base colisions (note - our actual logic here is pretty good - I'm not sure if this was on accident or not but because base langhes are free, rotating to a theta, jettisoning cargo, and then being in a position to launch from base right at that cargo next turn is much better than burning fuel trying to turn and manouver away)
-  * OPTIONAL We're going to add a bunch of helpful state to Team (or maybe Team's Brain)
-    * world vinyl and uranium (done), vector or map of all vinyl in the world, uranium, enemy ships, pointer to our and enemy station.
-
-If two ships want the same Asteroid, break ties like this:
-
-Version 0:
-1. Break ties arbitrarily just keep things from going after the same taret.
-
-Version 1: Optimal Assignment with Utility function which accounts for:
-1. The one with the shortest time to intercept.
-2. The one who previously had this target.
-3. The one can get their with the least fuel.
-
-In the future we could get fancier with it - for example in going after vinyl we could choose the one with the most cargo space, or for uranium the one with the most fuel space, etc.
-
-===
-
 Major old behaviors changed:
 
   * 5x costing error for Ship Thurst orders than documented (although
@@ -125,8 +70,9 @@ Lasers are modeled as colliding masses for damage purposes.
 ========================== ENGINE TODO ============================================
 
 
-* Game fix of collision eat bug - colliding with an asteroid you can
-  eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
+* Game fix of collision eat bug - colliding with an asteroid you can eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
+
+?!?!?! Concurrency / race double eating behaviors ?!?!?!??!
 
 NOTE - THe current fix on our branch isn't really good / working - I
 don't think it preserves the dual harvesting bug exactly for instance,
@@ -157,9 +103,6 @@ What makes sense to preserve:
  * NO This buggy double claim unfair collision system? Nope.
 
 * Velcoity clamping - maybe / yes - I could see people with old teams who want to compete but don't want different thrust semantics.
-
-
-
 
 ============= RACE CONDITION COLLISIONS / double yum=====================
 
@@ -437,25 +380,16 @@ In Ship.c, line 592 what is going on with the pointer checks against NULL and th
 
 ========================== Groonew TODO ============================================
 
-FOR EVOAI - Give it groogroo as a base, and then have the evoai compete against groonew? Once Groonew is conistently beating groogroo!
-
-0000DO FIRST000 - Our ships definitely just swarm around everything
-now - need to implement blocking on same resource:
-  * version 1 - just mark a claim and prevent others from taking it
-  * version 2 - "auction" or othrewise find an optimal claim.
+FOR EVOAI - Give it groogroo as a base, and then have the evoai
+compete against groonew? Once Groonew is conistently beating groogroo!
 
 0. Consider optimizing initial base launch so we don't all bonk into
 each other. Consider initial facing and if it matters which base
 you're in. Maybe first 2 turns are always to rotate the ships to cover
 an arc towards the center and blast off with max v.
 
-Optimization B: Will the engine calculate cost of our thursts? If so can we just use that in our thust entity thing?
-
-Optimization A: "auction" off best moves and don't duplicate two ships going at the same target - winner is the one who can get there first, tie break on lowest cost.
-
-Optimization C: If there is no or little vinyl left in the world, return to base like for reals my guy if you have vinyl.
-
-Optimization E: If there is no or little vinyl left, and the enemy base has some, go shoot it, if an enemy ship has some, go shoot it.
+Optimization E: If there is no or little vinyl left, and the enemy
+base has some, go shoot it, if an enemy ship has some, go shoot it.
 
 Does it ever make sense to shoot a asteroid to break it up (other than
 perhaps action econmy of getting to smaller chunks a tick earlier?)
@@ -479,8 +413,6 @@ TOROIDTOROIDTOROID
     -511, do we follow it straight or turn around - does vector
     operations suddenly say it is PI behind us instead of 0 ahead if
     we were heading to it dead on?
-
-
 
 0. I definitely need to consider toroidal approaches in perfect
 nagivation - getting shortest distance doesn't give shortest time to
@@ -563,10 +495,6 @@ a much reduced cost.
   with soon and plans based on that - we can do better.
 
 **************** END GROONEW PERFECT NAV ************************************
-
-1. Brain enhancements - we can call SetOrder to get the fuel cost of
-an order, and then ResetOrders to clear it out (I think) rather than
-figuring the fuel costs independenty on our own.
 
 1. For Codex branch, check if Team Ares is using toroidal logic,
 suggest it to use the relevant thing/ship primatives which do that

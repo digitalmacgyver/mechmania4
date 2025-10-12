@@ -409,18 +409,7 @@ namespace Pathfinding {
       //
       // Note - sometimes to put us on the desired trajectory we will actually
       // move away from the target in this approach!
-      //
-      // TODO: We have two possible ways of getting on the target heading with a
-      // specific speed under consideration here: This approach which thrusts now,
-      // and then will probably turn and thrust again on later turns, and the
-      // approach below where we turn now and thrust next turn. We should think
-      // about how to choose between these approaches when they are both possible
-      // - e.g. fuel use, whether we think that ending up oriented towards the
-      // target on the approach is important, etc.
-      //
-      // Below we'll consider case 2aii and compute our orders for 2aii, however if
-      // our preference for orders is: 2ai > 2b > 2aii, so we save any computed
-      // 2aii order here but only use it if 2b fails.
+
       double denominator = sin(ship_orient_t0 - dest_vec_t0.theta);
       if (denominator != 0.0) {
         // TODO - What if ship_vel_t0.rho is zero - as it will be when we're
@@ -482,8 +471,6 @@ namespace Pathfinding {
             }
             result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k, fuel_used, num_orders,
               time_to_intercept, fuel_total, "2ai");
-            // If 2ai is found, we stop analysis as it's the preferred outcome.
-            return result;
           }
 
           // Case 2aii: We can issue a single thrust order with a resulting
@@ -678,32 +665,59 @@ namespace Pathfinding {
     } else {
       // Case 2: We're not on the intercept trajectory.
 
-      // TODO: We have two possible ways of getting on the target heading with a
-      // specific speed under consideration here:
+      // We'll evaluate three cases:
+      // Case 2ai: We can thrust now and then drift to the target in time.
+      // Case 2aii: We can thrust now and then turn and thrust next turn to get on the intercept trajectory.
+      // Case 2b: We can turn now and then thrust next turn to get on the intercept trajectory.
 
-      // Aproach (2a) which thrusts now,
-      // and then will probably turn and thrust again on later turns, and the
-      // approach below (2b) where we turn now and thrust next turn.
-
-      // We should think
-      // about how to choose between these approaches when they are both possible
-      // - e.g. fuel use, whether we think that ending up oriented towards the
-      // target on the approach is important, etc.
-
-      // For now our preference for paths is: 2ai is better than 2b, which is better than 2aii.
-      // This is motivated by 2ai and 2b both being 2 order plans and 2aii being a 3 order plan, so 2ai and 2b are thought to be less speculative than 2aii. We prefer 2ai over 2b somewhat arbitrarily.
-
-      // TODO: Among other considerations - beark ties between 2ai and 2b bo forecasting which approach will have less distance to the target after 1 turn. (e.g. prefer 2ai over 2b if thrusting towards target, and vice versa).
-
-      // Case 2a: Analyze thrusting now to align trajectory.
+      // We'll check which one is the best according to thes metrics:
+      // - Minimum time to intercept.
+      // - Minimum fuel used.
+      // - Minimum number of orders.
       Case2aResult result_2a = AnalyzeThrustToAlign(ctx);
 
-      // Case 2ai check (Thrust and drift):
-      if (result_2a.fj_2ai.path_found) {
-        return result_2a.fj_2ai;
-      }
+      FuelTraj case_2ai = result_2a.fj_2ai;
+      FuelTraj case_2aii = result_2a.fj_2aii;
+      FuelTraj case_2b = TryTurnThenThrust(ctx);
 
-      // Case 2b: Try turning now to thrust next turn.
+      bool has_best_case = false;
+      FuelTraj best_case;
+
+      auto consider = [&](const FuelTraj& candidate) {
+        if (!candidate.path_found) {
+          return;
+        }
+        if (!has_best_case) {
+          best_case = candidate;
+          has_best_case = true;
+          return;
+        }
+        if (candidate.time_to_intercept < best_case.time_to_intercept) {
+          best_case = candidate;
+          return;
+        }
+        if (candidate.time_to_intercept > best_case.time_to_intercept) {
+          return;
+        }
+        if (candidate.fuel_total < best_case.fuel_total) {
+          best_case = candidate;
+          return;
+        }
+        if (candidate.fuel_total > best_case.fuel_total) {
+          return;
+        }
+        if (candidate.num_orders < best_case.num_orders) {
+          best_case = candidate;
+        }
+      };
+
+      consider(case_2ai);
+      consider(case_2aii);
+      consider(case_2b);
+
+      if (has_best_case) {
+        return best_case;
+      }
 
       // TODO: Case 2b is not always optimal - it may be better to do some
       // thrust->overthrust->turn sequence instead. Consider the case where we are
@@ -717,19 +731,6 @@ namespace Pathfinding {
       // analyze our current thrust options in terms of decompositon of parallel to,
       // and perpendicualr to, our desired thurst, and consider strongly thrusting
       // where the parallel to dimension is high.
-      fj = TryTurnThenThrust(ctx);
-      if (fj.path_found) {
-        return fj;
-      }
-
-      // Case 2aii fallback (Thrust-Turn-Thrust):
-
-      // NOTE: We have seen a behavior change here since before the refactoring,
-      // due to a bug in the refactored code where this case never could be
-      // returned - so now we do return this case when all else fails.
-      if (result_2a.fj_2aii.path_found) {
-        return result_2a.fj_2aii;
-      }
     }
 
     // If we got down here we couldn't find any way to intercept in time.
@@ -769,21 +770,6 @@ namespace Pathfinding {
 
   My intuition tells me the other options are redundant other than facing (facing could set us up for optimal paths), but here Im trying to think of a quick fix that could dramatically improve groonew without going all the way to optimal paths.
   */
-
-  double determine_probable_fuel_cost(CShip* ship, CThing* thing, double time) {
-      // TODO: Should calculate actual fuel cost based on:
-      // - Distance to target
-      // - Ship mass (including cargo)
-      // - Required velocity change
-      // - Turn angle required Currently returns hardcoded value We should
-      //   reconsider this - we can get the fuel costs for each order from SetOrder,
-      //   however the issue here is ourl magic bag planning may use two orders, a
-      //   rotation and a thrust. We should consider if the rotation cost is
-      //   typically trivial to just use thrust, or if we should be building up a
-      //   total fuel cost in the magic bag calculation where were working though
-      //   that stuff anyway.
-      return (double)5.0;
-    }
 
     Collision detect_collisions_on_path(CShip* ship, CThing* thing, double time) {
         Collision collision;
