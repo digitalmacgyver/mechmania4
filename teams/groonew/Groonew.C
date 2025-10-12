@@ -56,7 +56,6 @@ Groonew::~Groonew() {
     if (pSh == NULL) {
       continue;  // Ship is dead
     }
-
     
     pBr = pSh->GetBrain();
     if (pBr != NULL) {
@@ -252,8 +251,6 @@ void Groonew::AssignShipOrders() {
 
     double cur_fuel = pShip->GetAmount(S_FUEL);
     double cur_cargo = pShip->GetAmount(S_CARGO);
-    double max_fuel = pShip->GetCapacity(S_FUEL);
-    double max_cargo = pShip->GetCapacity(S_CARGO);
 
     // Determine preferred asteroid type based on current state
     AsteroidKind prefered_asteroid = VINYL;
@@ -263,11 +260,26 @@ void Groonew::AssignShipOrders() {
       prefered_asteroid = URANIUM;
     }
 
-    // Check if we should return to base
+    // TODO: In the future once we've gathered all the vinyl maybe we'll start
+    // shooting things.
+    bool commence_primary_ignition = false;
+
+    ShipWants wants = NOTHING;
     if ((pShip->GetAmount(S_CARGO) >= (2*40/3 - g_fp_error_epsilon)) ||
         (!vinyl_available && pShip->GetAmount(S_CARGO) > 0.01)) {
       // Return to base if we've got at least 2 medium sized asteroids in cargo,
       // or if there's no vinyl available and we've got any cargo.
+      wants = HOME;
+    } else if (prefered_asteroid == VINYL) {
+      wants = POINTS;
+    } else if (prefered_asteroid == URANIUM) {
+      wants = FUEL;
+    } else if (commence_primary_ignition) {
+      wants = VIOLENCE;
+    }
+
+    // Check if we should return to base
+    if (wants == HOME) {
       if (g_pParser && g_pParser->verbose) {
         printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
       }
@@ -284,7 +296,7 @@ void Groonew::AssignShipOrders() {
           break;
         }
       }
-    } else {
+    } else if (wants == POINTS || wants == FUEL) {
       // Harvest resources case - select best target from MagicBag
 
       // Our best target.
@@ -294,9 +306,9 @@ void Groonew::AssignShipOrders() {
       // need to save the targets we're trying to deconflict, or dynamically pull
       // them out of PathInfo->dest.
 
-      const auto& ship_paths = mb->getShipPaths(shipnum);
-      for (const auto& pair : ship_paths) {
-        const PathInfo& e = pair.second;  // pair.second is the PathInfo
+      auto& ship_paths = mb->getShipPaths(shipnum);
+      for (auto&& pair : ship_paths) {
+        PathInfo& e = pair.second;  // pair.second is the PathInfo
 
         if (claimed_targets.find(e.dest) != claimed_targets.end()) {
           continue;
@@ -304,20 +316,24 @@ void Groonew::AssignShipOrders() {
 
         if (e.dest != NULL) {
           bool is_asteroid = (e.dest->GetKind() == ASTEROID);
-          // Note: Can't call GetMaterial on non-asteroids.
+          // Note: Can't call GetMaterial on non-asteroids, hence the short
+          // circuit &&.
           bool is_prefered_asteroid = (is_asteroid && (static_cast<CAsteroid*>(e.dest)->GetMaterial() == prefered_asteroid));
 
           if (!is_asteroid || !is_prefered_asteroid) {
             continue;
           }
 
-          if ((best_e == NULL) || (e.fueltraj.time_to_intercept < best_e->fueltraj.time_to_intercept)) {
+          e.utility = CalculateUtility(pShip, wants, e);
+
+          if ((best_e == NULL) || (e.utility > best_e->utility)) {
             best_e = &e;
           }
         }
       }
 
-      if (best_e != NULL) {
+      // If we found something with positive utility, set the order.
+      if (best_e != NULL && best_e->utility > 0.0) {
         if (g_pParser && g_pParser->verbose) {
           CThing* target = best_e->dest;
           CAsteroid* ast = (CAsteroid*)target;
@@ -356,6 +372,88 @@ void Groonew::AssignShipOrders() {
       }
     }
   }
+}
+
+double Groonew::CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e) {
+  double utility = 0.0;
+
+  double cur_fuel = pShip->GetAmount(S_FUEL);
+  double cur_cargo = pShip->GetAmount(S_CARGO);
+  double max_fuel = pShip->GetCapacity(S_FUEL);
+  double max_cargo = pShip->GetCapacity(S_CARGO);
+
+  // For POINTS and FUEL we want to tiebreak the material/time utility so that:
+  // 1. All things being equal we prefer lower fuel consumption.
+  // 2. All things being equal after that we prefer fewer orders
+  //   (e.g. more certain plans).
+  //
+  // We approach this with the "big Multiplier" method where we multiply
+  // each teir of the utility by a number which is larger than the sum
+  // of all assigned utilities in the lower tier.
+  // 
+  // We have 4 ships, and our utilities naturally fall in these ranges:
+  //   Materials: 40 units next turn = 40
+  //   Fuel: 0 to 60
+  //   Orders: 1 to 3 but in the future we might plan further, up to time.
+  //
+  // So we have 4 tiers, we cap each utility at 250 and multiply by 4 for the 
+  // number of agents to get an Multiplier of 1000 per tier, so:
+  // 
+  // Materials *= 1000^2
+  // Fuel *= 1000^1
+  // Orders = base value
+  // Total utilitiy = Materials - Fuel - Orders
+  double multiplier = 1000.0;
+
+  if (wants == POINTS) {
+    // TODO: This relies on our ships 40 ton cargo hold being big enough to hold
+    // any vinyl asteroid, and assumes we'll jettison the difference before
+    // trying to catch this.
+    double vinyl_gained = std::min(e.dest->GetMass(), max_cargo - cur_cargo);
+    double fuel_spent = e.fueltraj.fuel_total;
+    double time_to_intercept = e.fueltraj.time_to_intercept;
+    unsigned int num_orders = e.fueltraj.num_orders;
+
+    double utility_per_second = vinyl_gained / time_to_intercept;
+
+    // This should be positive due to min asteroid size of 3, however just in
+    // case we wish to preserve utility=0.0 as a sentinel value meaning "issue
+    // no orders."
+    utility = utility_per_second * std::pow(multiplier, 2) - fuel_spent * multiplier - num_orders;
+    if (utility < 0.0) {
+      utility = 0.0;
+    }
+  } else if (wants == FUEL) {
+    double fuel_spent = e.fueltraj.fuel_total;
+
+    // TODO: Estimating fuel utility is more tricky than vinylbecause there are
+    // uranium asteroids we can't fit in our 20 ton hold (also because we spend
+    // fuel to acquire fuel). Here we'll just assume if we hit a big one we'll
+    // have access to 1/3rd of it's fragments.
+    double uranium_size = e.dest->GetMass();
+    if (uranium_size > max_fuel) {
+       uranium_size /= 3.0;
+    }
+    // We acquire the lesser of the uranium size or how much room we'll have in
+    // our tank when we get there.
+    // We spend fuel_spent.
+    // Our gain is acquired - spent.
+    double fuel_gained = std::min(uranium_size, max_fuel - cur_fuel - fuel_spent) - fuel_spent;
+    double time_to_intercept = e.fueltraj.time_to_intercept;
+    unsigned int num_orders = e.fueltraj.num_orders;
+
+    double utility_per_second = fuel_gained / time_to_intercept;
+
+    // TODO: This doesn't grant any positive utility to the way we'll buff up
+    // our shields when eating fuel.
+
+    // Only grant positive utility if we're actually gaining fuel.
+    utility = utility_per_second * std::pow(multiplier, 2) - fuel_spent * multiplier - num_orders;
+    if (utility < 0.0) {
+      utility = 0.0;
+    }
+  }
+  return utility;
 }
 
 ///////////////////////////////////////////////

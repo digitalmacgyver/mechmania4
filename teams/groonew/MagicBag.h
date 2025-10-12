@@ -31,7 +31,7 @@ class MagicBag {
   // information exists.
   const PathInfo* getEntry(unsigned int drone, CThing* dest) const;
 
-  const std::unordered_map<CThing*, PathInfo>& getShipPaths(unsigned int drone) const;
+  std::unordered_map<CThing*, PathInfo>& getShipPaths(unsigned int drone);
 
   // Add new entry to ship's list
   void addEntry(unsigned int drone, CThing* dest, const PathInfo& path);

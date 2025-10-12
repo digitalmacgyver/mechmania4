@@ -30,6 +30,9 @@ class PathInfo {
   // first collision on the way
   Collision collision;
 
+  // The utility of this path as determined by the Groonew team.
+  double utility;
+
   PathInfo();
   ~PathInfo();
 };

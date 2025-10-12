@@ -20,6 +20,9 @@
 
 #include <map>
 
+// Ship wants are a high level goal for the ship.
+enum ShipWants { HOME, POINTS, FUEL, VIOLENCE, NOTHING };
+
 //////////////////////////////////////
 // Main class: Groonew team
 // Uses centralized planning with biological/hive-mind naming theme
@@ -56,6 +59,9 @@ class Groonew : public CTeam {
     // TODO:
     // We need a way to store and retrieve the prior targets we had last turn.
     std::map<CShip*,CThing*> PriorTargets();
+
+    // Calculate the utility of a given path.
+    double CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e);
 };
 
 /////////////////////////////////////

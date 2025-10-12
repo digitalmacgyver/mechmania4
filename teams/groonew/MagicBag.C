@@ -25,8 +25,8 @@ const PathInfo* MagicBag::getEntry(unsigned int drone, CThing* target) const {
   return NULL;
 }
 
-const std::unordered_map<CThing*, PathInfo>& MagicBag::getShipPaths(unsigned int drone) const {
-  static const std::unordered_map<CThing*, PathInfo> empty_map;
+std::unordered_map<CThing*, PathInfo>& MagicBag::getShipPaths(unsigned int drone) {
+  static std::unordered_map<CThing*, PathInfo> empty_map;
   auto it = ship_paths.find(drone);
   if (it != ship_paths.end()) {
     return it->second;
