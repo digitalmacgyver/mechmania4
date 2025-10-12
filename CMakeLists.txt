@@ -9,6 +9,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Add compile options
 add_compile_options(-Wall -Wextra -g)
 
+# Fetch OR-Tools for linear programming
+include(FetchContent)
+FetchContent_Declare(
+  ortools
+  GIT_REPOSITORY https://github.com/google/or-tools.git
+  GIT_TAG        v9.10
+  GIT_SHALLOW    TRUE
+)
+
+# Configure OR-Tools build options (skip unnecessary components)
+set(BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_DEPS ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(ortools)
+
 # Option to build with graphics (now enabled by default)
 option(BUILD_WITH_GRAPHICS "Build with SDL2 graphics support" ON)
 option(USE_SDL2 "Use SDL2 for graphics instead of X11" ON)
@@ -145,7 +162,7 @@ add_executable(mm4team_groonew
     teams/groonew/PathInfo.C
     teams/groonew/Pathfinding.C
 )
-target_link_libraries(mm4team_groonew mm4_common pthread)
+target_link_libraries(mm4team_groonew mm4_common pthread ortools::ortools)
 target_include_directories(mm4team_groonew PRIVATE teams/groonew)
 
 # Evo team executable

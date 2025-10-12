@@ -4,9 +4,10 @@
  *  my magic bag!"
  */
 
-#include <iostream>
 
 #include "MagicBag.h"
+
+#include <iostream>
 
 // TODO: Add consts everywhere in here on args, returns, etc. where it makes sense.
 

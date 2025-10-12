@@ -14,6 +14,8 @@
 
 #include <set>
 
+#include "ortools/linear_solver/linear_solver.h"
+
 // External reference to global parser instance
 extern CParser* g_pParser;
 
