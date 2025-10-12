@@ -205,13 +205,7 @@ void Groonew::PopulateMagicBag() {
       for (unsigned int turn_i = 1; turn_i < max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
         FuelTraj fueltraj = Pathfinding::DetermineOrders(ship, athing, turn_i, this->calculator_ship);
-        
-        // IMPORTANT CHANGE: We no longer need the side-effect/reset pattern.
-        // determine_orders now uses the calculator and has no side effects on the real ship.
-        
-        // TODO: Calculate actual fuel cost (currently returns 5.0)
-        double fuel_cost = Pathfinding::determine_probable_fuel_cost(ship, athing, turn_i);
-        
+
         // TODO: Check for obstacles on path (currently returns dummy)
         Collision collision = Pathfinding::detect_collisions_on_path(ship, athing, turn_i);
         
@@ -221,9 +215,7 @@ void Groonew::PopulateMagicBag() {
           PathInfo path;
           path.traveler = ship;
           path.dest = athing;          // Target object
-          path.turns_total = turn_i;    // Time to reach
           path.fueltraj = fueltraj;     // How to get there
-          path.total_fuel = fuel_cost;  // Fuel required (TODO: fix)
           path.collision = collision;   // Obstacles (TODO: fix)
           
           // Add to this ship's list of possible targets (will be copied)
@@ -319,7 +311,7 @@ void Groonew::AssignShipOrders() {
             continue;
           }
 
-          if ((best_e == NULL) || (e.turns_total < best_e->turns_total)) {
+          if ((best_e == NULL) || (e.fueltraj.time_to_intercept < best_e->fueltraj.time_to_intercept)) {
             best_e = &e;
           }
         }
@@ -349,7 +341,7 @@ void Groonew::AssignShipOrders() {
 
           // Trajectory info
           printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                 best_e->turns_total,
+                 best_e->fueltraj.time_to_intercept,
                  ((best_e->fueltraj).order_kind == O_THRUST) ? "thrust" :
                  ((best_e->fueltraj).order_kind == O_TURN) ? "turn" : "other/none",
                  (best_e->fueltraj).order_mag);

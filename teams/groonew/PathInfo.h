@@ -23,16 +23,8 @@ class PathInfo {
   // TODO - populate this.
   unsigned int order_count;
 
-  // The first order along our path. 
+  // The first order along our path, and estimated values for the path.
   FuelTraj fueltraj;
-
-  // The estimate for all navigation orders planned along this path.
-  // TODO - populate this.
-  double total_fuel;
-
-  // The number of turns the trip is likely to take
-  // TODO - populate this.
-  double turns_total;
 
   // TODO: This is here for future development - use it or remove it. The
   // first collision on the way

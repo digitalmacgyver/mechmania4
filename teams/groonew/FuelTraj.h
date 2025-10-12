@@ -9,14 +9,24 @@
 // since it's generallyu safe/free to issue O_SHIELD orders with magnitude 0.
 class FuelTraj {
  public:
-  FuelTraj(bool found, double fuel, OrderKind kind, double mag) 
-   : path_found(found), fuel_used(fuel), order_kind(kind), order_mag(mag) {}
+  FuelTraj(bool found, OrderKind kind, double mag, double fuel_used,
+     double time_to_intercept, unsigned int num_orders, double fuel_total) 
+   : path_found(found), order_kind(kind), order_mag(mag), fuel_used(fuel_used),
+     time_to_intercept(time_to_intercept), num_orders(num_orders),
+     fuel_total(fuel_total) {}
 
   FuelTraj() = default;
 
+  // First order issued on our path.
   bool path_found = false; // No change to trajectory needed to get to target.
-  double fuel_used = 0.0; // Estimated order cost (can be 0 if no order needed).
   OrderKind order_kind = O_SHIELD; // Order kind to get to target - it's always safe to set O_SHIELD on each tic.
   double order_mag = 0.0; // Order magnitude to get to target.
+  double fuel_used = 0.0; // Estimated order cost (can be 0 if no order needed).
+
+  // Estimated values for the path.
+  double time_to_intercept = 0.0; // Estimated time to intercept the target.
+  unsigned int num_orders = 0; // Estimated number of orders to get to the target.
+  double fuel_total = 0.0; // Estimated total fuel cost of the path.
+
 };
 #endif
