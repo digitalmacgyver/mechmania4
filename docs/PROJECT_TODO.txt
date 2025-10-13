@@ -1,21 +1,6 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
-NEXT TASKS:
-
-I am working on game simulator code for a 2d-toroidal space where ships fly around with linear movement and instantaneous thrust and turn orders.
-
-Each turn a ship may either thrust, or turn, but not both.
-
-Ships have a position and a velocity, then each turn they either: Thrust (apply instantaneous delta-v along their orientation), or turn (instantaneous orientation change), and then drift on the resulting heading for 1 second.
-
-I have a navigation system that tries to compute optimal time to intercept with items of interest in the game world, however I'm concerned it has "fence post" or off by one errors where either it is generating thrusts which will just miss the collision cutoff by an entire game turn, or is optimistically stating an object can be reached in N game turns when really it will be N+1 on some code paths.
-
-Analyze the code for PopulateMagicBag, PathFinding.C, and look for spots where the prospective path and time to intercept set in a FuelTraj is subject to a fence post error / off by 1 error on the number of game turns required.
-
-
-
-
 Ship, Asteroid, and Station Damage Overview:
 
 * Ships take damage to shields from collisions with Asteroids, other
@@ -36,9 +21,11 @@ Ship, Asteroid, and Station Damage Overview:
 Order Sequencing:
 * Once each team has submitted orders to the server the following occurs:
   1. Shield raising orders are processed first.
-  2. Then Thurst, Turn, Drifting and resulting collisions in one sub-step of 1/5th of a full turn duration.
+  2. Then Thurst, Turn, Drifting and resulting collisions in one
+  sub-step of 1/5th of a full turn duration.
   3. Then laser shots are processed in full, including damage being dealt.
-  4. Then Thrust, Turn, Drifting and resulting collisions in four steps of 1/5th of a full turn duration.
+  4. Then Thrust, Turn, Drifting and resulting collisions in four
+  steps of 1/5th of a full turn duration.
 
 Ship Non-Laser Collision Damage Calculations:
 
@@ -48,10 +35,16 @@ Ship Non-Laser Collision Damage Calculations:
 
 Ship Collision Notes:
 
-* Damage depends only on the mass of the object collided with - not the mass of the ship which collides
-* The maxiumum theoretical combined velocity of two colliding objects is 60
-* Ships weigh 40 tons + their current fuel + their current vinyl cargo which means they lie in the range of 40-100 tons.
-* Asteroids weigh between 3 and 40 tons. (Theoretically asteroids of up to 60 tons could exist if a ship with 60 tons of cargo collected 60 tons worth of asteroids and jettisoned them, but we ignore these corner cases).
+* Damage depends only on the mass of the object collided with - not
+  the mass of the ship which collides
+* The maxiumum theoretical combined velocity of two colliding objects
+  is 60
+* Ships weigh 40 tons + their current fuel + their current vinyl cargo
+  which means they lie in the range of 40-100 tons.
+* Asteroids weigh between 3 and 40 tons. (Theoretically asteroids of
+  up to 60 tons could exist if a ship with 60 tons of cargo collected
+  60 tons worth of asteroids and jettisoned them, but we ignore these
+  corner cases).
 
 Therefore the maximum damage from a single collision to shields is:
   (60*100)/1000 = 6 for a ship to ship collision
@@ -63,103 +56,62 @@ during the simulation, the theoretical Ship-Ship damage is closer to
 may be changed.
 
 
-
 Ship Laser Damage Calculations:
 
-When a ship fires a laser it specifies a beam length of up to 512 (max beam length = min(world_width/2, world_height/2)).
+When a ship fires a laser it specifies a beam length of up to 512 (max
+beam length = min(world_width/2, world_height/2)).
 
 The fuel cost to fire a laser is beam length / 50.
 
-When a beam strikes a target it is treated as a collision with an object of mass: 30*(beam length - distance from firing ship to target)
+When a beam strikes a target it is treated as a collision with an
+object of mass: 30*(beam length - distance from firing ship to target)
 
 Ship Laser Notes:
 
-* Ships have a radius of 12, so when two ships shoot at one another they are always at least 24 units apart.
+* Ships have a radius of 12, so when two ships shoot at one another
+  they are always at least 24 units apart.
 
 * For a "point blank" laser shot of beam length L:
   * The shooter spends L/50 fuel on the laser
-  * The target loses (30*(L-24))/1000 shields. Note further that 1 unit of shield costs 1 unit of fuel.
+  * The target loses (30*(L-24))/1000 shields. Note further that 1
+  unit of shield costs 1 unit of fuel.
 
-So for a point blank laser shot the shooter expends Fs fuel to deplete: 30*(Fs*50-24)/1000 = St of the target's shields.
-  * So in terms of Fs, the target's shield loss is (24+1000*St/30)/50 = 24/50 + 2*St/3.
-  * In other words, for each unit of fuel the shooter spends at point blank the target would have to spend around 1.5 units of fuel to prevent that much damage with their shields
+So for a point blank laser shot the shooter expends Fs fuel to
+deplete: 30*(Fs*50-24)/1000 = St of the target's shields.
+* So in terms of Fs, the target's shield loss is (24+1000*St/30)/50 =
+  24/50 + 2*St/3.
+* In other words, for each unit of fuel the shooter spends at point
+  blank the target would have to spend around 1.5 units of fuel to
+  prevent that much damage with their shields
 
-The "break even" distance Db at which a shooter's fuel cost to damage shields is equal to the targets cost to raise their shields is:
+The "break even" distance Db at which a shooter's fuel cost to damage
+shields is equal to the targets cost to raise their shields is:
   * Fs = L/50 = St = (30*(L-Db))/1000 is when Db = L/3, or put another way:
-  * When the target is closer than 1/3rd of the beam length shooting is more cost effective than shields, and beyond that less cost effective.
+  * When the target is closer than 1/3rd of the beam length shooting
+    is more cost effective than shields, and beyond that less cost
+    effective.
 
-Shooting is 2x more costly than shields at Db = 2L/3, and then degrades rapidly (3x more costly at 7L/9, 10x more costly at 14L/15).
+Shooting is 2x more costly than shields at Db = 2L/3, and then
+degrades rapidly (3x more costly at 7L/9, 10x more costly at 14L/15).
 
-The maximum damage from a single laser blast at point blank range of a maximum power laser is: 30*(512-24)/1000 = 14.64.
+The maximum damage from a single laser blast at point blank range of a
+maximum power laser is: 30*(512-24)/1000 = 14.64.
 
 Asteroid Laser Damage Calculations:
 
 These are similar to ship to ship calculations where:
 * Any single shot that deals >= 1 unit of Shield damage shatters an asteroid
-* Any single shot that deals < 1 unit of Shield damage has no effect (cumulative small damage have no effect - it does not accumulate like a ship).
+* Any single shot that deals < 1 unit of Shield damage has no effect
+  (cumulative small damage have no effect - it does not accumulate
+  like a ship).
 
 Station Laser Damage Calculations:
 
 These are similar to ship to ship calculations where:
-* A shot that would deal X units of Shield damage depletes the vinyl stores of the Station by X, to a minimum of 0.
+* A shot that would deal X units of Shield damage depletes the vinyl
+  stores of the Station by X, to a minimum of 0.
 
-
-
-
-
-Ship size is 12.0
-
-Ship mass is 40.0 empty + fuel + cargo.
-
-1. Answer questions about laser system and damage, maximum collision
-damage, how much shileds do we actually need.
-
-double g_laser_range_per_fuel_unit = 50.0;
-double g_laser_mass_scale_per_remaining_unit = 30.0;
-double g_laser_damage_mass_divisor = 1000.0;
-double g_asteroid_laser_shatter_threshold = 1000.0;
-
-Asteroid shatter - Asteroid.C line 135:
-GetMass() of laser >= g_asteroid_laser_shatter_threshold
-
-Comments say laser's mass at time of impact is:
-g_laser_mass_scale..._unit * (L-D) where L is initial beam length and
-D is shooter to impact distince => 30*beam remaining = mass
-
-Ships:
-
-Max laser value is worldsize / 2 on world's smaller x or y dimension
-(both 1024 in our case).
-
-Laser order includes a laser distance value: L, and it consumes L / 50
-fuel (laser_range_per_fuel_unit)
-
-When taking ship damage from lasers we reduce shield by
-laser->GetMass() / 1000 (laser_mass_divisor)
-
-NOTE: normal collisions do RelativeMomentum.rho / 1000
-
-Stations:
-
-When taking damage from lasers reduce cargo by laser->GetMass() / 1000
-to a minimum of 0.
-
-World:
-
-In calculating lasers we:
-get target from pShip->LaserTarget();
-
-(I stopped paying attention to the logic here - it's atrocious - 18
-lines of code with 5 or so temp variables to measure the distance
-between 2 points, and the excess beam length - there could be bugs but
-I'm writing how it is supposed to work).
-
-get range by doing DistTo from sourrce to target
-
-Set the mass of our beam to 30*(power-distance) as described in
-comments.
-
-
+==
 
 2. Refine override logic in GetVinyl.C:
   * Shield top up before hitting eatable vinyl
@@ -187,96 +139,19 @@ Contest results:
 
 Game 1-5 as team #2:
 1: 80  | 120
-2: 120 | 120
-3: 160 | 120
-4: 80  | 120
-5: 160 | 80
+2: 120 | 80
+3: 160 | 160
+4: 80  | 160
+5: 160 | 97.777 (tie some vinyl destroyed)
 
 Game 6-10 as team #1:
-6: 120 | 160
-7: 80  | 160
+6: 120 | 120
+7: 80  | 80
 8: 120 | 120
-9: 120 | 120
-10: 120 | 80
+9: 120 | 93.333
+10: 120 | 40
 
-NOTE - in my current builld there is clearly something wrong - ships
-are crab walking sideways, and seem to be dodging away from impacts,
-like there is a sign error somewhere
-
-NOTE - EVEN IF I BACK OUT THE CHANGES I NEED TO KEEP THE FIX FOR T1 FEASIBILITY I THINK!!! I WAS SAYING T1 INTERCEPTS WERE FEASIBLE WITHOUT CHECKING MAX SPEEDS.
-   * Wait - hang on - does this prevent me from overthrusting?!?
-   * I want to look at total distances as a groos check, not disallow overthrusting.
-
-
-NOTE - I'M CONFUSING MYSELF WITH T1 FEASIBILITY AND MAYBE KNOCKING OUT OTHER FEASIBLE PLANS.
-DON'T PUT FEASIBILITY CHECKS IN CONTEXT, DO THEM ALL FOR EACH CASE EXPLICITLY.
-
-
-
-
-
-===
-I think I must have a calculation bug in my code.
-
-Looking at the verbose run logging in build/baglog.txt I noticed these sections:
-
-Around 1317:
-
-[Pathfinding] Case 2ai: THRUST 45.755 (fuel=0.0)
-  Ship: pos(149.4,295.1) vel(18.5,-1.94) orient=1.63
-  Target: pos(20.6,-166.9) vel(28.0,-1.45) dest(55.2,-445.0)
-[Pathfinding] Case 2aii: THRUST 45.755 (fuel=0.0)
-  Ship: pos(149.4,295.1) vel(18.5,-1.94) orient=1.63
-  Target: pos(20.6,-166.9) vel(28.0,-1.45) dest(55.2,-445.0)
-[Case 2aii Analysis] Thrust: 45.75, Facing: BACKWARD, Speed: 18.5/30.0, Orient-Vel angle: 2.71 rad
-
-Line 1429
-t=6.0	Red 5 [assignment]:
-	→ Following vinyl asteroid 14 (Utility: 133022561.88):
-	  Ship:	pos(149.4,295.1)	vel(18.5,-1.94)	orient 1.63
-	  Asteroid:	pos(20.6,-166.9)	vel(28.0,-1.45)	orient -0.28	mass 40.0
-	  Plan:	turns=0.3	order=thrust	mag=45.75
-
-I don't see how the constants involved for the ship and asteroid can possibly result in an intercept in 0.3 turns - which suggests a bug to me. The most likely code path for that bug (in fact the only plausible one to me) is in case 2ai - however I can't see how the logic there yeilds a turns of 0.3 - unless there is a computational flaw elsehwere.
-
-Can you walk through the code and the implies values of variables based on these log lines and try to understand how we came up with a planned turns=0.3 value for a shippt and an asteroid who are over 450 units apart on the map?
-
-
-
-
-In a run I saw RED 5 doing weird stuff and noticed this in the log which seems clearly bad - I think the only way turns can be 0.3 in this scenario is a case 2ai analysis gone wrong (the bad behaviors I'm seeing include crabwalking and dodging / jumping back from targets - possibly because very high utility things are getting turned up due to foreshortened intercept timese?!?)
-
-
-
-
-
-
-Line 1393:
-
-[Pathfinding] Case 2aii: THRUST -28.104 (fuel=0.0)
-  Ship: pos(151.8,159.8) vel(28.1,-2.40) orient=-2.39
-  Target: pos(20.6,-166.9) vel(28.0,-1.45) dest(69.0,467.8)
-[Case 2aii Analysis] Thrust: -28.10, Facing: FORWARD, Speed: 28.1/30.0, Orient-Vel angle: 0.00 rad
-
-
-
-Around 1317:
-
-[Pathfinding] Case 2ai: THRUST 45.755 (fuel=0.0)
-  Ship: pos(149.4,295.1) vel(18.5,-1.94) orient=1.63
-  Target: pos(20.6,-166.9) vel(28.0,-1.45) dest(55.2,-445.0)
-[Pathfinding] Case 2aii: THRUST 45.755 (fuel=0.0)
-  Ship: pos(149.4,295.1) vel(18.5,-1.94) orient=1.63
-  Target: pos(20.6,-166.9) vel(28.0,-1.45) dest(55.2,-445.0)
-[Case 2aii Analysis] Thrust: 45.75, Facing: BACKWARD, Speed: 18.5/30.0, Orient-Vel angle: 2.71 rad
-
-Line 1429
-t=6.0	Red 5 [assignment]:
-	→ Following vinyl asteroid 14 (Utility: 133022561.88):
-	  Ship:	pos(149.4,295.1)	vel(18.5,-1.94)	orient 1.63
-	  Asteroid:	pos(20.6,-166.9)	vel(28.0,-1.45)	orient -0.28	mass 40.0
-	  Plan:	turns=0.3	order=thrust	mag=45.75
-
+7-3 | 5-4-1
 
 ===
 
