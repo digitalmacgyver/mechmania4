@@ -94,7 +94,6 @@ namespace Pathfinding {
       // Vectors at t1 (after 1 turn drift)
       CTraj intercept_vec_t1;   // Required velocity to reach destination in 'time - 1'.
       CTraj thrust_vec_t1;      // Required change in velocity at t1.
-      bool t1_intercept_feasible;
     };
 
     // TODO: Is tere a way to do this with a return rather than an in/out parameter?
@@ -127,16 +126,15 @@ namespace Pathfinding {
       ctx.intercept_vec_t0.rho /= time;  // Velocity needed to reach target in time
       // So now intercep_vec_t0 represents the ideal velocity starting now.
 
-      // T1 Calculations (if we let the ship drift for 1 turn)
+      // T1 Calculations
+      // NOTE: THESE APPLY ONLY IF THE SHIP HAS NOT THURSTED IN TURN 0!
       CCoord ship_pos_t1 = ship->PredictPosition(g_game_turn_duration);
       CTraj dest_vec_t1 = ship_pos_t1.VectTo(ctx.destination);
       ctx.intercept_vec_t1 = dest_vec_t1;
-      ctx.t1_intercept_feasible = false;
       // TODO: This condition is really trying to represent "we have at least 2
       // game turns to intercept - because we wish to issue 2 orders to arrive on
       // an intercept course."
       if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
-        ctx.t1_intercept_feasible = true;
         ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
         ctx.thrust_vec_t1 = ctx.intercept_vec_t1 - ctx.ship_vel_t0; // Note - ship_vel hasn't changed since T0
       }
@@ -147,6 +145,7 @@ namespace Pathfinding {
 
     // Returns true if the game engine will clamp us as a result sending a thrust
     // order with rho for this ship.
+    // DEBUG - work through this - does this do the right thing when rho is negative?
     bool is_speeding(CShip* ship, double rho, double maxspeed = -1.0) {
       // Emulate the behavior of a default parameter for this global that isn't
       // known till runtime.
@@ -177,7 +176,7 @@ namespace Pathfinding {
       vtarget.rho = dist;
       CCoord traj_end = vtraj.ConvertToCoord();
       CCoord target_end = vtarget.ConvertToCoord();
-      return traj_end.DistTo(target_end) <= epsilon;
+      return traj_end.DistTo(target_end) < (epsilon - g_fp_error_epsilon);
     }
 
     // Checks if vtraj and vtarget are nearly parallel.
@@ -234,12 +233,12 @@ namespace Pathfinding {
       // intercept trajectory always to collide - so case 1a shouldn't be guarded by a check of weather we're on an intercept trajectory.
       double its_coming_right_for_us = ship->DetectCollisionCourse(*thing);
       if (!ship->IsDocked() && its_coming_right_for_us != g_no_collide_sentinel &&
-      its_coming_right_for_us <= time) {
+      its_coming_right_for_us < time) {
 
         // TODO: We have to issue some kind of order in FuelTraj but we don't actually
         // want our planner to take note of the order - O_SHIELD seems the safest bet,
         // but we should clean this up.
-        return CreateSuccessTraj(ctx, ship, O_SHIELD, 0.0, 0.0, 1, time, 0.0, "1a");
+        return CreateSuccessTraj(ctx, ship, O_SHIELD, 0.0, 0.0, 0, its_coming_right_for_us, 0.0, "1a");
       }
       return FAILURE_TRAJ;
     }
@@ -262,7 +261,15 @@ namespace Pathfinding {
         double thrust_order_amt = thrust_vec_t0.rho;
 
         // Do we need forward or reverse thrust?
-        if (fabs(ship_orient_vec_t0.theta - dest_vec_t0.theta) > PI) {
+
+        // Calculate the angular difference accounting for wraparound
+        double angle_diff = ship_orient_vec_t0.theta - dest_vec_t0.theta;
+        // Normalize to [-PI, PI]
+        while (angle_diff > PI) angle_diff -= 2*PI;
+        while (angle_diff < -PI) angle_diff += 2*PI;
+
+        // If facing more backward than forward, use reverse thrust
+        if (fabs(angle_diff) > PI/2) {
           thrust_order_amt *= -1.0;
         }
         if (!is_speeding(ship, thrust_order_amt)) {
@@ -278,34 +285,46 @@ namespace Pathfinding {
       return FAILURE_TRAJ;
     }
 
-    // Case 1c: On trajectory, misaligned orientation, needs turn (reduces to Case 1b next turn).
+    // Case 1c: On trajectory, possibly misaligned orientation, needs turn (reduces to
+    // Case 1b next turn).
+    //
+    // DEBUG: Is this note accurate? Is there any game scenario where that is actually true?
+    // NOTE: We can end up in this case when we are aligned but can't issue enough
+    // thrust this turn to get to the target without speeding, but if we drift for 
+    // one turn then next turn we can issue enough thrust without speeding.
+    //
+    // So this case is both:
+    // Drift then thrust
+    // Turn then thrust
     FuelTraj TryTurnToAlign(const PathfindingContext& ctx) {
       const CTraj& intercept_vec_t1 = ctx.intercept_vec_t1;
       const CTraj& thrust_vec_t1 = ctx.thrust_vec_t1;
       CShip* ship = ctx.ship;
       double ship_orient_t0 = ctx.ship_orient_t0;
-      bool t1_intercept_feasible = ctx.t1_intercept_feasible;
 
       // We won't arrive on time as it is, and our orient is not on the
       // trajectory, but we can turn and thrust to arrive on time. =>
       // O_TURN (should reduce to Case 1b next game turn)
       //
-      // TODO: Clean up this opaque interface around t1_intercept_feasible;
-      //
-      // Note: intercept_vec_t1.rho and thrust_vec_t1 are only valid if
-      // ti_intercept_feasible.
-      if (t1_intercept_feasible && (intercept_vec_t1.rho <= g_game_max_speed)) {
+      bool t1_dist_ok = (
+        ctx.time > g_game_turn_duration 
+        && (g_game_max_speed > (intercept_vec_t1.rho / (ctx.time - g_game_turn_duration)))
+      );
+      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.rho));
+      if (t1_dist_ok && t1_thrust_ok) {
         // Even through we can thrust forward and backward, prefer to be facing our
         // target so we can shoot it if we want to.
 
         double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
 
         double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt);
-        unsigned int num_orders = 1;
-        double fuel_total = fuel_used;
+        unsigned int num_orders = 2;
+        double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho);
         double time_to_intercept = ctx.time;
-        return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
-          time_to_intercept, fuel_total, "1c");
+        if (fuel_total < ctx.state_t0.fuel) {
+          return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
+            time_to_intercept, fuel_total, "1c");
+        }
       }
       return FAILURE_TRAJ;
     }
@@ -314,9 +333,9 @@ namespace Pathfinding {
     FuelTraj TryTurnThenThrust(const PathfindingContext& ctx) {
       CShip* ship = ctx.ship;
       double time = ctx.time;
+      const CTraj& intercept_vec_t1 = ctx.intercept_vec_t1;
       const CTraj& thrust_vec_t1 = ctx.thrust_vec_t1;
       double ship_orient_t0 = ctx.ship_orient_t0;
-      bool t1_intercept_feasible = ctx.t1_intercept_feasible;
 
       // TODO: Case 2b is not always optimal - it may be better to do some
       // thrust->overthrust->turn sequence instead. Consider the case where we are
@@ -330,30 +349,31 @@ namespace Pathfinding {
       // analyze our current thrust options in terms of decompositon of parallel to,
       // and perpendicualr to, our desired thurst, and consider strongly thrusting
       // where the parallel to dimension is high.
-      //
-      // TODO: Definitely fix this kind of comparison - we're never calling this
-      // function with time = 1.5, so here due to FP rounding errors we might be
-      // saying we don't have time to issue orders, or we do have time - in here we
-      // are reasoning about turns, not time durations!
-      if (t1_intercept_feasible) {
-        if (!is_speeding(ship, thrust_vec_t1.rho)) {
-          double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
 
-          double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt);
-          unsigned int num_orders = 2;
-          // TODO: We introduce a slight error in fuel_total as we base the cost
-          // on our current state not what our state will be when we issue the
-          // next order. For now we accept this for brevity rather than
-          // simulating state of our ship next turn for maginally more accurate
-          // fuel estimates.
-          double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho);
-          double time_to_intercept = ctx.time;
+      bool t1_dist_ok = (
+        time > g_game_turn_duration 
+        && (g_game_max_speed > (intercept_vec_t1.rho / (time - g_game_turn_duration)))
+      );
+      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.rho));
 
-          // Check this multi-order path doesn't run out of fuel.
-          if (fuel_total < ctx.state_t0.fuel) {
-            return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
-              time_to_intercept, fuel_total, "2b");
-          }
+      if (t1_dist_ok && t1_thrust_ok) {
+        
+        double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
+
+        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt);
+        unsigned int num_orders = 2;
+        // TODO: We introduce a slight error in fuel_total as we base the cost
+        // on our current state not what our state will be when we issue the
+        // next order. For now we accept this for brevity rather than
+        // simulating state of our ship next turn for maginally more accurate
+        // fuel estimates.
+        double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho);
+        double time_to_intercept = ctx.time;
+
+        // Check this multi-order path doesn't run out of fuel.
+        if (fuel_total < ctx.state_t0.fuel) {
+          return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
+            time_to_intercept, fuel_total, "2b");
         }
       }
       return FAILURE_TRAJ;
@@ -438,7 +458,7 @@ namespace Pathfinding {
           //           => O_THRUST
 
           // Check if we'll reach the target next turn due to this thrust.
-          bool thrust_reaches_target = (t_dest_vec_t1.rho <= ((ship->GetSize() + thing->GetSize()) / 2.0));
+          bool thrust_reaches_target = (t_dest_vec_t1.rho < (ship->GetSize() + thing->GetSize() - g_fp_error_epsilon));
 
           // TODO: It is logically possible, if perhaps not geometrically possible,
           // that our thrust would push us through the position of the destination -
@@ -465,8 +485,10 @@ namespace Pathfinding {
             double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k);
             unsigned int num_orders = 1;
             double fuel_total = fuel_used;
-            double time_to_intercept = ctx.time;
-            if (thrust_reaches_target) {
+            // Since we had to thurst a specific amount to get on target, we
+            // might arrive earlier than the requested time.
+            double time_to_intercept = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
+            if (thrust_reaches_target && (time_to_intercept > g_game_turn_duration)) {
               time_to_intercept = g_game_turn_duration;
             }
             result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k, fuel_used, num_orders,

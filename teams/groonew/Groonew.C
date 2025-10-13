@@ -204,7 +204,7 @@ void Groonew::PopulateMagicBag() {
       unsigned int max_intercept_turns = 21;
 
       // Calculate optimal intercept time
-      for (unsigned int turn_i = 1; turn_i < max_intercept_turns; ++turn_i) {
+      for (unsigned int turn_i = 1; turn_i <= max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
         FuelTraj fueltraj = Pathfinding::DetermineOrders(ship, athing, turn_i,
                                                          this->calculator_ship);
