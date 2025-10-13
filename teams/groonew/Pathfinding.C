@@ -208,8 +208,8 @@ namespace Pathfinding {
         // Get target velocity
         CTraj target_vel = ctx.thing->GetVelocity();
 
-        printf("[Pathfinding] Case %s: %s %.3f (fuel=%.1f)\n",
-               case_label, order_name, mag, fj.fuel_used);
+        printf("[Pathfinding] Case %s: %s %.3f (fuel=%.1f) (tti=%.1f)\n",
+               case_label, order_name, mag, fj.fuel_used, fj.time_to_intercept);
         printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f) orient=%.2f\n",
                ctx.ship_pos_t0.fX, ctx.ship_pos_t0.fY,
                ctx.ship_vel_t0.rho, ctx.ship_vel_t0.theta,
