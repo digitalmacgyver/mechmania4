@@ -168,6 +168,7 @@ void Groonew::PopulateMagicBag() {
   // Reset global resource counters
   uranium_left = 0.0;
   vinyl_left = 0.0;
+  bool first_iteration = true;
 
   // For each of our ships, calculate paths to all objects
   for (unsigned int ship_i = 0; ship_i < GetShipCount(); ++ship_i) {
@@ -190,14 +191,17 @@ void Groonew::PopulateMagicBag() {
         continue;  // Skip generic things (laser beams, etc.)
       }
 
+
       // Track global resource availability
-      if (athing->GetKind() == ASTEROID) {
-        if (((CAsteroid*)athing)->GetMaterial() == VINYL) {
-          vinyl_left += athing->GetMass();  // Track total vinyl in world
-        } else if (((CAsteroid*)athing)->GetMaterial() == URANIUM) {
-          uranium_left += athing->GetMass();  // Track total uranium in world
-        } else {
-          printf("ERROR: Unknown asteroid material!\n");
+      if (first_iteration) {
+        if (athing->GetKind() == ASTEROID) {
+          if (((CAsteroid*)athing)->GetMaterial() == VINYL) {
+            vinyl_left += athing->GetMass();  // Track total vinyl in world
+          } else if (((CAsteroid*)athing)->GetMaterial() == URANIUM) {
+            uranium_left += athing->GetMass();  // Track total uranium in world
+          } else {
+            printf("ERROR: Unknown asteroid material!\n");
+          }
         }
       }
 
@@ -228,6 +232,7 @@ void Groonew::PopulateMagicBag() {
         }
       }
     }
+    first_iteration = false;
   }
 }
 

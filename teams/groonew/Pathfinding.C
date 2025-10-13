@@ -8,6 +8,7 @@
 #include "GameConstants.h"
 #include "ParserModern.h"
 #include "Traj.h"
+#include "World.h"
 
 #include <cmath>
 
@@ -68,6 +69,34 @@ namespace Pathfinding {
       return cost;
     }
 
+    // We want to know often what is the first thing we'll collide with,
+    // as subsequent to that later collisions are speculative because
+    // our path will be changed.
+    CThing* GetFirstCollision(CShip* ship) {
+      CWorld* worldp = ship->GetWorld();
+
+      double min_collision_time = g_no_collide_sentinel;
+      CThing* min_collision_thing = NULL;
+
+      for (unsigned int thing_i = worldp->UFirstIndex;
+        thing_i <= worldp->ULastIndex;
+        thing_i = worldp->GetNextIndex(thing_i)) {
+        CThing* athing = worldp->GetThing(thing_i);
+        if (athing == NULL || !(athing->IsAlive())) {
+          continue;  // Skip dead objects
+        }
+        if (athing->GetKind() == GENTHING) {
+          continue;  // Skip generic things (laser beams, etc.)
+        }
+        double collision_time = ship->DetectCollisionCourse(*athing);
+        if (collision_time != g_no_collide_sentinel || collision_time < min_collision_time) {
+          min_collision_time = collision_time;
+          min_collision_thing = athing;
+        }
+      }
+      return min_collision_thing;
+    }
+
     // --- Pathfinding Context ---
 
     // Struct to hold the context of the pathfinding attempt for a specific ship and target.
@@ -94,6 +123,9 @@ namespace Pathfinding {
       // Vectors at t1 (after 1 turn drift)
       CTraj intercept_vec_t1;   // Required velocity to reach destination in 'time - 1'.
       CTraj thrust_vec_t1;      // Required change in velocity at t1.
+
+      CThing* first_collision_thing;
+      double first_collision_time;
     };
 
     // TODO: Is tere a way to do this with a return rather than an in/out parameter?
@@ -141,6 +173,13 @@ namespace Pathfinding {
 
       ctx.calculator_ship = calculator_ship;
       ctx.state_t0 = CaptureState(ship); // Capture T0 state
+
+      ctx.first_collision_thing = GetFirstCollision(ship);
+      if (ctx.first_collision_thing != NULL) {
+        ctx.first_collision_time = ship->DetectCollisionCourse(*ctx.first_collision_thing);
+      } else {
+        ctx.first_collision_time = g_no_collide_sentinel;
+      }
     }
 
     // Returns true if the game engine will clamp us as a result sending a thrust
@@ -224,21 +263,25 @@ namespace Pathfinding {
     }
 
     // Case 1a: And we'll drift into it at or before the desired time. => No order.
+    // NOTE: Since our obects aren't point masses, we don't need to be on an
+    // intercept trajectory always to collide - so case 1a shouldn't be guarded by
+    // a check of whether we're on an intercept trajectory.
     FuelTraj TryDriftIntercept(const PathfindingContext& ctx) {
       CShip* ship = ctx.ship;
       CThing* thing = ctx.thing;
       double time = ctx.time;
+      CThing* first_collision_thing = ctx.first_collision_thing;
+      double first_collision_time = ctx.first_collision_time;
 
-      // NOTE: Since our obects aren't point masses, we don't need to be on an
-      // intercept trajectory always to collide - so case 1a shouldn't be guarded by a check of weather we're on an intercept trajectory.
-      double its_coming_right_for_us = ship->DetectCollisionCourse(*thing);
-      if (!ship->IsDocked() && its_coming_right_for_us != g_no_collide_sentinel &&
-      its_coming_right_for_us < time) {
-
+      if (!ship->IsDocked() 
+      && first_collision_time <= time 
+      && first_collision_time != g_no_collide_sentinel
+      && first_collision_thing != NULL
+      && first_collision_thing == thing) {
         // TODO: We have to issue some kind of order in FuelTraj but we don't actually
         // want our planner to take note of the order - O_SHIELD seems the safest bet,
         // but we should clean this up.
-        return CreateSuccessTraj(ctx, ship, O_SHIELD, 0.0, 0.0, 0, its_coming_right_for_us, 0.0, "1a");
+        return CreateSuccessTraj(ctx, ship, O_SHIELD, 0.0, 0.0, 0, first_collision_time, 0.0, "1a");
       }
       return FAILURE_TRAJ;
     }
