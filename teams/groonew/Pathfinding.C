@@ -10,6 +10,7 @@
 #include "Traj.h"
 #include "World.h"
 
+#include <cfloat>
 #include <cmath>
 
 // External reference to global parser instance
@@ -75,9 +76,15 @@ namespace Pathfinding {
     CThing* GetFirstCollision(CShip* ship) {
       CWorld* worldp = ship->GetWorld();
 
-      double min_collision_time = g_no_collide_sentinel;
+      double min_collision_time = DBL_MAX;
       CThing* min_collision_thing = NULL;
 
+      // Can't collide with anything if we're docked.
+      if (ship->IsDocked()) {
+        return NULL;
+      }
+
+      // Iterate over everything till we find the soonest collision with our ship.
       for (unsigned int thing_i = worldp->UFirstIndex;
         thing_i <= worldp->ULastIndex;
         thing_i = worldp->GetNextIndex(thing_i)) {
@@ -88,12 +95,45 @@ namespace Pathfinding {
         if (athing->GetKind() == GENTHING) {
           continue;  // Skip generic things (laser beams, etc.)
         }
+        if (athing == ship) {
+          continue;  // Skip self
+        }
         double collision_time = ship->DetectCollisionCourse(*athing);
-        if (collision_time != g_no_collide_sentinel || collision_time < min_collision_time) {
+        if (collision_time == g_no_collide_sentinel) {
+          continue;  // Skip objects we won't collide with
+        }
+        if (collision_time < min_collision_time) {
           min_collision_time = collision_time;
           min_collision_thing = athing;
         }
       }
+
+      // Verbose logging of first collision detection
+      if (g_pParser && g_pParser->verbose && min_collision_thing != NULL) {
+        // Convert ThingKind to string
+        const char* object_type;
+        switch (min_collision_thing->GetKind()) {
+          case GENTHING:  object_type = "GENTHING"; break;
+          case ASTEROID:  object_type = "ASTEROID"; break;
+          case STATION:   object_type = "STATION"; break;
+          case SHIP:      object_type = "SHIP"; break;
+          default:        object_type = "UNKNOWN"; break;
+        }
+  
+        // Get velocities
+        CTraj ship_vel = ship->GetVelocity();
+        CTraj obj_vel = min_collision_thing->GetVelocity();
+  
+        printf("[FirstCollision] Ship '%s' -> %s '%s' in %.2fs\n",
+          ship->GetName(), object_type, min_collision_thing->GetName(), min_collision_time);
+        printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
+          ship->GetPos().fX, ship->GetPos().fY,
+          ship_vel.rho, ship_vel.theta);
+        printf("  Object: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
+          min_collision_thing->GetPos().fX, min_collision_thing->GetPos().fY,
+          obj_vel.rho, obj_vel.theta);
+      }
+
       return min_collision_thing;
     }
 
