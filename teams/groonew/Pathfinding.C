@@ -225,13 +225,13 @@ namespace Pathfinding {
     // Returns true if the game engine will clamp us as a result sending a thrust
     // order with rho for this ship.
     // DEBUG - work through this - does this do the right thing when rho is negative?
-    bool is_speeding(CShip* ship, double rho, double maxspeed = -1.0) {
+    bool is_speeding(CShip* ship, double direction, double magnitude, double maxspeed = -1.0) {
       // Emulate the behavior of a default parameter for this global that isn't
       // known till runtime.
       if (maxspeed < 0) {
         maxspeed = g_game_max_speed;
       }
-      return ((ship->GetVelocity() + CTraj(rho, ship->GetOrient())).rho > maxspeed);
+      return ((ship->GetVelocity() + CTraj(magnitude, direction)).rho > maxspeed);
     }
 
     // Returns true if the trajectories vtraj and vtarget are nearly parallel.
@@ -355,7 +355,7 @@ namespace Pathfinding {
         if (fabs(angle_diff) > PI/2) {
           thrust_order_amt *= -1.0;
         }
-        if (!is_speeding(ship, thrust_order_amt)) {
+        if (!is_speeding(ship, ship_orient_vec_t0.theta, thrust_order_amt)) {
           // TODO: Check if our order was reduced due to fuel limits and return FAILURE_TRAJ instead.
           double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_order_amt);          
           unsigned int num_orders = 1;
@@ -393,7 +393,7 @@ namespace Pathfinding {
         ctx.time > g_game_turn_duration 
         && (g_game_max_speed > (intercept_vec_t1.rho / (ctx.time - g_game_turn_duration)))
       );
-      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.rho));
+      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.theta, thrust_vec_t1.rho));
       if (t1_dist_ok && t1_thrust_ok) {
         // Even through we can thrust forward and backward, prefer to be facing our
         // target so we can shoot it if we want to.
@@ -437,7 +437,7 @@ namespace Pathfinding {
         time > g_game_turn_duration 
         && (g_game_max_speed > (intercept_vec_t1.rho / (time - g_game_turn_duration)))
       );
-      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.rho));
+      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.theta, thrust_vec_t1.rho));
 
       if (t1_dist_ok && t1_thrust_ok) {
         

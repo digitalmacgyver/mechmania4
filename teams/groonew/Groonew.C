@@ -517,9 +517,15 @@ void Groonew::AssignShipOrders() {
       wants = HOME;
     } else if (prefered_asteroid == VINYL && vinyl_available) {
       wants = POINTS;
-    } else if (prefered_asteroid == URANIUM && uranium_available) {
+    } else if (prefered_asteroid == URANIUM && uranium_available && vinyl_available) {
+      // While there's still vinyl we just get vinyl and fuel if we need it.
       wants = FUEL;
-    } else if (commence_primary_ignition) {
+    } else if (prefered_asteroid == URANIUM && uranium_available && cur_fuel <= 6.6) {
+      // If there's still uranium but no vinyl, and we're low on fuel, stock up
+      // for battle.
+      wants = FUEL;
+    } else {
+      // Those who can't create will destroy.
       wants = VIOLENCE;
     }
 
@@ -542,6 +548,9 @@ void Groonew::AssignShipOrders() {
           // Either we set the order above, or we didn't need an order this turn
           // to achieve our goal.
           break;
+        }
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ Returning to base (cargo=%.1f) (tti=%d)\n", cur_cargo, j);
         }
       }
     } else if (wants == POINTS || wants == FUEL) {
@@ -571,6 +580,244 @@ void Groonew::AssignShipOrders() {
         } else {
           e.utility = 0.0;  // Not an asteroid or destination is null
         }
+      }
+    } else if (wants == VIOLENCE) {
+      // VIOLENCE mode: Converge on enemy ships/stations
+      // We issue orders directly - no need for utility optimization since
+      // combat targeting is generally robust against uncoordinated action.
+
+      CTeam* pmyTeam = pShip->GetTeam();
+      const double emergency_fuel_reserve = (pmyWorld->GetGameTime() >= 280.0) ? 0.0 : 5.0;
+      const double available_fuel = pShip->GetAmount(S_FUEL) - emergency_fuel_reserve;
+      const double max_beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
+
+      // Structure to hold potential targets
+      struct ViolenceTarget {
+        CThing* thing;
+        int priority_class;  // 1=station with vinyl, 2=ship with vinyl, 3=other ship
+        double sort_key1;    // For stations: 0, For ships: cargo (desc) or shields (asc)
+        double sort_key2;    // For ships with cargo: shields, For others: fuel
+        double sort_key3;    // For ships with cargo: fuel, For others: 0
+      };
+
+      std::vector<ViolenceTarget> targets;
+
+      // Scan world for enemy targets
+      for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
+           idx = pmyWorld->GetNextIndex(idx)) {
+        CThing* thing = pmyWorld->GetThing(idx);
+        if (thing == NULL || !thing->IsAlive()) continue;
+
+        ThingKind kind = thing->GetKind();
+        if (kind != STATION && kind != SHIP) continue;
+
+        CTeam* thing_team = thing->GetTeam();
+        if (thing_team == NULL) continue;
+        if (thing_team->GetTeamNumber() == pmyTeam->GetTeamNumber()) continue;
+
+        ViolenceTarget target;
+        target.thing = thing;
+
+        if (kind == STATION) {
+          CStation* station = static_cast<CStation*>(thing);
+          double vinyl = station->GetVinylStore();
+          if (vinyl > g_fp_error_epsilon) {
+            target.priority_class = 1;
+            target.sort_key1 = 0.0;
+            target.sort_key2 = 0.0;
+            target.sort_key3 = 0.0;
+            targets.push_back(target);
+          }
+        } else if (kind == SHIP) {
+          CShip* enemy = static_cast<CShip*>(thing);
+          double cargo = enemy->GetAmount(S_CARGO);
+          double shields = enemy->GetAmount(S_SHIELD);
+          double fuel = enemy->GetAmount(S_FUEL);
+
+          if (cargo > g_fp_error_epsilon) {
+            // Second priority: ships with vinyl
+            // Sort by: most vinyl (desc), least shields (asc), least fuel (asc)
+            target.priority_class = 2;
+            target.sort_key1 = -cargo;  // Negate for descending
+            target.sort_key2 = shields;  // Ascending
+            target.sort_key3 = fuel;     // Ascending
+            targets.push_back(target);
+          } else {
+            // Third priority: other enemy ships
+            // Sort by: least shields (asc), least fuel (asc)
+            target.priority_class = 3;
+            target.sort_key1 = shields;
+            target.sort_key2 = fuel;
+            target.sort_key3 = 0.0;
+            targets.push_back(target);
+          }
+        }
+      }
+
+      // Sort targets by priority
+      std::sort(targets.begin(), targets.end(),
+                [](const ViolenceTarget& a, const ViolenceTarget& b) {
+        if (a.priority_class != b.priority_class) return a.priority_class < b.priority_class;
+        if (fabs(a.sort_key1 - b.sort_key1) > g_fp_error_epsilon) return a.sort_key1 < b.sort_key1;
+        if (fabs(a.sort_key2 - b.sort_key2) > g_fp_error_epsilon) return a.sort_key2 < b.sort_key2;
+        return a.sort_key3 < b.sort_key3;
+      });
+
+      // Find best target we can path to
+      CThing* best_target = NULL;
+      PathInfo best_path;
+
+      for (const auto& target : targets) {
+        // Check if we have a path to this target in MagicBag
+        auto& ship_paths = mb->getShipPaths(shipnum);
+        auto it = ship_paths.find(target.thing);
+        if (it != ship_paths.end()) {
+          best_target = target.thing;
+          best_path = it->second;
+          break;
+        }
+      }
+
+      // Issue navigation orders if we found a target
+      if (best_target != NULL) {
+        const char* target_type = (best_target->GetKind() == STATION) ? "enemy station" : "enemy ship";
+
+        if (g_pParser && g_pParser->verbose) {
+          printf("t=%.1f\t%s [VIOLENCE]:\n", pmyWorld->GetGameTime(), pShip->GetName());
+          printf("\t→ Engaging %s '%s'\n", target_type, best_target->GetName());
+        }
+
+        // Special handling for STATIONS to avoid getting stuck docked
+        if (best_target->GetKind() == STATION) {
+          CStation* enemy_station = static_cast<CStation*>(best_target);
+          double distance = pShip->GetPos().DistTo(enemy_station->GetPos());
+
+          // Check if docked at enemy station (IsDocked + very close)
+          bool docked_at_enemy = (pShip->IsDocked() && distance < g_ship_default_docking_distance + 5.0);
+
+          if (docked_at_enemy) {
+            // MODE 1: Docked at enemy - exit facing the station
+            double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
+            double current_orient = pShip->GetOrient();
+            double angle_diff = angle_to_station - current_orient;
+
+            // Normalize angle difference to [-PI, PI]
+            while (angle_diff > PI) angle_diff -= PI2;
+            while (angle_diff < -PI) angle_diff += PI2;
+
+            if (fabs(angle_diff) > 0.1) {
+              // Not facing station, turn to face it
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ MODE: Docked exit - Turning to face (angle_diff=%.2f)\n", angle_diff);
+              }
+              pShip->SetOrder(O_TURN, angle_diff);
+            } else {
+              // Facing station, thrust backwards to exit
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ MODE: Docked exit - Backing away\n");
+              }
+              pShip->SetOrder(O_THRUST, -5.0);
+            }
+          } else if (distance < 200.0) {
+            // MODE 2: Near enemy station - manual positioning for optimal shooting
+            const double optimal_distance = 150.0;
+            bool facing = pShip->IsFacing(*enemy_station);
+
+            if (facing) {
+              // Facing station, manage distance
+              if (distance < optimal_distance * 0.8) {
+                // Too close, back away
+                if (g_pParser && g_pParser->verbose) {
+                  printf("\t→ MODE: Manual positioning - Backing away (dist=%.1f)\n", distance);
+                }
+                pShip->SetOrder(O_THRUST, -3.0);
+              } else if (distance > optimal_distance * 1.5) {
+                // Too far, approach slowly
+                if (g_pParser && g_pParser->verbose) {
+                  printf("\t→ MODE: Manual positioning - Approaching (dist=%.1f)\n", distance);
+                }
+                pShip->SetOrder(O_THRUST, 5.0);
+              } else {
+                // Good distance, no navigation order
+                if (g_pParser && g_pParser->verbose) {
+                  printf("\t→ MODE: Manual positioning - Holding position (dist=%.1f)\n", distance);
+                }
+              }
+            } else {
+              // Not facing, turn to face
+              double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
+              double current_orient = pShip->GetOrient();
+              double angle_diff = angle_to_station - current_orient;
+
+              // Normalize
+              while (angle_diff > PI) angle_diff -= PI2;
+              while (angle_diff < -PI) angle_diff += PI2;
+
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ MODE: Manual positioning - Turning to face (angle_diff=%.2f)\n", angle_diff);
+              }
+              pShip->SetOrder(O_TURN, angle_diff);
+            }
+          } else {
+            // MODE 3: Far from station - use MagicBag navigation
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ MODE: MagicBag navigation (dist=%.1f)\n", distance);
+              printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                     best_path.fueltraj.time_to_intercept,
+                     (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                     : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
+                     best_path.fueltraj.order_mag);
+            }
+            pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
+          }
+
+          // Try to shoot regardless of navigation mode
+          if (pShip->IsFacing(*enemy_station) && available_fuel > g_fp_error_epsilon) {
+            if (distance + g_fp_error_epsilon < max_beam_length) {
+              double beam_length = max_beam_length;
+              bool good_efficiency = (beam_length >= 3.0 * distance);
+
+              if (good_efficiency) {
+                if (g_pParser && g_pParser->verbose) {
+                  printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n", beam_length, distance);
+                }
+                pShip->SetOrder(O_LASER, beam_length);
+              }
+            }
+          }
+        } else {
+          // Enemy SHIP targeting - use existing simple logic
+          if (g_pParser && g_pParser->verbose) {
+            printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                   best_path.fueltraj.time_to_intercept,
+                   (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                   : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
+                   best_path.fueltraj.order_mag);
+          }
+
+          // Apply navigation orders
+          pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
+
+          // Check if we can shoot at the target
+          if (pShip->IsFacing(*best_target) && available_fuel > g_fp_error_epsilon) {
+            double distance = pShip->GetPos().DistTo(best_target->GetPos());
+
+            if (distance + g_fp_error_epsilon < max_beam_length) {
+              double beam_length = max_beam_length;
+              bool good_efficiency = (beam_length >= 3.0 * distance);
+
+              if (good_efficiency) {
+                if (g_pParser && g_pParser->verbose) {
+                  printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n", beam_length, distance);
+                }
+                pShip->SetOrder(O_LASER, beam_length);
+              }
+            }
+          }
+        }
+      } else if (g_pParser && g_pParser->verbose) {
+        printf("t=%.1f\t%s [VIOLENCE]:\n", pmyWorld->GetGameTime(), pShip->GetName());
+        printf("\t→ No valid enemy targets found\n");
       }
     }
     // If wants == NOTHING or VIOLENCE, the ship currently does nothing
