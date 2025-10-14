@@ -17,7 +17,9 @@
 namespace Pathfinding {
     // The core algorithmic function.
     // Calculates orders (thrust/turn) to reach target in given time.
-    FuelTraj DetermineOrders(CShip* ship, CThing* thing, double time, CShip* calculator);
+    // If require_facing is true, only considers trajectories where ship will be
+    // facing the target (cases 1b, 1c, 2b - good for combat).
+    FuelTraj DetermineOrders(CShip* ship, CThing* thing, double time, CShip* calculator, bool require_facing = false);
 
     // TODO: Currently returns hardcoded 5.0 - should calculate actual fuel cost
     double determine_probable_fuel_cost(CShip* ship, CThing* thing, double time);

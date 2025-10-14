@@ -8,6 +8,7 @@
 #include "Station.h"
 #include "Team.h"
 #include "Thing.h"
+#include "World.h"
 #include "ParserModern.h"
 
 #include <limits>
@@ -72,8 +73,14 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
         targets.station_dist = dist;
       }
     } else {
+      // Skip docked enemy ships - they're safe at their base
+      CShip* enemy_ship = static_cast<CShip*>(thing);
+      if (enemy_ship->IsDocked()) {
+        continue;
+      }
+
       if (dist < targets.ship_dist) {
-        targets.ship = static_cast<CShip*>(thing);
+        targets.ship = enemy_ship;
         targets.ship_dist = dist;
       }
     }
@@ -153,9 +160,22 @@ void GetVinyl::Decide() {
   double max_fuel = pShip->GetCapacity(S_FUEL);
   double max_cargo = pShip->GetCapacity(S_CARGO);
 
-  // The approximate amount of shields needed to fend off one 
-  // really bad collision and one maximum powered laser blast.
+  // Check resource availability for shield strategy
+  Groonew* groonew_team = static_cast<Groonew*>(pmyTeam);
+  bool no_vinyl_free = (groonew_team->vinyl_left <= g_fp_error_epsilon);
+  bool no_resources_free = (groonew_team->uranium_left <= g_fp_error_epsilon &&
+                            groonew_team->vinyl_left <= g_fp_error_epsilon);
+
+  // Shield maintenance strategy based on game phase:
+  // - Normal (resources available): 20.66 shields (protect against collisions + laser)
+  // - Mid-game (no vinyl): 12.5 shields (lighter protection, more fuel for combat)
+  // - End-game (no resources): 0.0 shields (all fuel to weapons)
   double wanted_shields = 20.66;
+  if (no_resources_free) {
+    wanted_shields = 0.0;
+  } else if (no_vinyl_free) {
+    wanted_shields = 12.5;
+  }
   // We don't issue orders that would deplete this below 5
   // so we have enough to get home / get more fuel.
   double fuel_reserve = 5.0;

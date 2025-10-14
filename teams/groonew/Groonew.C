@@ -207,11 +207,22 @@ void Groonew::PopulateMagicBag() {
 
       unsigned int max_intercept_turns = 21;
 
+      // Determine if this target is an enemy ship - if so, prefer facing trajectories for combat
+      bool require_facing = false;
+      if (athing->GetKind() == SHIP) {
+        CTeam* athing_team = athing->GetTeam();
+        CTeam* my_team = ship->GetTeam();
+        bool is_enemy = (athing_team != NULL && my_team != NULL &&
+                        athing_team->GetTeamNumber() != my_team->GetTeamNumber());
+        require_facing = is_enemy;  // For enemy ships, prioritize facing trajectories
+      }
+
       // Calculate optimal intercept time
       for (unsigned int turn_i = 1; turn_i <= max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
+        // Pass require_facing=true for enemy ships to prioritize combat-ready approaches
         FuelTraj fueltraj = Pathfinding::DetermineOrders(ship, athing, turn_i,
-                                                         this->calculator_ship);
+                                                         this->calculator_ship, require_facing);
 
         // TODO: Check for obstacles on path (currently returns dummy)
         Collision collision =
@@ -587,7 +598,9 @@ void Groonew::AssignShipOrders() {
       // combat targeting is generally robust against uncoordinated action.
 
       CTeam* pmyTeam = pShip->GetTeam();
-      const double emergency_fuel_reserve = (pmyWorld->GetGameTime() >= 280.0) ? 0.0 : 5.0;
+      // No fuel reserve if: (1) turn >= 280, OR (2) no uranium left in world
+      const double emergency_fuel_reserve =
+          (pmyWorld->GetGameTime() >= 280.0 || uranium_left <= g_fp_error_epsilon) ? 0.0 : 5.0;
       const double available_fuel = pShip->GetAmount(S_FUEL) - emergency_fuel_reserve;
       const double max_beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
 
@@ -601,6 +614,23 @@ void Groonew::AssignShipOrders() {
       };
 
       std::vector<ViolenceTarget> targets;
+
+      // Check if enemy base has vinyl (for end-game determination)
+      double enemy_base_vinyl = 0.0;
+      for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
+           idx = pmyWorld->GetNextIndex(idx)) {
+        CThing* thing = pmyWorld->GetThing(idx);
+        if (thing == NULL || !thing->IsAlive()) continue;
+        if (thing->GetKind() != STATION) continue;
+
+        CTeam* thing_team = thing->GetTeam();
+        if (thing_team == NULL) continue;
+        if (thing_team->GetTeamNumber() == pmyTeam->GetTeamNumber()) continue;
+
+        CStation* station = static_cast<CStation*>(thing);
+        enemy_base_vinyl = station->GetVinylStore();
+        break;  // Only one enemy station
+      }
 
       // Scan world for enemy targets
       for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
@@ -630,6 +660,12 @@ void Groonew::AssignShipOrders() {
           }
         } else if (kind == SHIP) {
           CShip* enemy = static_cast<CShip*>(thing);
+
+          // Skip docked enemy ships - they're safe at their base
+          if (enemy->IsDocked()) {
+            continue;
+          }
+
           double cargo = enemy->GetAmount(S_CARGO);
           double shields = enemy->GetAmount(S_SHIELD);
           double fuel = enemy->GetAmount(S_FUEL);
@@ -804,11 +840,22 @@ void Groonew::AssignShipOrders() {
 
             if (distance + g_fp_error_epsilon < max_beam_length) {
               double beam_length = max_beam_length;
+
+              // End-game condition: no resources left and enemy base empty
+              // Fire full blast without efficiency check
+              bool end_game = (uranium_left <= g_fp_error_epsilon &&
+                              vinyl_left <= g_fp_error_epsilon &&
+                              enemy_base_vinyl <= g_fp_error_epsilon);
+
               bool good_efficiency = (beam_length >= 3.0 * distance);
 
-              if (good_efficiency) {
+              if (end_game || good_efficiency) {
                 if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n", beam_length, distance);
+                  if (end_game) {
+                    printf("\t→ Firing laser FULL BLAST [END-GAME] (beam=%.1f, dist=%.1f)\n", beam_length, distance);
+                  } else {
+                    printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n", beam_length, distance);
+                  }
                 }
                 pShip->SetOrder(O_LASER, beam_length);
               }

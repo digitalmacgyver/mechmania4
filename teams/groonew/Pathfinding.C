@@ -691,7 +691,7 @@ namespace Pathfinding {
   // Step 2: Adapt the logic given that the underlying simulation uses dt=0.2.
 
   // Step 4: Consider how to adapt logic to be collision aware.
-  FuelTraj DetermineOrders(CShip* ship, CThing* thing, double time, CShip* calculator) {
+  FuelTraj DetermineOrders(CShip* ship, CThing* thing, double time, CShip* calculator, bool require_facing) {
     /*
     The idea in this part of the code is to implement a sort of greedy
     pathfinding algorithm.
@@ -715,6 +715,10 @@ namespace Pathfinding {
     them to get on desired trajectories. We ignore for now the implementation
     details of the 5 engine subticks and plan at the turn level, leaving subtick
     analysis for future enhancement.
+
+    If require_facing is true, we only consider trajectories where the ship
+    will be facing the target (cases 1b, 1c, 2b). This is useful for combat
+    scenarios where we want to be able to shoot while approaching.
     */
     PathfindingContext ctx;
 
@@ -752,10 +756,12 @@ namespace Pathfinding {
       return FAILURE_TRAJ;
     }
 
-    // Case 1a: Check for drift collision (handled outside the intercept trajectory check because our nonpoint massess can collide even when not on an (point mass) intercept trajectory.
-    FuelTraj fj = TryDriftIntercept(ctx);
-    if (fj.path_found) {
-      return fj;
+    // Case 1a: Check for drift collision (skip if require_facing since drift gives no facing control)
+    if (!require_facing) {
+      FuelTraj fj = TryDriftIntercept(ctx);
+      if (fj.path_found) {
+        return fj;
+      }
     }
 
     // Determine if we are currently on an intercept trajectory.
@@ -763,6 +769,7 @@ namespace Pathfinding {
     // this check to be along the direction of our orientation.
     bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.dest_vec_t0.rho);
 
+    FuelTraj fj = FAILURE_TRAJ;
     if (on_intercept_trajectory) {
       // Case 1: We're already on an intercept trajectory.
 
@@ -790,11 +797,20 @@ namespace Pathfinding {
       // - Minimum time to intercept.
       // - Minimum fuel used.
       // - Minimum number of orders.
-      Case2aResult result_2a = AnalyzeThrustToAlign(ctx);
+      //
+      // If require_facing is true, only consider Case 2b (turn-then-thrust)
+      // which guarantees ship will be facing target. Skip 2ai (drift) and
+      // 2aii (thrust-turn-thrust) which don't guarantee facing.
 
-      FuelTraj case_2ai = result_2a.fj_2ai;
-      FuelTraj case_2aii = result_2a.fj_2aii;
+      FuelTraj case_2ai;
+      FuelTraj case_2aii;
       FuelTraj case_2b = TryTurnThenThrust(ctx);
+
+      if (!require_facing) {
+        Case2aResult result_2a = AnalyzeThrustToAlign(ctx);
+        case_2ai = result_2a.fj_2ai;
+        case_2aii = result_2a.fj_2aii;
+      }
 
       bool has_best_case = false;
       FuelTraj best_case;
@@ -827,8 +843,10 @@ namespace Pathfinding {
         }
       };
 
-      consider(case_2ai);
-      consider(case_2aii);
+      if (!require_facing) {
+        consider(case_2ai);
+        consider(case_2aii);
+      }
       consider(case_2b);
 
       if (has_best_case) {
