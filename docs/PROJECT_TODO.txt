@@ -113,13 +113,6 @@ These are similar to ship to ship calculations where:
 
 ==
 
-2. Refine override logic in GetVinyl.C:
-  * Shield top up before hitting eatable vinyl
-  * Is it better to shoot uranium that won't fit or crash into it?
-  * For Vinyl if we're going to hit it next turn jettison to make room.
-  * Take potshots at enemy ships / bases if we've got fuel to spare.
-  * Improve jettison enemy base logic.
-
 3. Double check our base launch logic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles
 is_docked and fuel costs while docked.
@@ -127,12 +120,6 @@ is_docked and fuel costs while docked.
     - toy with approaches like turn 1: orient twards middle in fan,
     turn 2 max launch, turn 3+ normal control.
   
-4. Add in hunter killer mode for once uranium is gone: enemy base when
-uranium > 0, enemy ships with uranium, then enemy ships without
-uraniam. No need to deconflict these orders - it's OK if we overkill.
-* Suicide mode - if game clock is > 277 shoot down to 0 fuel instead
-of preserving 5.
-
 ===
 
 Contest results:
