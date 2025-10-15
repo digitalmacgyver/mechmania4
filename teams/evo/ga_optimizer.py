@@ -16,33 +16,30 @@ import multiprocessing
 
 # --- Configuration (Constants) ---
 
-# Define the parameters (Genome) - UPDATED: Added Prediction Horizon and Dynamic Fuel parameters
+# Define the parameters (Genome) - UPDATED: Parameters adapted for MagicBag and Trajectory Planning
 PARAMETERS = {
-    # Heuristics
-    "W_DISTANCE": (-5.0, 0.0),
-    "W_VINYL": (1.0, 40.0),
-    "W_URANIUM": (1.0, 20.0),
-    "W_FUEL_BOOST_FACTOR": (1.0, 10.0),
-    "W_FUEL_COST_PENALTY": (0.0, 30.0),
-    "W_TTI_PENALTY": (0.0, 10.0),
-    "W_CONFLICT_PENALTY": (10.0, 200.0),
+    # Heuristics (MagicBag Weights)
+    "W_VINYL_VALUE": (5.0, 50.0),
+    "W_URANIUM_VALUE": (5.0, 30.0),
+    "W_FUEL_BOOST_FACTOR": (2.0, 15.0),
+    "W_TIME_PENALTY": (1.0, 20.0),      # Penalty per second of travel time
+    "W_FUEL_COST_PENALTY": (0.5, 10.0), # Penalty per unit of Delta-V
+    "W_CONFLICT_PENALTY": (50.0, 300.0),
     
     # Thresholds
-    "THRESHOLD_RETURN_CARGO": (0.8, 1.0),
-    # THRESHOLD_FUEL_LOW is deprecated
+    "THRESHOLD_RETURN_CARGO": (0.85, 1.0),
     "THRESHOLD_FUEL_TARGET": (50.0, 150.0),
     "THRESHOLD_MAX_SHIELD_BOOST": (15.0, 60.0),
     
-    # Dynamic Fuel Management (NEW)
-    "FUEL_COST_PER_DIST": (0.05, 0.2), 
-    "FUEL_SAFETY_MARGIN": (10.0, 50.0),
+    # Dynamic Fuel Management
+    "FUEL_COST_PER_DIST_ESTIMATE": (0.05, 0.2), # Used for safety margin calculation
+    "FUEL_SAFETY_MARGIN": (20.0, 80.0),
 
-    # Navigation (P-Controller and Vector Navigation)
-    "NAV_DESIRED_SPEED_FACTOR": (0.5, 1.0),
-    "NAV_ALIGNMENT_STRICT_ANGLE": (0.01, 0.2), # Tighter range (0.5 deg to 11 deg)
-    "NAV_ALIGNMENT_LOOSE_ANGLE": (0.5, 1.5),   # (PI/2 ~= 1.57)
-    "NAV_CLOSE_ENOUGH_DIST": (10.0, 50.0),
-    "NAV_PREDICTION_HORIZON": (0.0, 15.0), # NEW: Max time horizon for prediction (seconds)
+    # Navigation (Trajectory Planning and Alignment)
+    "NAV_ALIGNMENT_STRICT_ANGLE": (0.01, 0.15), # Tighter range for precise alignment (0.5 deg to 8.5 deg)
+    "NAV_ALIGNMENT_LOOSE_ANGLE": (0.2, 1.2),    # Range for allowing thrust during minor course corrections
+    "NAV_INTERCEPT_TIME_HORIZON": (20.0, 90.0), # Max time to search for intercept solutions
+    "NAV_STATION_BRAKING_DIST": (20.0, 150.0),  # Distance to start slowing down near the station
 
     # Safety
     "NAV_AVOIDANCE_HORIZON": (5.0, 20.0),
@@ -55,6 +52,7 @@ PARAMETERS = {
     # Configuration
     "SHIP_CARGO_RATIO": (0.1, 0.9)
 }
+
 PARAM_KEYS = list(PARAMETERS.keys())
 NUM_PARAMS = len(PARAMETERS.keys())
 
@@ -195,18 +193,6 @@ def prepare_parameters(params):
         # Use np.clip on the individual element
         clamped_val = np.clip(params[i], min_val, max_val)
         clamped_params.append(clamped_val)
-    
-    # Constraint: FUEL_TARGET must be > FUEL_LOW
-    try:
-        fuel_low_idx = PARAM_KEYS.index("THRESHOLD_FUEL_LOW")
-        fuel_target_idx = PARAM_KEYS.index("THRESHOLD_FUEL_TARGET")
-        if clamped_params[fuel_target_idx] <= clamped_params[fuel_low_idx]:
-            clamped_params[fuel_target_idx] = clamped_params[fuel_low_idx] + 1.0
-            max_val = PARAMETERS["THRESHOLD_FUEL_TARGET"][1]
-            # Re-clip the target if the adjustment exceeded the max range
-            clamped_params[fuel_target_idx] = min(clamped_params[fuel_target_idx], max_val)
-    except ValueError:
-        pass
     
     # Constraint: NAV_ALIGNMENT_LOOSE_ANGLE must be >= NAV_ALIGNMENT_STRICT_ANGLE
     try:

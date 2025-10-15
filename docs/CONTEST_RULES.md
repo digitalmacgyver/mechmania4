@@ -30,7 +30,7 @@ At initialization, each team can allocate their ships' capacity between fuel and
 - **Default Split:** 30 tons fuel, 30 tons cargo
 - **Customizable:** Teams can adjust the fuel/cargo ratio at game start
 - **Shield Capacity:** 8000 units (effectively unlimited)
-- **Mass:** 10 tons (empty ship) + current fuel + current vinyl cargo
+- **Mass:** 40 tons (empty hull) + current fuel + current vinyl cargo
 - **Maximum Speed:** 30 units/second
 - **Size:** A radius 12 circle
 
@@ -60,13 +60,13 @@ Ships can perform the following actions each turn:
 ## Movement and Physics
 
 ### Thrust Mechanics
-- **Fuel Cost:** 1 ton of fuel accelerates a 10-ton ship from 0 to 180 units/second (6 × max speed)
+- **Fuel Cost:** 1 ton of fuel accelerates a 40-ton hull from 0 to 180 units/second (6 × max speed)
 - **Formula:** Fuel = |thrust| × ship_mass / (6 × max_speed × empty_mass)
 - **Direction:** Can thrust forward (positive) or backward (negative)
 - **While Docked:** No fuel consumed for thrust
 
 ### Rotation Mechanics
-- **Fuel Cost:** 1 ton of fuel rotates a 10-ton ship 6 full circles (12π radians)
+- **Fuel Cost:** 1 ton of fuel rotates a 40-ton hull 6 full circles (12π radians)
 - **Formula:** Fuel = |rotation| × ship_mass / (6 × 2π × empty_mass)
 - **While Docked:** No fuel consumed for rotation
 - **No Angular Momentum:** After each turn order to a desired heading a ship does not continue to rotate
@@ -113,28 +113,52 @@ Consider these examples:
 | **Negative thrust case:**<br/>![Negative thrust within limit](diagrams/thrust_negative_within_limit.svg) | **Negative thrust case:**<br/>![Negative thrust exceeds limit](diagrams/thrust_negative_exceeds_limit.svg) |
 ## Combat System
 
-### Lasers
-- **Range:** Variable (set by ship) up to 512 units long
-- **Fuel Cost:** 1 ton per 50 units of beam length
-- **Formula:** Fuel = beam_length / 50
-- **Damage:** 30*( L - D ) / 1000 shield units where L is the length of the fired beam and D is the distance to the target.
-- **Restrictions:** Cannot fire while docked
-- **Targeting:** Hits first object in line of sight
+### Damage Overview
+- **Ships** lose shield points whenever they collide with asteroids or other ships, or when they are struck by lasers. If incoming damage exceeds the remaining shields the ship is destroyed. Docked ships cannot be harmed and take no damage when docking with their own station.
+- **Asteroids** are damaged by ship collisions and laser fire. Any qualifying hit fractures the rock into three equal-mass pieces unless the resulting fragments would fall below the minimum mass (`g_thing_minmass`, 3 tons), in which case the asteroid vaporises. Asteroids bounce off stations and do not collide with one another.
+- **Stations** only take laser damage. Each point of effective laser damage removes one ton of stored vinyl, floored at zero.
 
-### Laser Effects on Different Objects
-- **Enemy Ships:** Damages shields, destroys ship if shields depleted
-- **Asteroids:** Breaks large asteroids into smaller pieces if at least 1000 damage is done (otherwise no effect)
-- **Stations:** Reduces stored vinyl (1 ton vinyl lost per 1000 points of damage)
-- **Friendly Fire:** Can damage your own ships/station
+### Turn Resolution Order
+After both teams submit orders, the server resolves each turn in four phases:
+1. Apply shield-charge orders.
+2. Run one physics sub-step (`g_physics_simulation_dt`, default 0.2 s) that applies thrust/turn/drift and handles collisions.
+3. Resolve every laser shot, applying damage immediately.
+4. Run the remaining four physics sub-steps to complete the turn’s movement.
+
+### Laser Mechanics
+- **Range:** Up to `min(fWXMax, fWYMax)` units (512 with default map).
+- **Fuel Cost:** `beam_length / g_laser_range_per_fuel_unit` (defaults to 50 units of beam per ton of fuel). Ships cannot fire while docked.
+- **Impact Mass:** The engine treats a beam hit as a collision with a virtual object of mass  
+  `g_laser_mass_scale_per_remaining_unit × max(0, beam_length − distance_to_target)` (default scale: 30).
+- **Shield Damage:** The virtual mass feeds into the collision damage equation (see below), so longer beams are only efficient when the target is close. At point-blank range, every ton of fuel spent on a laser forces the target to spend roughly 1.5 tons to restore shields. Beyond one third of the chosen beam length the laser becomes less fuel-efficient than shield charging, and at two thirds it costs twice as much fuel as the defender spends.
+- **Line of Sight:** Beams strike the first object along their path, including friendly ships or stations.
+
+### Collision Damage (Ships)
+- When a ship collides with an asteroid or another ship, it loses  
+  `damage = mass_other × relative_speed / g_laser_damage_mass_divisor` shield points (`g_laser_damage_mass_divisor` defaults to 1000).
+- Only the other object’s mass is used in the calculation; the striking ship’s mass is irrelevant to the damage it receives.
+- Ships weigh their 40-ton hull plus carried fuel and vinyl (0–60 tons combined), while naturally spawned asteroids range from roughly 3 to 40 tons. Because each object’s velocity is capped at `g_game_max_speed` (30 units/s), peak relative speeds hover around 60 units/s, yielding worst-case hits of ~6 shield points (ship vs. ship) or ~2.4 (ship vs. heavy asteroid). Engine subtleties can briefly push the ceiling a bit higher (~8.4), but those spikes are rare.
+
+### Laser Targets by Object Type
+- **Ships:** Lose shields as described above; destruction occurs when shields drop below zero.
+- **Asteroids:** Shatter if the computed damage is ≥1 shield point; otherwise the shot has no effect (damage does not accumulate between hits).
+- **Stations:** Lose vinyl equal to the computed damage, clamped at zero. Friendly fire is possible.
 
 ### Shields
-- **Purpose:** Protect ship from damage
-- **Fuel Cost:** 1:1 ratio (1 ton fuel = 1 shield unit)
-- **Maximum:** 8000 units (effectively unlimited)
-- **Damage Sources:**
-  - Laser hits: beam_length / 1000 shield damage
-  - Collisions: relative_velocity*mass_of_collided_object / 1000 shield damage
-- **Destruction:** Ship destroyed when shields reach negative value
+- Charging shields consumes fuel at a 1:1 ratio and can be done every turn (even while docked, though fuel still comes out of the tank). There is no automatic regeneration.
+- Default maximum shield capacity is extremely high (`g_ship_default_shield_capacity` = 8000), so the practical limit is usually the ship’s fuel reserves.
+
+### Default Combat Constants
+The examples above assume the standard constants defined in `team/src/GameConstants.C` and `team/src/Coord.h`:
+
+| Constant | Default | Description |
+| --- | --- | --- |
+| `g_laser_range_per_fuel_unit` | `50.0` | Beam length purchasable per ton of fuel. |
+| `g_laser_mass_scale_per_remaining_unit` | `30.0` | Converts remaining beam length into virtual impact mass. |
+| `g_laser_damage_mass_divisor` | `1000.0` | Scales impact mass into shield damage. |
+| `g_game_max_speed` | `30.0` | Top speed for any object. |
+| `g_thing_minmass` | `3.0` | Minimum fragment mass when asteroids shatter. |
+| `fWXMax`, `fWYMax` | `512.0` | Half-width/height of the map; sets the laser range ceiling. |
 
 ## Collisions
 

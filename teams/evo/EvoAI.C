@@ -4,6 +4,7 @@
 #include <ctime>
 #include <algorithm>
 #include <cstring> // Required for strlen
+#include <cmath>   // Required for sqrt, pow, etc.
 
 // Initialize static members (Defaults)
 bool EvoAI::s_loggingEnabled = false; // Default false, rely on launcher/args to enable if needed
@@ -36,35 +37,34 @@ const char* MaterialToString(AsteroidKind mat) {
 
 // --- EvoAI (CTeam) Implementation ---
 
+// UPDATED: Parameter initialization adapted for MagicBag and Trajectory Planning
 EvoAI::EvoAI() {
     // Initialize default parameters (Genome)
     
-    // Heuristics
-    params_["W_DISTANCE"] = -1.0;
-    params_["W_VINYL"] = 10.0;
-    params_["W_URANIUM"] = 5.0;
+    // Heuristics (MagicBag Weights)
+    params_["W_VINYL_VALUE"] = 20.0;
+    params_["W_URANIUM_VALUE"] = 10.0;
     params_["W_FUEL_BOOST_FACTOR"] = 5.0;
-    params_["W_FUEL_COST_PENALTY"] = 10.0;
-    params_["W_TTI_PENALTY"] = 2.0;
-    params_["W_CONFLICT_PENALTY"] = 50.0; 
+    params_["W_TIME_PENALTY"] = 5.0; // Penalty per second of travel time
+    params_["W_FUEL_COST_PENALTY"] = 2.0; // Penalty per unit of Delta-V
+    params_["W_CONFLICT_PENALTY"] = 100.0;
     
     // Thresholds
     params_["THRESHOLD_RETURN_CARGO"] = 0.95;
-    // THRESHOLD_FUEL_LOW is deprecated
     params_["THRESHOLD_FUEL_TARGET"] = 60.0;
     params_["THRESHOLD_MAX_SHIELD_BOOST"] = 30.0; 
 
     // Dynamic Fuel Management
-    params_["FUEL_COST_PER_DIST"] = 0.08;
-    params_["FUEL_SAFETY_MARGIN"] = 20.0;
+    // FUEL_COST_PER_DIST_ESTIMATE is used for calculating the safety margin when far from base.
+    params_["FUEL_COST_PER_DIST_ESTIMATE"] = 0.08;
+    params_["FUEL_SAFETY_MARGIN"] = 30.0;
     
-    // Navigation (P-Controller and Vector Navigation)
-    params_["NAV_DESIRED_SPEED_FACTOR"] = 0.9;
+    // Navigation (Trajectory Planning and Alignment)
     params_["NAV_ALIGNMENT_STRICT_ANGLE"] = 0.05; 
-    params_["NAV_ALIGNMENT_LOOSE_ANGLE"] = 1.0;  // ~57 degrees
-    params_["NAV_CLOSE_ENOUGH_DIST"] = 25.0;
-    params_["NAV_PREDICTION_HORIZON"] = 5.0; // NEW
-    
+    params_["NAV_ALIGNMENT_LOOSE_ANGLE"] = 0.8;  // Relaxed alignment for efficient trajectory following
+    params_["NAV_INTERCEPT_TIME_HORIZON"] = 45.0; // Max time to consider for intercept solutions
+    params_["NAV_STATION_BRAKING_DIST"] = 50.0; // Distance to start slowing down near the station
+
     // Safety
     params_["NAV_AVOIDANCE_HORIZON"] = 10.0;
     params_["NAV_SHIELD_BOOST_TTC"] = 1.5;
@@ -302,21 +302,20 @@ HarvesterBrain::HarvesterBrain(EvoAI* pTeam, ParamMap* params)
     CacheParameters(params);
 }
 
-// Cache parameters (UPDATED)
+// Cache parameters (UPDATED for MagicBag)
 void HarvesterBrain::CacheParameters(ParamMap* params) {
     // Helper lambda for safe access
     auto getParam = [&](const std::string& key, double defaultVal) {
         return params->count(key) ? (*params)[key] : defaultVal;
     };
 
-    // Heuristics
-    cache_.W_DISTANCE = getParam("W_DISTANCE", -1.0);
-    cache_.W_VINYL = getParam("W_VINYL", 10.0);
-    cache_.W_URANIUM = getParam("W_URANIUM", 5.0);
+    // Heuristics (MagicBag Weights)
+    cache_.W_VINYL_VALUE = getParam("W_VINYL_VALUE", 20.0);
+    cache_.W_URANIUM_VALUE = getParam("W_URANIUM_VALUE", 10.0);
     cache_.W_FUEL_BOOST_FACTOR = getParam("W_FUEL_BOOST_FACTOR", 5.0);
-    cache_.W_FUEL_COST_PENALTY = getParam("W_FUEL_COST_PENALTY", 10.0);
-    cache_.W_TTI_PENALTY = getParam("W_TTI_PENALTY", 2.0);
-    cache_.W_CONFLICT_PENALTY = getParam("W_CONFLICT_PENALTY", 50.0); 
+    cache_.W_TIME_PENALTY = getParam("W_TIME_PENALTY", 5.0);
+    cache_.W_FUEL_COST_PENALTY = getParam("W_FUEL_COST_PENALTY", 2.0);
+    cache_.W_CONFLICT_PENALTY = getParam("W_CONFLICT_PENALTY", 100.0); 
 
     // Thresholds
     cache_.THRESHOLD_RETURN_CARGO = getParam("THRESHOLD_RETURN_CARGO", 0.95);
@@ -324,15 +323,14 @@ void HarvesterBrain::CacheParameters(ParamMap* params) {
     cache_.THRESHOLD_MAX_SHIELD_BOOST = getParam("THRESHOLD_MAX_SHIELD_BOOST", 30.0); 
 
     // Dynamic Fuel Management
-    cache_.FUEL_COST_PER_DIST = getParam("FUEL_COST_PER_DIST", 0.08);
-    cache_.FUEL_SAFETY_MARGIN = getParam("FUEL_SAFETY_MARGIN", 20.0);
+    cache_.FUEL_COST_PER_DIST_ESTIMATE = getParam("FUEL_COST_PER_DIST_ESTIMATE", 0.08);
+    cache_.FUEL_SAFETY_MARGIN = getParam("FUEL_SAFETY_MARGIN", 30.0);
     
-    // Navigation (P-Controller)
-    cache_.NAV_DESIRED_SPEED_FACTOR = getParam("NAV_DESIRED_SPEED_FACTOR", 0.9);
+    // Navigation (Trajectory Planning and Alignment)
     cache_.NAV_ALIGNMENT_STRICT_ANGLE = getParam("NAV_ALIGNMENT_STRICT_ANGLE", 0.05);
-    cache_.NAV_ALIGNMENT_LOOSE_ANGLE = getParam("NAV_ALIGNMENT_LOOSE_ANGLE", 1.0);
-    cache_.NAV_CLOSE_ENOUGH_DIST = getParam("NAV_CLOSE_ENOUGH_DIST", 25.0);
-    cache_.NAV_PREDICTION_HORIZON = getParam("NAV_PREDICTION_HORIZON", 5.0); // NEW
+    cache_.NAV_ALIGNMENT_LOOSE_ANGLE = getParam("NAV_ALIGNMENT_LOOSE_ANGLE", 0.8);
+    cache_.NAV_INTERCEPT_TIME_HORIZON = getParam("NAV_INTERCEPT_TIME_HORIZON", 45.0);
+    cache_.NAV_STATION_BRAKING_DIST = getParam("NAV_STATION_BRAKING_DIST", 50.0);
 
     // Safety
     cache_.NAV_AVOIDANCE_HORIZON = getParam("NAV_AVOIDANCE_HORIZON", 10.0);
@@ -483,38 +481,13 @@ void HarvesterBrain::UpdateGoalDescription() {
     std::stringstream ss;
     ss << currentGoalDescription_;
 
-    // Determine the navigation target position
-    CCoord navTargetPos(0.0, 0.0); // Default for DEPARTING towards center
-    bool hasNavTarget = false;
-
-    if (pTarget_ && pTarget_->IsAlive()) {
-        navTargetPos = pTarget_->GetPos();
-        hasNavTarget = true;
-    } else if (state_ == DEPARTING) {
-        // In DEPARTING, the target is the center (0,0) conceptually.
-        hasNavTarget = true;
-    }
-
-    // Add navigation metrics if relevant
-    if (hasNavTarget) {
-        // Calculate metrics
-        double dist = pShip->GetPos().DistTo(navTargetPos);
-        double targetAngle = pShip->GetPos().AngleTo(navTargetPos);
-        double angleError = targetAngle - pShip->GetOrient();
-        
-        // Normalize angle error
-        if (angleError > PI) angleError -= PI2;
-        if (angleError < -PI) angleError += PI2;
-        
-        ss << std::fixed;
-        ss << " | NavMetrics: Dist=" << std::setprecision(2) << dist;
-        // AngleErr logged here is relative to the navTargetPos (e.g., the center or the asteroid)
-        ss << ", AngleErr=" << std::setprecision(4) << angleError;
-
+    // Add navigation metrics if relevant (Specific to DEPARTING state for now)
+    // Trajectory planning metrics are logged during the navigation execution itself.
+    if (state_ == DEPARTING) {
         // Specific check for "spinning while docked" issue
-        if (pShip->IsDocked() && state_ == DEPARTING) {
+        if (pShip->IsDocked()) {
             // To accurately log Turn vs Thrust during Directed Launch, we must check the error 
-            // relative to the actual departure angle (including offset), not just the center.
+            // relative to the actual departure angle (including offset).
 
             const double DEPARTURE_ALIGNMENT_THRESHOLD = 0.8;
             
@@ -524,6 +497,9 @@ void HarvesterBrain::UpdateGoalDescription() {
             double departureError = actualDepartureAngle - pShip->GetOrient();
             if (departureError > PI) departureError -= PI2;
             if (departureError < -PI) departureError += PI2;
+
+            ss << std::fixed << std::setprecision(4);
+            ss << " | DepartureError=" << departureError;
 
             if (fabs(departureError) > DEPARTURE_ALIGNMENT_THRESHOLD) {
                  ss << " [Status: Docked, Turning]";
@@ -558,7 +534,7 @@ void HarvesterBrain::Decide() {
     // Handle search states
     if (state_ == HUNTING || state_ == REFUELING) {
         // Update goal before searching
-        if (state_ == HUNTING) currentGoalDescription_ = "Searching for resources";
+        if (state_ == HUNTING) currentGoalDescription_ = "Searching for resources (MagicBag)";
         if (state_ == REFUELING) {
              std::stringstream ss_refuel;
              ss_refuel << "Searching for Uranium (Low Fuel, Threshold=" 
@@ -566,7 +542,8 @@ void HarvesterBrain::Decide() {
              currentGoalDescription_ = ss_refuel.str();
         }
         
-        SelectTarget(); 
+        // Use MagicBag to select the best target
+        SelectTargetMagicBag(); 
         
         if (pTarget_) {
             // Goal updated within SelectTarget/TransitionState.
@@ -621,8 +598,8 @@ void HarvesterBrain::UpdateState() {
     CStation* base = pShip->GetTeam()->GetStation();
     if (base && base->IsAlive()) {
         double dist_to_base = pShip->GetPos().DistTo(base->GetPos());
-        // Estimated fuel cost to return + safety margin
-        double required_return_fuel = (dist_to_base * cache_.FUEL_COST_PER_DIST) + cache_.FUEL_SAFETY_MARGIN;
+        // Estimated fuel cost to return + safety margin (using the estimate parameter)
+        double required_return_fuel = (dist_to_base * cache_.FUEL_COST_PER_DIST_ESTIMATE) + cache_.FUEL_SAFETY_MARGIN;
         
         currentDynamicFuelLow_ = required_return_fuel;
     }
@@ -709,12 +686,13 @@ void HarvesterBrain::ExecuteAction() {
                 movement_order_issued = true;
             }
         } else if (state_ == INTERCEPTING) {
-            NavigateVectorP(); // Use P-Controller
+            NavigateTrajectory(); // Use Trajectory Planning
             movement_order_issued = true;
         } else if (state_ == HUNTING || state_ == REFUELING) {
             // Braking if searching and no target
             if (!pTarget_) {
-                 NavigateVectorP();
+                 // Use trajectory planning to brake (target velocity = 0)
+                 NavigateTrajectory();
                  movement_order_issued = true;
                  currentGoalDescription_ += " | ACTION: Braking.";
             }
@@ -772,8 +750,10 @@ void HarvesterBrain::HandleDeparting() {
     }
 }
 
+// --- MagicBag Implementation ---
 
-void HarvesterBrain::SelectTarget() {
+// SelectTargetMagicBag: Evaluates all potential targets using trajectory analysis.
+void HarvesterBrain::SelectTargetMagicBag() {
     CWorld* pWorld = pShip->GetWorld();
     if (!pWorld) return;
 
@@ -782,7 +762,7 @@ void HarvesterBrain::SelectTarget() {
     double bestScore = -std::numeric_limits<double>::infinity();
     bool bestIsTooLarge = false;
 
-    // Use BAD_INDEX constant
+    // Iterate through all asteroids (The "Bag")
     for (unsigned int index = pWorld->UFirstIndex; index != BAD_INDEX; index = pWorld->GetNextIndex(index)) {
         CThing* pTh = pWorld->GetThing(index);
         if (pTh && pTh->GetKind() == ASTEROID && pTh->IsAlive()) {
@@ -792,7 +772,8 @@ void HarvesterBrain::SelectTarget() {
             if (asteroid->GetMass() < g_thing_minmass) continue;
 
             bool too_large = false;
-            double score = EvaluateAsteroid(asteroid, prioritizeFuel, too_large);
+            // Evaluate the asteroid based on trajectory planning
+            double score = EvaluateAsteroidMagicBag(asteroid, prioritizeFuel, too_large);
             
             if (score > bestScore) {
                 bestScore = score;
@@ -811,113 +792,82 @@ void HarvesterBrain::SelectTarget() {
             if (((CAsteroid*)pTarget_)->GetMaterial() == VINYL) {
                  TransitionState(BREAKING);
             } else {
-                pTarget_ = NULL; // Should not happen if EvaluateAsteroid is correct
+                pTarget_ = NULL; // Should not happen if EvaluateAsteroidMagicBag is correct
             }
         } else {
             TransitionState(INTERCEPTING);
+            // Log the winning score
+            if (EvoAI::s_loggingEnabled) {
+                std::stringstream ss;
+                ss << "MagicBag Winner: ID " << pTarget_->GetWorldIndex() << " Score: " << std::fixed << std::setprecision(2) << bestScore;
+                BrainLog(ss.str());
+            }
         }
     }
 }
 
-// Estimate Time-To-Intercept (TTI)
-double HarvesterBrain::EstimateTTI(CThing* target) {
-    // Calculate relative velocity (V_target - V_ship)
-    CTraj relVel = pShip->RelativeVelocity(*target);
-    
-    // Calculate distance (Toroidal aware)
-    double dist = pShip->GetPos().DistTo(target->GetPos());
-
-    if (dist < 0.1) return 0.0;
-
-    // Get the displacement vector (from ship to target)
-    CTraj displacement = pShip->GetPos().VectTo(target->GetPos());
-    
-    // We need the dot product of relative velocity and the normalized displacement vector.
-    // CTraj (polar) must be converted to CCoord (Cartesian) for the dot product.
-    
-    // Convert relative velocity to Cartesian
-    CCoord relVelCartesian = relVel.ConvertToCoord();
-    
-    // Normalize the displacement vector (make it a unit vector)
-    displacement.rho = 1.0; 
-    CCoord displacementUnitVector = displacement.ConvertToCoord();
-
-    // Calculate the dot product (recession rate)
-    double recession_rate = relVelCartesian.fX * displacementUnitVector.fX +
-                            relVelCartesian.fY * displacementUnitVector.fY;
-
-    // Use the global constant for max speed (30.0)
-    const double MAX_SHIP_SPEED = g_game_max_speed;
-
-    // If recession_rate is positive, the target is currently moving away.
-    if (recession_rate > 0) {
-        if (recession_rate > MAX_SHIP_SPEED) {
-            return 9999.0; // High TTI penalty
-        }
-        // TTI is based on the speed difference.
-        return dist / (MAX_SHIP_SPEED - recession_rate);
-    } else {
-        // If moving towards us or stationary (recession_rate <= 0)
-        return dist / MAX_SHIP_SPEED;
-    }
-}
-
-
-// EvaluateAsteroid includes TTI analysis and Conflict Detection.
-// UPDATED: Includes deterministic tie-breaking for coordination.
-double HarvesterBrain::EvaluateAsteroid(CAsteroid* asteroid, bool prioritizeFuel, bool& too_large) {
-    // 1. Check Fit
+// EvaluateAsteroidMagicBag: Uses trajectory planning to determine the true cost/benefit.
+double HarvesterBrain::EvaluateAsteroidMagicBag(CAsteroid* asteroid, bool prioritizeFuel, bool& too_large) {
+    // 1. Check Fit and Material Constraints
     too_large = !pShip->AsteroidFits(asteroid);
     
-    // If refueling, we MUST be able to fit the uranium.
-    if (prioritizeFuel && too_large) {
+    if (prioritizeFuel && too_large) return -std::numeric_limits<double>::infinity();
+    if (too_large && asteroid->GetMaterial() != VINYL) return -std::numeric_limits<double>::infinity();
+
+    // 2. Calculate Intercept Trajectory
+    CTraj desiredVelocity;
+    double timeToIntercept = 9999.0;
+    bool reachable = false;
+
+    // If we are breaking the asteroid, we don't need a precise intercept, just get close.
+    // We use a simplified estimation for breaking targets.
+    if (too_large) {
+        double dist = pShip->GetPos().DistTo(asteroid->GetPos());
+        timeToIntercept = dist / g_game_max_speed; // Simplified TTI
+        reachable = true;
+        // Desired velocity isn't critical for breaking evaluation, but we set it towards the target for fuel estimation.
+        desiredVelocity = pShip->GetPos().VectTo(asteroid->GetPos());
+        if (desiredVelocity.rho > 0.001) {
+            desiredVelocity.rho = g_game_max_speed;
+        }
+    } else {
+        // For mining, calculate the precise intercept.
+        reachable = CalculateInterceptVector(asteroid, desiredVelocity, timeToIntercept);
+    }
+
+
+    if (!reachable || timeToIntercept > cache_.NAV_INTERCEPT_TIME_HORIZON) {
         return -std::numeric_limits<double>::infinity();
     }
 
-    // If it's too large and not Vinyl, we can't break it effectively, so ignore it.
-    if (too_large && asteroid->GetMaterial() != VINYL) {
-        return -std::numeric_limits<double>::infinity();
-    }
-
-    // 2. Basic Weighted Score
-    // DistTo correctly handles toroidal wrap
-    double distance = pShip->GetPos().DistTo(asteroid->GetPos());
+    // 3. Calculate Value
     double mass = asteroid->GetMass();
     AsteroidKind material = asteroid->GetMaterial();
-
-    double score = cache_.W_DISTANCE * distance;
+    double value = 0.0;
 
     if (material == VINYL) {
-        double weight = cache_.W_VINYL;
-        if (prioritizeFuel) weight *= 0.01;
-        score += weight * mass;
+        value = cache_.W_VINYL_VALUE * mass;
+        if (prioritizeFuel) value *= 0.01;
     } else if (material == URANIUM) {
-        double weight = cache_.W_URANIUM;
-        if (prioritizeFuel) weight *= cache_.W_FUEL_BOOST_FACTOR;
-        score += weight * mass;
+        value = cache_.W_URANIUM_VALUE * mass;
+        if (prioritizeFuel) value *= cache_.W_FUEL_BOOST_FACTOR;
     }
 
-    // 3. Reachability Penalty (TTI)
-    double tti = EstimateTTI(asteroid);
-    // Apply penalty (W_TTI_PENALTY is expected to be positive)
-    score -= cache_.W_TTI_PENALTY * tti;
+    // 4. Calculate Costs (Time and Fuel)
+    double timeCost = cache_.W_TIME_PENALTY * timeToIntercept;
 
-    // 4. Fuel Cost Penalty
-    CStation* base = pShip->GetTeam()->GetStation();
-    // Only apply penalty if we intend a round trip (i.e., collecting, not breaking)
-    if (base && !too_large) {
-        double dist_to_base = asteroid->GetPos().DistTo(base->GetPos());
-        // double total_dist = distance + dist_to_base;
+    // Estimate fuel cost based on required acceleration (Delta-V)
+    CTraj currentVelocity = pShip->GetVelocity();
+    CTraj requiredDeltaV = desiredVelocity - currentVelocity;
+    double deltaV = requiredDeltaV.rho;
 
-        // Use the dynamic fuel cost parameter
-        double estimated_fuel_cost = (distance + dist_to_base) * cache_.FUEL_COST_PER_DIST;
+    // Rough estimation of fuel usage based on Delta-V.
+    double fuelCostEstimate = deltaV * cache_.W_FUEL_COST_PENALTY;
 
-        if (estimated_fuel_cost > pShip->GetAmount(S_FUEL)) {
-            score -= cache_.W_FUEL_COST_PENALTY * (estimated_fuel_cost - pShip->GetAmount(S_FUEL));
-        }
-    }
-    
-    // 5. Conflict Detection (Basic Coordination)
+    // 5. Calculate Final Score
+    double score = value - timeCost - fuelCostEstimate;
+
+    // 6. Conflict Detection (Coordination)
     CTeam* pTeam = pShip->GetTeam();
     if (pTeam) {
         for (unsigned int i = 0; i < pTeam->GetShipCount(); ++i) {
@@ -926,21 +876,30 @@ double HarvesterBrain::EvaluateAsteroid(CAsteroid* asteroid, bool prioritizeFuel
                 HarvesterBrain* otherBrain = dynamic_cast<HarvesterBrain*>(otherShip->GetBrain());
                 
                 if (otherBrain && otherBrain->GetCurrentTarget() == asteroid) {
-                    // If another ship is targeting this asteroid, check who is closer.
-                    double otherDist = otherShip->GetPos().DistTo(asteroid->GetPos());
+                    // Check who can reach it faster.
+                    double otherTTI = 9999.0;
+                    CTraj dummyVel;
                     
-                    // NEW: Deterministic Tie-Breaking
-                    const double DISTANCE_TOLERANCE = 1.0; // Treat distances within 1 unit as equal
+                    // We need to calculate the intercept vector from the perspective of the other ship.
+                    // We temporarily swap the pShip context pointer to reuse the CalculateInterceptVector function.
+                    CShip* originalShip = pShip;
+                    pShip = otherShip; 
+                    bool otherReachable = CalculateInterceptVector(asteroid, dummyVel, otherTTI);
+                    pShip = originalShip; // Restore the pointer
 
-                    if (otherDist < distance - DISTANCE_TOLERANCE) {
-                        // They are clearly closer, apply penalty.
-                        score -= cache_.W_CONFLICT_PENALTY;
-                    } else if (fabs(otherDist - distance) <= DISTANCE_TOLERANCE) {
-                        // We are equidistant. Use Ship ID as tie-breaker.
-                        // Lower ID takes priority.
-                        if (pShip->GetWorldIndex() > otherShip->GetWorldIndex()) {
-                            // Other ship has lower ID, apply penalty.
+                    if (otherReachable) {
+                         // Deterministic Tie-Breaking
+                        const double TIME_TOLERANCE = 0.5; // Treat TTI within 0.5s as equal
+
+                        if (otherTTI < timeToIntercept - TIME_TOLERANCE) {
+                            // They are clearly faster, apply penalty.
                             score -= cache_.W_CONFLICT_PENALTY;
+                        } else if (fabs(otherTTI - timeToIntercept) <= TIME_TOLERANCE) {
+                            // We are equally fast. Use Ship ID as tie-breaker.
+                            // Lower ID takes priority.
+                            if (pShip->GetWorldIndex() > otherShip->GetWorldIndex()) {
+                                score -= cache_.W_CONFLICT_PENALTY;
+                            }
                         }
                     }
                 }
@@ -951,64 +910,128 @@ double HarvesterBrain::EvaluateAsteroid(CAsteroid* asteroid, bool prioritizeFuel
     return score;
 }
 
+
 // --- Navigation and Tactics Implementation ---
 
-// NavigateVectorP (P-Controller)
-// Implements Dual-Threshold strategy, Oscillation Damping, and Predictive Intercept.
-// FIXED: Corrected usage of CThing::PredictPosition
-bool HarvesterBrain::NavigateVectorP() {
+// CalculateInterceptVector: Solves for the velocity required to intercept a moving target using the ship's max speed.
+// This uses an analytical solution (solving a quadratic equation) for optimal intercept time.
+// FIXED: Corrected CCoord to CTraj conversion.
+bool HarvesterBrain::CalculateInterceptVector(CThing* target, CTraj& desiredVelocity, double& timeToIntercept) {
+    if (!target) return false;
+
+    // Get positions and velocities in Cartesian coordinates for easier math
+    CCoord P1 = pShip->GetPos();
+    // CCoord P2 = target->GetPos(); // Not needed directly, we use D
+    CTraj V2_traj = target->GetVelocity();
+    CCoord V2 = V2_traj.ConvertToCoord();
+
+    // Calculate displacement vector (handles toroidal wrap)
+    CTraj displacement = P1.VectTo(target->GetPos());
+    CCoord D = displacement.ConvertToCoord();
+
+    // We are solving for the minimum time 't' such that ||V1|| = V_max (g_game_max_speed)
+
+    double V_max = g_game_max_speed;
+
+    // The equation to solve is a quadratic equation in 't':
+    // (V_max^2 - ||V2||^2) * t^2 - 2 * (D . V2) * t - ||D||^2 = 0
+
+    double V2_sq = V2.fX * V2.fX + V2.fY * V2.fY;
+    double D_sq = D.fX * D.fX + D.fY * D.fY;
+    double D_dot_V2 = D.fX * V2.fX + D.fY * V2.fY;
+
+    double a = V_max * V_max - V2_sq;
+    double b = -2.0 * D_dot_V2;
+    double c = -D_sq;
+
+    // Handle the case where a is close to zero (target speed is close to max ship speed)
+    if (fabs(a) < 1e-6) {
+        // If a is zero, it's a linear equation: b*t + c = 0
+        if (fabs(b) < 1e-6) {
+             // If b is also zero, check c. If c is non-zero (D_sq > 0), no solution unless D_sq is also zero.
+             return (D_sq < 1e-6); 
+        }
+
+        double t = -c / b;
+        if (t < 1e-6) return false; // Solution is in the past or immediate present
+
+        timeToIntercept = t;
+    } else {
+        // Solve the quadratic equation
+        double discriminant = b * b - 4.0 * a * c;
+
+        if (discriminant < 0) return false; // No real solution (unreachable)
+
+        double sqrt_discriminant = sqrt(discriminant);
+
+        double t1 = (-b + sqrt_discriminant) / (2.0 * a);
+        double t2 = (-b - sqrt_discriminant) / (2.0 * a);
+
+        // Find the smallest positive time
+        double t = std::numeric_limits<double>::max();
+        if (t1 > 1e-6 && t1 < t) t = t1;
+        if (t2 > 1e-6 && t2 < t) t = t2;
+
+        if (t == std::numeric_limits<double>::max()) return false; // No positive solution
+
+        timeToIntercept = t;
+    }
+
+    // Calculate the required velocity V1
+    // V1 = (D + V2*t) / t
+    CCoord V1;
+    V1.fX = (D.fX + V2.fX * timeToIntercept) / timeToIntercept;
+    V1.fY = (D.fY + V2.fY * timeToIntercept) / timeToIntercept;
+
+    // Convert back to polar coordinates (CTraj)
+    // FIX: CCoord does not have ConvertToTraj(). Use the CTraj assignment operator/constructor.
+    desiredVelocity = V1;
+
+    // Final check on speed (due to floating point inaccuracies)
+    if (desiredVelocity.rho > V_max + 1e-3) {
+        // Should theoretically not happen if the math is correct, but useful safety check.
+        return false;
+    }
+    if (desiredVelocity.rho > V_max) {
+        desiredVelocity.rho = V_max;
+    }
+
+    return true;
+}
+
+
+// NavigateTrajectory: Executes the calculated trajectory plan.
+bool HarvesterBrain::NavigateTrajectory() {
     
-    // 1. Determine Desired Velocity Vector
+    // 1. Determine Desired Velocity Vector (Recalculated every turn for robustness)
     CTraj desiredVelocity;
+    double timeToIntercept = 9999.0;
+    bool reachable = false;
 
     if (pTarget_) {
-        
-        // NEW: Predictive Intercept
-        CCoord targetPos = pTarget_->GetPos();
-        double dist = pShip->GetPos().DistTo(targetPos);
-        double desired_speed = g_game_max_speed * cache_.NAV_DESIRED_SPEED_FACTOR;
-        
-        // Estimate time to reach target based on current distance and max desired speed.
-        double estimated_time = (desired_speed > 0.1) ? (dist / desired_speed) : 0.0;
-
-        // Cap the prediction horizon based on GA parameter.
-        if (estimated_time > cache_.NAV_PREDICTION_HORIZON) {
-            estimated_time = cache_.NAV_PREDICTION_HORIZON;
+        // If we are returning to base, implement braking logic.
+        if (pTarget_->GetKind() == STATION) {
+            double dist = pShip->GetPos().DistTo(pTarget_->GetPos());
+            // Simple braking logic near the station
+            if (dist < cache_.NAV_STATION_BRAKING_DIST) {
+                // Aim for a slower speed as we approach (Proportional control)
+                desiredVelocity = pShip->GetPos().VectTo(pTarget_->GetPos());
+                // Speed scales with distance, capped at max speed.
+                desiredVelocity.rho = std::min(dist, g_game_max_speed);
+                reachable = true;
+            } else {
+                 reachable = CalculateInterceptVector(pTarget_, desiredVelocity, timeToIntercept);
+            }
+        } else {
+             reachable = CalculateInterceptVector(pTarget_, desiredVelocity, timeToIntercept);
         }
 
-        // Use CThing::PredictPosition to estimate future location.
-        if (estimated_time > 0.1) {
-             // FIX: PredictPosition returns the CCoord directly.
-             CCoord futurePos = pTarget_->PredictPosition(estimated_time);
-             // Aim at the predicted position
-             desiredVelocity = pShip->GetPos().VectTo(futurePos);
-        } else {
-             // Fallback to current position if time is too short
-             desiredVelocity = pShip->GetPos().VectTo(targetPos);
-        }
 
-        
-        // Set the magnitude (speed).
-
-        // Velocity Matching: If close enough, match the target's velocity.
-        // Use the actual distance to the target for proximity check.
-        if (dist < cache_.NAV_CLOSE_ENOUGH_DIST) {
-            desiredVelocity = pTarget_->GetVelocity();
-        } else {
-             // Otherwise, scale the vector towards the aimpoint by desired speed
-             double current_dist_to_aimpoint = desiredVelocity.rho;
-
-             if (current_dist_to_aimpoint < desired_speed) {
-                desired_speed = current_dist_to_aimpoint; // Don't overshoot
-             }
-             // Handle near-zero vector normalization safely.
-             if (desiredVelocity.rho > 0.001) {
-                 desiredVelocity.rho = desired_speed;
-             } else if (desired_speed > 0.001) {
-                 desiredVelocity.rho = desired_speed;
-             } else {
-                 desiredVelocity.rho = 0.0;
-             }
+        if (!reachable) {
+            // If the target became unreachable (e.g., mathematical impossibility), 
+            // fall back to braking and re-evaluate next turn.
+            desiredVelocity.rho = 0.0;
+            currentGoalDescription_ += " | WARNING: Target became unreachable. Braking.";
         }
     } else {
         // If no target (e.g., braking), desired velocity is zero.
@@ -1024,12 +1047,28 @@ bool HarvesterBrain::NavigateVectorP() {
     double targetAngle = requiredAcceleration.theta;
     double requiredThrustMagnitude = requiredAcceleration.rho;
 
-    // If Delta-V is negligible, we don't need to act.
+    // Log navigation metrics
+    if (EvoAI::s_loggingEnabled && pTarget_ && reachable) {
+        std::stringstream ss_nav;
+        ss_nav << std::fixed << std::setprecision(2);
+        // Only log TTI if it was calculated (not applicable during station braking)
+        if (timeToIntercept < 9000.0) {
+            ss_nav << " | NavMetrics: TTI=" << timeToIntercept;
+        } else {
+            ss_nav << " | NavMetrics: TTI=N/A";
+        }
+        ss_nav << " DesiredV=" << desiredVelocity.rho
+               << " DeltaV=" << requiredThrustMagnitude;
+        currentGoalDescription_ += ss_nav.str();
+    }
+
+
+    // If Delta-V is negligible, we don't need to act (Coasting).
     if (requiredThrustMagnitude < 0.1) {
         return true;
     }
 
-    // 4. Calculate Turn Command (P-Controller / Direct Orientation)
+    // 4. Calculate Turn Command (Direct Orientation)
     double turnCommand = targetAngle; 
 
     // 5. Decision: Turn or Thrust (Mutually exclusive)
@@ -1044,9 +1083,9 @@ bool HarvesterBrain::NavigateVectorP() {
 
     // Strategy: Dual Thresholds with Oscillation Damping
 
-    // NEW: Oscillation Damping. If we have turned too many times consecutively, 
+    // Oscillation Damping. If we have turned too many times consecutively, 
     // relax the strict alignment requirement to allow thrust and break the cycle.
-    const int MAX_SUCCESSIVE_TURNS = 2;
+    const int MAX_SUCCESSIVE_TURNS = 3; // Increased tolerance for trajectory following
     double current_strict_angle = cache_.NAV_ALIGNMENT_STRICT_ANGLE;
 
     if (successiveTurns_ > MAX_SUCCESSIVE_TURNS) {
@@ -1064,6 +1103,7 @@ bool HarvesterBrain::NavigateVectorP() {
         pShip->SetOrder(O_THRUST, -available_thrust);
     }
     // Case C: Somewhat Aligned (Loose Threshold) - Apply Thrust
+    // This is crucial for efficient trajectory following, allowing minor course corrections without stopping to turn.
     else if (fabs(angleError) < cache_.NAV_ALIGNMENT_LOOSE_ANGLE) {
         
         // Calculate the component of the thrust vector that aligns with the required acceleration.
@@ -1087,7 +1127,7 @@ bool HarvesterBrain::NavigateVectorP() {
 
 
 // AvoidCollisions (Reactive Avoidance)
-// UPDATED: Implements Impulse Avoidance and Threat Filtering.
+// (Implementation remains the same as the original EvoAI.C provided)
 bool HarvesterBrain::AvoidCollisions(double& imminent_ttc) {
     CWorld* pWorld = pShip->GetWorld();
     if (!pWorld || pShip->IsDocked()) return false;
@@ -1157,7 +1197,7 @@ bool HarvesterBrain::AvoidCollisions(double& imminent_ttc) {
 }
 
 // HandleBreaking (Movement and Laser Firing)
-// UPDATED: Added Oscillation Damping.
+// (Implementation remains largely the same, utilizing the updated alignment parameters)
 bool HarvesterBrain::HandleBreaking() {
     if (!pTarget_) return false;
 
@@ -1184,7 +1224,8 @@ bool HarvesterBrain::HandleBreaking() {
     double current_strict_angle = cache_.NAV_ALIGNMENT_STRICT_ANGLE;
 
     if (successiveTurns_ > MAX_SUCCESSIVE_TURNS) {
-        current_strict_angle = cache_.NAV_ALIGNMENT_LOOSE_ANGLE;
+        // For breaking, we prioritize accuracy, so we might want a tighter relaxation than navigation.
+        current_strict_angle = std::min(cache_.NAV_ALIGNMENT_LOOSE_ANGLE, 0.2); // Cap relaxation for tactics
         currentGoalDescription_ += " | DAMPING: Relaxing alignment (Excessive Turns).";
     }
 
@@ -1225,7 +1266,9 @@ void HarvesterBrain::TransitionState(BrainState newState) {
         
         // Check if the current description is a generic "Evaluating" or "Target lost" type message.
         bool needsUpdate = (currentGoalDescription_.find("Evaluating") != std::string::npos) ||
-                           (currentGoalDescription_.find("Target lost") != std::string::npos);
+                           (currentGoalDescription_.find("Target lost") != std::string::npos) ||
+                           (currentGoalDescription_.find("Searching") != std::string::npos);
+
 
         std::stringstream goalSS;
         switch(newState) {
@@ -1233,7 +1276,7 @@ void HarvesterBrain::TransitionState(BrainState newState) {
                 goalSS << "Docked at station, preparing departure.";
                 break;
             case HUNTING:
-                if (needsUpdate) goalSS << "Searching for resources.";
+                if (needsUpdate) goalSS << "Searching for resources (MagicBag).";
                 break;
             case REFUELING:
                 goalSS << "Fuel low, prioritizing Uranium.";

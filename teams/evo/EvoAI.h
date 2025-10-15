@@ -52,33 +52,30 @@ private:
     void InitializeLogging(); 
 };
 
-// Structure to cache GA parameters
+// Structure to cache GA parameters (UPDATED for MagicBag)
 struct CachedParams {
-    // Heuristics
-    double W_DISTANCE;
-    double W_VINYL;
-    double W_URANIUM;
+    // Heuristics (MagicBag Weights)
+    double W_VINYL_VALUE;
+    double W_URANIUM_VALUE;
     double W_FUEL_BOOST_FACTOR;
-    double W_FUEL_COST_PENALTY;
-    double W_TTI_PENALTY;
+    double W_TIME_PENALTY;
+    double W_FUEL_COST_PENALTY; // Penalty per unit of Delta-V
     double W_CONFLICT_PENALTY; 
     
     // Thresholds
     double THRESHOLD_RETURN_CARGO;
-    // THRESHOLD_FUEL_LOW is now deprecated in favor of dynamic management
     double THRESHOLD_FUEL_TARGET;
     double THRESHOLD_MAX_SHIELD_BOOST; 
 
-    // NEW: Dynamic Fuel Management
-    double FUEL_COST_PER_DIST;
+    // Dynamic Fuel Management
+    double FUEL_COST_PER_DIST_ESTIMATE; // Used for safety margin calculation
     double FUEL_SAFETY_MARGIN;
     
-    // Navigation (P-Controller and Vector Navigation)
-    double NAV_DESIRED_SPEED_FACTOR;
+    // Navigation (Trajectory Planning and Alignment)
     double NAV_ALIGNMENT_STRICT_ANGLE;
     double NAV_ALIGNMENT_LOOSE_ANGLE;
-    double NAV_CLOSE_ENOUGH_DIST;
-    double NAV_PREDICTION_HORIZON; // NEW
+    double NAV_INTERCEPT_TIME_HORIZON;
+    double NAV_STATION_BRAKING_DIST;
     
     // Safety
     double NAV_AVOIDANCE_HORIZON;
@@ -116,20 +113,20 @@ private:
     void UpdateState();
     void ExecuteAction();
     void HandleDeparting();
-    void SelectTarget();
     
-    // Navigation
-    bool NavigateVectorP();
+    // MagicBag (Target Selection)
+    void SelectTargetMagicBag();
+    double EvaluateAsteroidMagicBag(CAsteroid* asteroid, bool prioritizeFuel, bool& too_large);
+    
+    // Navigation (Trajectory Planning)
+    bool CalculateInterceptVector(CThing* target, CTraj& desiredVelocity, double& timeToIntercept);
+    bool NavigateTrajectory();
     bool AvoidCollisions(double& imminent_ttc);
     double CalculateDepartureAngle(); 
     void TrackSuccessiveTurns(); // Updates the successiveTurns_ counter
     
     // Tactics
     bool HandleBreaking();
-
-    // Evaluation
-    double EvaluateAsteroid(CAsteroid* asteroid, bool prioritizeFuel, bool& too_large);
-    double EstimateTTI(CThing* target);
 
     void TransitionState(BrainState newState);
     void CacheParameters(ParamMap* params);

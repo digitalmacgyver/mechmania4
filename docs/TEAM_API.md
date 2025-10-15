@@ -349,19 +349,52 @@ if (shields < g_ship_default_shield_amount) {
 }
 ```
 
-### Damage Calculation
+### Damage System Overview
 
-```cpp
-// Collision damage = relative_momentum / 1000
-// Laser damage = beam_length / 1000
+- **Ships** lose shields when they collide with asteroids or other ships, or when they are hit by lasers. If incoming damage exceeds remaining shields the ship is destroyed. Ships dock by “colliding” with a friendly station and take no damage (and cannot be damaged) while docked.
+- **Asteroids** take damage from ship collisions and lasers. Any collision shatters an asteroid into three equal fragments unless doing so would produce chunks lighter than `g_thing_minmass` (3 tons), in which case the asteroid is destroyed. Asteroids bounce off stations and do not collide with one another.
+- **Stations** only take damage from lasers. Laser damage removes vinyl from their storage until it reaches zero.
 
-// Check if ship will survive collision
-CTraj rel_momentum = pShip->RelativeMomentum(*thing);
-double damage = rel_momentum.rho / 1000.0;
-if (damage > shields) {
-    // Ship will be destroyed!
-}
-```
+#### Order Sequencing
+Once both teams have submitted orders, the server processes them in four stages every turn:
+1. Apply shield orders.
+2. Execute one physics sub-step (thrust/turn/drift plus collisions) covering `1/5` of a turn.
+3. Resolve all laser fire, including damage.
+4. Execute the remaining four physics sub-steps to finish the turn.
+
+#### Collision Damage (Ships)
+- A ship that collides with an asteroid or another ship takes shield damage equal to  
+  `damage = (mass_of_other_object × relative_speed) / g_laser_damage_mass_divisor`.
+- Only the other object’s mass matters. Ships weigh their base 40 tons plus carried fuel and vinyl (up to 60 tons of cargo/fuel combined), so real ship masses live between 40 and 100 tons. Asteroids typically weigh 3–40 tons.
+- Because each ship’s speed is clamped to `g_game_max_speed` (30 units/s), the theoretical relative speed cap is ~60 units/s, yielding worst-case damage of about 6.0 shield units in a ship–ship collision and 2.4 against a 40-ton asteroid. The physics engine can momentarily allow slightly higher velocities (observed peaks near 8.4 damage), but those spikes are rare and may change in future builds.
+
+#### Laser Damage (Ships)
+- A ship chooses a beam length up to `min(fWXMax, fWYMax)` (default 512). Firing costs `beam_length / g_laser_range_per_fuel_unit` fuel (`g_laser_range_per_fuel_unit` defaults to 50).
+- When the beam hits, the engine pretends it collided with an object whose mass is  
+  `g_laser_mass_scale_per_remaining_unit × (beam_length − distance_to_target)`. That mass feeds into the same shield-damage formula used for collisions.
+- At point blank range (ships are at least 24 units apart because of their radii) each unit of fuel spent on a laser costs the shooter 1 fuel but forces the target to spend roughly 1.5 fuel to rebuild shields. The trade flips once the target is farther than one third of the chosen beam length; at two thirds the beam costs twice as much fuel to shoot as the target needs to raise shields.
+
+#### Laser Damage (Asteroids)
+- Any single laser hit that would inflict ≥1 unit of shield damage shatters the asteroid into three equal chunks (subject to the minimum-mass rule). Shots that would deal <1 shield point do nothing—damage does not accumulate between laser hits.
+
+#### Laser Damage (Stations)
+- Stations treat incoming laser damage exactly like shield loss: a shot that would inflict `X` shield damage removes `X` vinyl from the station, never below zero.
+
+#### Default Combat Constants
+The numeric examples above use the default configuration defined in `team/src/GameConstants.C` and `team/src/Coord.h`:
+
+| Constant | Default | Purpose |
+| --- | --- | --- |
+| `g_laser_range_per_fuel_unit` | `50.0` | Fuel cost (tons) per unit of beam length. |
+| `g_laser_mass_scale_per_remaining_unit` | `30.0` | Converts remaining beam length to an equivalent impact mass. |
+| `g_laser_damage_mass_divisor` | `1000.0` | Scales impact mass into shield damage. |
+| `g_ship_spawn_mass` | `40.0` | Base hull mass before adding fuel or cargo. |
+| `g_ship_total_stat_capacity` | `60.0` | Total capacity shared by fuel and cargo tanks. |
+| `g_game_max_speed` | `30.0` | Per-object speed clamp; sets the relative-speed ceiling. |
+| `g_thing_minmass` | `3.0` | Minimum mass for asteroid fragments after shattering. |
+| `fWXMax`, `fWYMax` | `512.0` | Half the world width/height; sets the absolute laser range cap. |
+
+Adjust these constants (or command-line parameters that override them) to explore alternate combat balance.
 
 ## Resource Collection
 

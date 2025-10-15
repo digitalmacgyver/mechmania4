@@ -48,7 +48,12 @@ namespace Pathfinding {
     }
 
     // The core calculation function. It guarantees synchronization before calculation.
-    double CalculateAccurateFuelCost(CShip* calculator, const ShipState& state, OrderKind kind, double magnitude) {
+    double CalculateAccurateFuelCost(CShip* calculator, const ShipState& state, OrderKind kind, double magnitude, bool is_docked = false) {
+      // Costs are zero when docked for these manouvers.
+      if (is_docked && (kind == O_THRUST || kind == O_TURN)) {
+        return 0.0;
+      }
+
       // 1. Synchronize State (Apply Memento)
       // NOTE: This relies on the availability of setters (SetPos, SetVelocity, etc.).
       // Make non-const copies since SetPos/SetVel require non-const references
@@ -357,7 +362,7 @@ namespace Pathfinding {
         }
         if (!is_speeding(ship, ship_orient_vec_t0.theta, thrust_order_amt)) {
           // TODO: Check if our order was reduced due to fuel limits and return FAILURE_TRAJ instead.
-          double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_order_amt);          
+          double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_order_amt, ship->IsDocked());          
           unsigned int num_orders = 1;
           double fuel_total = fuel_used;
           double time_to_intercept = ctx.time;  
@@ -400,9 +405,10 @@ namespace Pathfinding {
 
         double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
 
-        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt);
+        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt, ship->IsDocked());
         unsigned int num_orders = 2;
-        double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho);
+        // Note on the is_docked argument - if we were docked this turn, we'll be docked when we do this thrust.
+        double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho, ship->IsDocked());
         double time_to_intercept = ctx.time;
         if (fuel_total < ctx.state_t0.fuel) {
           return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
@@ -413,6 +419,8 @@ namespace Pathfinding {
     }
 
     // Case 2b: Misaligned trajectory, turn now to enable thrust next turn (reduces to Case 2ai/1b).
+    // TODO: The logic here seems almost identical to 1c. Should I just have one function here with
+    // most of this logic and dispatch between them?
     FuelTraj TryTurnThenThrust(const PathfindingContext& ctx) {
       CShip* ship = ctx.ship;
       double time = ctx.time;
@@ -443,14 +451,14 @@ namespace Pathfinding {
         
         double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
 
-        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt);
+        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt, ship->IsDocked());
         unsigned int num_orders = 2;
         // TODO: We introduce a slight error in fuel_total as we base the cost
         // on our current state not what our state will be when we issue the
         // next order. For now we accept this for brevity rather than
         // simulating state of our ship next turn for maginally more accurate
         // fuel estimates.
-        double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho);
+        double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho, ship->IsDocked());
         double time_to_intercept = ctx.time;
 
         // Check this multi-order path doesn't run out of fuel.
@@ -565,7 +573,7 @@ namespace Pathfinding {
 
           // Check if we're heading the right way fast enough.
           if (thrust_reaches_target || thrusted_through || thrust_and_drift) {
-            double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k);
+            double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k, ship->IsDocked());
             unsigned int num_orders = 1;
             double fuel_total = fuel_used;
             // Since we had to thurst a specific amount to get on target, we
@@ -596,7 +604,7 @@ namespace Pathfinding {
             if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho)
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
 
-              double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k);
+              double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k, ship->IsDocked());
               unsigned int num_orders = 3;
               // TODO: We introduce a slight error in fuel_total as we base the
               // cost on our current state not what our state will be when we
@@ -604,11 +612,14 @@ namespace Pathfinding {
               // than simulating state of our ship next turn for maginally more
               // accurate fuel estimates.
               double fuel_total = fuel_used 
+                // If our first order is a thrust, we won't be docked for orders 2 and 3
+                // (unless we collide with a station, but if so we'll figure that out next
+                // turn).
                 // Add the rotation to bring our orient onto the direction the
                 // first thrust got us on.
-                + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, t_ship_vel_t1.theta - ship_orient_t0);
+                + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, t_ship_vel_t1.theta - ship_orient_t0, false);
                 // Add the acceleration towards the target.
-                + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, fabs(t_intercept_vec_t2.rho - t_ship_vel_t1.rho));
+                + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, fabs(t_intercept_vec_t2.rho - t_ship_vel_t1.rho), false);
               double time_to_intercept = ctx.time;
 
               if (fuel_total >= ctx.state_t0.fuel) {
