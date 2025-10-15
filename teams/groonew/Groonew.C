@@ -210,22 +210,11 @@ void Groonew::PopulateMagicBag() {
 
       unsigned int max_intercept_turns = 21;
 
-      // Determine if this target is an enemy ship - if so, prefer facing trajectories for combat
-      bool require_facing = false;
-      if (athing->GetKind() == SHIP) {
-        CTeam* athing_team = athing->GetTeam();
-        CTeam* my_team = ship->GetTeam();
-        bool is_enemy = (athing_team != NULL && my_team != NULL &&
-                        athing_team->GetTeamNumber() != my_team->GetTeamNumber());
-        require_facing = is_enemy;  // For enemy ships, prioritize facing trajectories
-      }
-
       // Calculate optimal intercept time
       for (unsigned int turn_i = 1; turn_i <= max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
-        // Pass require_facing=true for enemy ships to prioritize combat-ready approaches
         FuelTraj fueltraj = Pathfinding::DetermineOrders(ship, athing, turn_i,
-                                                         this->calculator_ship, require_facing);
+                                                         this->calculator_ship);
 
         // TODO: Check for obstacles on path (currently returns dummy)
         Collision collision =
@@ -601,6 +590,35 @@ void Groonew::AssignShipOrders() {
       // combat targeting is generally robust against uncoordinated action.
 
       CTeam* pmyTeam = pShip->GetTeam();
+
+      // Dynamic fuel management: If we're low on fuel and uranium is available,
+      // temporarily switch to FUEL seeking to restock before continuing combat
+      if (cur_fuel <= 5.5 && uranium_available) {
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ [VIOLENCE override] Low fuel (%.1f), seeking uranium before combat\n", cur_fuel);
+        }
+        wants = FUEL;
+        ships_seeking_resources.push_back(pShip);
+        ship_ptr_to_shipnum[pShip] = shipnum;
+
+        // Calculate utilities for uranium asteroids
+        auto& ship_paths = mb->getShipPaths(shipnum);
+        for (auto&& pair : ship_paths) {
+          PathInfo& e = pair.second;
+          if (e.dest != NULL && e.dest->GetKind() == ASTEROID) {
+            AsteroidKind material = static_cast<CAsteroid*>(e.dest)->GetMaterial();
+            if (material == URANIUM) {
+              e.utility = CalculateUtility(pShip, wants, e);
+            } else {
+              e.utility = 0.0;
+            }
+          } else {
+            e.utility = 0.0;
+          }
+        }
+        continue;  // Skip to next ship, let resource assignment handle this
+      }
+
       // No fuel reserve if: (1) turn >= 280, OR (2) no uranium left in world
       const double emergency_fuel_reserve =
           (pmyWorld->GetGameTime() >= 280.0 || uranium_left <= g_fp_error_epsilon) ? 0.0 : 5.0;
@@ -726,81 +744,100 @@ void Groonew::AssignShipOrders() {
           printf("\t→ Engaging %s '%s'\n", target_type, best_target->GetName());
         }
 
-        // Special handling for STATIONS to avoid getting stuck docked
+        // Phase-based station attack: navigate → exit dock → maintain firing position
         if (best_target->GetKind() == STATION) {
           CStation* enemy_station = static_cast<CStation*>(best_target);
           double distance = pShip->GetPos().DistTo(enemy_station->GetPos());
 
-          // Check if docked at enemy station (IsDocked + very close)
+          // Determine current phase based on ship state
           bool docked_at_enemy = (pShip->IsDocked() && distance < g_ship_default_docking_distance + 5.0);
 
           if (docked_at_enemy) {
-            // MODE 1: Docked at enemy - exit facing the station
-            double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
+            // PHASE 2: Exit dock with staggered angles to avoid collisions
+            // Assign each ship a unique exit angle based on shipnum
+            // Angles: 3*PI/4 (135°), PI/4 (45°), -PI/4 (-45°), -3*PI/4 (-135°)
+            const double exit_angles[4] = {3.0*PI/4.0, PI/4.0, -PI/4.0, -3.0*PI/4.0};
+            double target_exit_angle = exit_angles[shipnum % 4];
+
             double current_orient = pShip->GetOrient();
-            double angle_diff = angle_to_station - current_orient;
+            double angle_diff = target_exit_angle - current_orient;
 
             // Normalize angle difference to [-PI, PI]
             while (angle_diff > PI) angle_diff -= PI2;
             while (angle_diff < -PI) angle_diff += PI2;
 
             if (fabs(angle_diff) > 0.1) {
-              // Not facing station, turn to face it
+              // Not facing exit angle, turn to face it
               if (g_pParser && g_pParser->verbose) {
-                printf("\t→ MODE: Docked exit - Turning to face (angle_diff=%.2f)\n", angle_diff);
+                printf("\t→ PHASE 2a: Turning to exit angle %.2f (current=%.2f, diff=%.2f)\n",
+                       target_exit_angle, current_orient, angle_diff);
               }
               pShip->SetOrder(O_TURN, angle_diff);
             } else {
-              // Facing station, thrust backwards to exit
+              // Facing exit angle, thrust backwards to exit
               if (g_pParser && g_pParser->verbose) {
-                printf("\t→ MODE: Docked exit - Backing away\n");
+                printf("\t→ PHASE 2b: Exiting dock at angle %.2f (dist=%.1f)\n",
+                       target_exit_angle, distance);
               }
-              pShip->SetOrder(O_THRUST, -5.0);
+              pShip->SetOrder(O_THRUST, -1.0);
             }
-          } else if (distance < 200.0) {
-            // MODE 2: Near enemy station - manual positioning for optimal shooting
-            const double optimal_distance = 150.0;
+          } else if (distance < 100.0) {
+            // PHASE 3: Maintain firing position within 100 units
             bool facing = pShip->IsFacing(*enemy_station);
+            CTraj velocity = pShip->GetVelocity();
 
             if (facing) {
-              // Facing station, manage distance
-              if (distance < optimal_distance * 0.8) {
-                // Too close, back away
+              // Case 3a: Facing station - maintain position and prepare to shoot
+              double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
+              double radial_velocity = velocity.rho * cos(velocity.theta - angle_to_station);
+
+              if (radial_velocity > 0.5) {
+                // Moving away from station, counter with positive thrust
                 if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ MODE: Manual positioning - Backing away (dist=%.1f)\n", distance);
+                  printf("\t→ PHASE 3a: Countering drift away (radial_vel=%.2f, dist=%.1f)\n",
+                         radial_velocity, distance);
                 }
-                pShip->SetOrder(O_THRUST, -3.0);
-              } else if (distance > optimal_distance * 1.5) {
-                // Too far, approach slowly
-                if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ MODE: Manual positioning - Approaching (dist=%.1f)\n", distance);
-                }
-                pShip->SetOrder(O_THRUST, 5.0);
+                pShip->SetOrder(O_THRUST, 2.0);
               } else {
-                // Good distance, no navigation order
                 if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ MODE: Manual positioning - Holding position (dist=%.1f)\n", distance);
+                  printf("\t→ PHASE 3a: Holding firing position (radial_vel=%.2f, dist=%.1f)\n",
+                         radial_velocity, distance);
                 }
+                // No thrust order - let natural drift continue
               }
-            } else {
-              // Not facing, turn to face
+            } else if (velocity.rho < 1.0) {
+              // Case 3b: Not facing but velocity low - turn to face
               double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
               double current_orient = pShip->GetOrient();
               double angle_diff = angle_to_station - current_orient;
 
-              // Normalize
+              // Normalize angle difference to [-PI, PI]
               while (angle_diff > PI) angle_diff -= PI2;
               while (angle_diff < -PI) angle_diff += PI2;
 
               if (g_pParser && g_pParser->verbose) {
-                printf("\t→ MODE: Manual positioning - Turning to face (angle_diff=%.2f)\n", angle_diff);
+                printf("\t→ PHASE 3b: Turning to face station (angle_diff=%.2f, vel=%.2f, dist=%.1f)\n",
+                       angle_diff, velocity.rho, distance);
               }
               pShip->SetOrder(O_TURN, angle_diff);
+            } else {
+              // Case 3c: Lost target lock (high velocity, not facing) - return to Phase 1
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ PHASE 3c: Lost lock (vel=%.2f, facing=%d, dist=%.1f) - returning to Phase 1\n",
+                       velocity.rho, facing, distance);
+                printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                       best_path.fueltraj.time_to_intercept,
+                       (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                       : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
+                       best_path.fueltraj.order_mag);
+              }
+              // Use MagicBag navigation to re-acquire target
+              pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
             }
           } else {
-            // MODE 3: Far from station - use MagicBag navigation
+            // PHASE 1: Navigate to station using MagicBag pathfinding
             if (g_pParser && g_pParser->verbose) {
-              printf("\t→ MODE: MagicBag navigation (dist=%.1f)\n", distance);
+              printf("\t→ PHASE 1: Navigating to enemy station (dist=%.1f)\n", distance);
               printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
                      best_path.fueltraj.time_to_intercept,
                      (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
@@ -810,57 +847,189 @@ void Groonew::AssignShipOrders() {
             pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
           }
 
-          // Try to shoot regardless of navigation mode
-          if (pShip->IsFacing(*enemy_station) && available_fuel > g_fp_error_epsilon) {
-            if (distance + g_fp_error_epsilon < max_beam_length) {
-              double beam_length = max_beam_length;
-              bool good_efficiency = (beam_length >= 3.0 * distance);
+          // Shooting logic - attempt to fire if within range and facing
+          if (distance < 100.0 && pShip->IsFacing(*enemy_station) && available_fuel > g_fp_error_epsilon) {
+            double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
+            bool good_efficiency = (beam_length >= 3.0 * distance);
 
-              if (good_efficiency) {
-                if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n", beam_length, distance);
-                }
-                pShip->SetOrder(O_LASER, beam_length);
+            if (good_efficiency) {
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ Firing laser at enemy station (beam=%.1f, dist=%.1f)\n",
+                       beam_length, distance);
               }
+              pShip->SetOrder(O_LASER, beam_length);
+            } else if (g_pParser && g_pParser->verbose) {
+              printf("\t→ Holding fire (poor efficiency: beam=%.1f, dist=%.1f)\n",
+                     beam_length, distance);
             }
           }
         } else {
-          // Enemy SHIP targeting - use existing simple logic
-          if (g_pParser && g_pParser->verbose) {
-            printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                   best_path.fueltraj.time_to_intercept,
-                   (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
-                   : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
-                   best_path.fueltraj.order_mag);
+          // Phase-based ship-to-ship combat
+          const double SHOOTING_DISTANCE = 160.0;
+
+          // Scan for NON-DOCKED enemy ships within shooting distance
+          // Re-evaluated every turn - no mode locking
+          CShip* nearest_enemy = NULL;
+          double nearest_distance = SHOOTING_DISTANCE + 1.0;
+
+          for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
+               idx = pmyWorld->GetNextIndex(idx)) {
+            CThing* thing = pmyWorld->GetThing(idx);
+            if (thing == NULL || !thing->IsAlive() || thing->GetKind() != SHIP) continue;
+
+            CTeam* thing_team = thing->GetTeam();
+            if (thing_team == NULL || thing_team->GetTeamNumber() == pmyTeam->GetTeamNumber()) continue;
+
+            CShip* enemy_ship = static_cast<CShip*>(thing);
+            if (enemy_ship->IsDocked()) continue;  // CRITICAL: Skip docked ships - they don't trigger combat mode
+
+            double distance = pShip->GetPos().DistTo(enemy_ship->GetPos());
+            if (distance < nearest_distance) {
+              nearest_enemy = enemy_ship;
+              nearest_distance = distance;
+            }
           }
 
-          // Apply navigation orders
-          pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
+          if (nearest_enemy != NULL && nearest_distance <= SHOOTING_DISTANCE) {
+            // PHASE 2: Within shooting distance of a non-docked enemy
+            bool facing = pShip->IsFacing(*nearest_enemy);
 
-          // Check if we can shoot at the target
-          if (pShip->IsFacing(*best_target) && available_fuel > g_fp_error_epsilon) {
-            double distance = pShip->GetPos().DistTo(best_target->GetPos());
+            if (facing) {
+              // Case 2a: Facing the enemy - shoot them
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ PHASE 2a: Engaging enemy ship '%s' at close range (dist=%.1f)\n",
+                       nearest_enemy->GetName(), nearest_distance);
+              }
 
-            if (distance + g_fp_error_epsilon < max_beam_length) {
-              double beam_length = max_beam_length;
+              // Shoot if we have fuel and they're in range
+              if (available_fuel > g_fp_error_epsilon && nearest_distance < max_beam_length) {
+                double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
 
-              // End-game condition: no resources left and enemy base empty
-              // Fire full blast without efficiency check
-              bool end_game = (uranium_left <= g_fp_error_epsilon &&
-                              vinyl_left <= g_fp_error_epsilon &&
-                              enemy_base_vinyl <= g_fp_error_epsilon);
+                // End-game condition: no resources left and enemy base empty
+                bool end_game = (uranium_left <= g_fp_error_epsilon &&
+                                vinyl_left <= g_fp_error_epsilon &&
+                                enemy_base_vinyl <= g_fp_error_epsilon);
 
-              bool good_efficiency = (beam_length >= 3.0 * distance);
+                bool good_efficiency = (beam_length >= 3.0 * nearest_distance);
 
-              if (end_game || good_efficiency) {
+                if (end_game || good_efficiency) {
+                  if (g_pParser && g_pParser->verbose) {
+                    if (end_game) {
+                      printf("\t→ Firing laser FULL BLAST [END-GAME] (beam=%.1f, dist=%.1f)\n",
+                             beam_length, nearest_distance);
+                    } else {
+                      printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n",
+                             beam_length, nearest_distance);
+                    }
+                  }
+                  pShip->SetOrder(O_LASER, beam_length);
+                }
+              }
+              // No thrust order - maintain current trajectory while engaging
+            } else {
+              // Case 2b: Not facing - evaluate if we should turn or pursue
+              CTraj our_vel = pShip->GetVelocity();
+              CTraj enemy_vel = nearest_enemy->GetVelocity();
+
+              // Predict enemy position one turn from now
+              CCoord enemy_pos_t0 = nearest_enemy->GetPos();
+              CCoord enemy_pos_t1 = enemy_pos_t0 + CCoord(enemy_vel.rho * cos(enemy_vel.theta),
+                                                           enemy_vel.rho * sin(enemy_vel.theta));
+
+              // Predict our position one turn from now (considering our current velocity)
+              CCoord our_pos_t0 = pShip->GetPos();
+              CCoord our_pos_t1 = our_pos_t0 + CCoord(our_vel.rho * cos(our_vel.theta),
+                                                       our_vel.rho * sin(our_vel.theta));
+
+              // Check if we'll still be within shooting distance next turn
+              double predicted_distance_t1 = our_pos_t1.DistTo(enemy_pos_t1);
+
+              if (predicted_distance_t1 <= SHOOTING_DISTANCE) {
+                // Case 2b1: Still in range next turn - turn to face predicted position
+                double angle_to_target_t1 = our_pos_t1.AngleTo(enemy_pos_t1);
+                double current_orient = pShip->GetOrient();
+                double angle_diff = angle_to_target_t1 - current_orient;
+
+                // Normalize angle difference to [-PI, PI]
+                while (angle_diff > PI) angle_diff -= PI2;
+                while (angle_diff < -PI) angle_diff += PI2;
+
                 if (g_pParser && g_pParser->verbose) {
-                  if (end_game) {
-                    printf("\t→ Firing laser FULL BLAST [END-GAME] (beam=%.1f, dist=%.1f)\n", beam_length, distance);
-                  } else {
-                    printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n", beam_length, distance);
+                  printf("\t→ PHASE 2b1: Turning to face enemy ship '%s' (angle_diff=%.2f)\n",
+                         nearest_enemy->GetName(), angle_diff);
+                  printf("\t  Current dist=%.1f, Predicted dist=%.1f\n",
+                         nearest_distance, predicted_distance_t1);
+                  printf("\t  Enemy: (%.1f,%.1f) -> (%.1f,%.1f)\n",
+                         enemy_pos_t0.fX, enemy_pos_t0.fY, enemy_pos_t1.fX, enemy_pos_t1.fY);
+                  printf("\t  Us: (%.1f,%.1f) -> (%.1f,%.1f)\n",
+                         our_pos_t0.fX, our_pos_t0.fY, our_pos_t1.fX, our_pos_t1.fY);
+                }
+
+                pShip->SetOrder(O_TURN, angle_diff);
+              } else {
+                // Case 2b2: Will be out of range - resume Phase 1 pursuit
+                if (g_pParser && g_pParser->verbose) {
+                  printf("\t→ PHASE 2b2: Enemy moving out of range, resuming pursuit\n");
+                  printf("\t  Current dist=%.1f, Predicted dist=%.1f (> %.1f)\n",
+                         nearest_distance, predicted_distance_t1, SHOOTING_DISTANCE);
+                  printf("\t  Switching to MagicBag pursuit of '%s'\n", best_target->GetName());
+                  printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                         best_path.fueltraj.time_to_intercept,
+                         (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                         : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
+                         best_path.fueltraj.order_mag);
+                }
+
+                // Use MagicBag navigation to pursue
+                pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
+
+                // Opportunistic shooting during pursuit
+                if (pShip->IsFacing(*best_target) && available_fuel > g_fp_error_epsilon) {
+                  double distance = pShip->GetPos().DistTo(best_target->GetPos());
+                  if (distance < max_beam_length) {
+                    double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
+                    bool good_efficiency = (beam_length >= 3.0 * distance);
+                    if (good_efficiency) {
+                      if (g_pParser && g_pParser->verbose) {
+                        printf("\t→ Opportunistic shot during pursuit (beam=%.1f, dist=%.1f)\n",
+                               beam_length, distance);
+                      }
+                      pShip->SetOrder(O_LASER, beam_length);
+                    }
                   }
                 }
-                pShip->SetOrder(O_LASER, beam_length);
+              }
+            }
+          } else {
+            // PHASE 1: No enemies within shooting distance - navigate to intercept
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ PHASE 1: Navigating to intercept enemy ship '%s' (dist=%.1f)\n",
+                     best_target->GetName(), pShip->GetPos().DistTo(best_target->GetPos()));
+              printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                     best_path.fueltraj.time_to_intercept,
+                     (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                     : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
+                     best_path.fueltraj.order_mag);
+            }
+
+            // Use MagicBag navigation to intercept
+            pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
+
+            // Opportunistic shooting - if we happen to be facing them during intercept
+            if (pShip->IsFacing(*best_target) && available_fuel > g_fp_error_epsilon) {
+              double distance = pShip->GetPos().DistTo(best_target->GetPos());
+
+              if (distance < max_beam_length) {
+                double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
+                bool good_efficiency = (beam_length >= 3.0 * distance);
+
+                if (good_efficiency) {
+                  if (g_pParser && g_pParser->verbose) {
+                    printf("\t→ Opportunistic shot during intercept (beam=%.1f, dist=%.1f)\n",
+                           beam_length, distance);
+                  }
+                  pShip->SetOrder(O_LASER, beam_length);
+                }
               }
             }
           }
