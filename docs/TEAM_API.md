@@ -340,6 +340,33 @@ CTraj vector_to_target = my_pos.VectTo(target_pos);
 // vector_to_target.theta = angle to target
 ```
 
+**Toroidal Topology (World Wrapping):**
+
+The game world has toroidal topology - when you leave one edge, you appear on the opposite edge. **All coordinate methods automatically handle this wrapping:**
+
+- `DistTo()` - Returns the **shortest distance** accounting for world wrapping
+- `AngleTo()` - Returns the angle toward the **shortest path** (may wrap through edges)
+- `VectTo()` - Returns the vector along the **shortest path**
+
+**Example:** A ship at (500, 0) measuring distance to (-500, 0):
+- Direct distance (left): 1000 units
+- Wrapped distance (right): 24 units ← **DistTo() returns this**
+- Angle: 0° (pointing right/east) ← **AngleTo() returns this**
+
+The shortest path automatically wraps through the right edge because 24 units < 1000 units.
+
+**Important implications:**
+- Navigation algorithms work naturally - just use `DistTo()` and `AngleTo()`
+- No need to manually check for wrapping or calculate alternate paths
+- Pathfinding to asteroids/stations automatically uses the shortest route
+- Maximum distance between any two points is ~724 units (corner to opposite corner)
+
+**Testing toroidal calculations:** Run `./build/test_toroidal_coordinates` to see comprehensive examples of toroidal distance and angle calculations, including:
+- Simple non-wrapping cases
+- Single-edge wrapping (through top/bottom/left/right)
+- Corner wrapping (through two adjacent edges)
+- Explanation of why 3-edge wrapping is geometrically impossible in 2D
+
 ### Collision Detection
 
 ```cpp

@@ -293,3 +293,13 @@ if(BUILD_WITH_GRAPHICS)
     # Link to repository fonts directory for runtime instructions
     target_compile_definitions(mm4obs PRIVATE MM4_FONTS_GITHUB_URL="https://github.com/digitalmacgyver/mechmania4/tree/master/team/src/fonts")
 endif()
+
+# Test program for toroidal coordinate calculations
+add_executable(test_toroidal_coordinates
+    docs/test_toroidal_coordinates.cpp
+    ${SRC_DIR}/Coord.C
+    ${SRC_DIR}/Traj.C
+    ${SRC_DIR}/Sendable.C
+)
+target_include_directories(test_toroidal_coordinates PRIVATE ${SRC_DIR})
+target_link_libraries(test_toroidal_coordinates m)  # Link math library
