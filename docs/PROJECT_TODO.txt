@@ -355,10 +355,6 @@ Q. Double check that Coord DistTo and AngleTo produce proper toroidal
 measures with some test cases and a hello_world style program that
 just runs these functions.
 
-Q. How accurate is the physics simulation:
-   * Conservetion of energy on collision / thrus
-   * Conservation of momentum on collision / thrust
-  
 Q. CTraj::Rotate noramlizes - does this reduce the cost? what if
 someone wants to do a spinarooney and puts in a rotate of 1000*PI?
 
