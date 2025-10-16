@@ -455,25 +455,38 @@ void CShip::Drift(double dt) {
   // Now handle turning
   omega = 0.0;
   if (turnamt != 0.0) {
-    fuelcons = SetOrder(O_TURN, turnamt);
-
-    // In new mode, use fuel-limited value; in legacy mode, use original (buggy) behavior
+    // In legacy mode, calculate fuel for full turn (buggy behavior)
+    // In new mode, calculate fuel for dt-sized turn (fixed behavior)
     if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
-      // Legacy mode: use original value (allows double-spend bug)
+      // Legacy mode: calculate fuel for full turn amount
+      fuelcons = SetOrder(O_TURN, turnamt);
+      // Use original value (allows double-spend bug and premature clamping)
       omega = turnamt;
+
+      double oldFuel = GetAmount(S_FUEL);
+      double newFuel = oldFuel - fuelcons * dt;
+      SetAmount(S_FUEL, newFuel);
+
+      // Check if out of fuel
+      if (oldFuel > 0.01 && newFuel <= 0.01) {
+        printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
+               GetTeam() ? GetTeam()->GetName() : "Unknown");
+      }
     } else {
-      // New mode: use fuel-limited value from SetOrder
+      // New mode: calculate fuel for dt-sized turn (fixes premature clamping bug)
+      fuelcons = SetOrder(O_TURN, turnamt * dt);
+      // Use fuel-limited value from SetOrder (already dt-sized)
       omega = GetOrder(O_TURN);
-    }
 
-    double oldFuel = GetAmount(S_FUEL);
-    double newFuel = oldFuel - fuelcons * dt;
-    SetAmount(S_FUEL, newFuel);
+      double oldFuel = GetAmount(S_FUEL);
+      double newFuel = oldFuel - fuelcons;
+      SetAmount(S_FUEL, newFuel);
 
-    // Check if out of fuel
-    if (oldFuel > 0.01 && newFuel <= 0.01) {
-      printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
-             GetTeam() ? GetTeam()->GetName() : "Unknown");
+      // Check if out of fuel
+      if (oldFuel > 0.01 && newFuel <= 0.01) {
+        printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
+               GetTeam() ? GetTeam()->GetName() : "Unknown");
+      }
     }
 
     if (turnamt < 0.0) {
@@ -494,12 +507,20 @@ void CShip::Drift(double dt) {
     }
   }
 
-  // Finally, update position and orientation. 
+  // Finally, update position and orientation.
   // From CThing::Drift
   //
   // TODO - factor this out in Thing.C to be a common function for CThing::Drift and us to use.
   Pos += (Vel * dt).ConvertToCoord();
-  orient += omega * dt;
+
+  // Apply rotation: in legacy mode omega is full turn (multiply by dt),
+  // in new mode omega is already dt-sized (apply directly)
+  if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+    orient += omega * dt;  // Legacy: omega is full turn amount
+  } else {
+    orient += omega;       // New: omega is already dt-sized
+  }
+
   if (orient < -PI || orient > PI) {
     CTraj VTmp(1.0, orient);
     VTmp.Normalize();

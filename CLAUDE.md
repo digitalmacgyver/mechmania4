@@ -69,15 +69,22 @@ double MyClass::PublicMethodNew(/* params */) {
    - Feature: `velocity-limits`
    - Public method: `SetOrder(O_THRUST, value)`
    - Private methods: `ProcessThrustOrderOld()`, `ProcessThrustOrderNew()`
-   - Legacy: Current velocity/acceleration limits
-   - New: Improved limits (to be implemented)
+   - Legacy: Buggy fuel calculation with double-spend on each dt tick
+   - New: Correct fuel calculation using dt-sized thrust amounts
 
 3. **Thrust Drift Processing (Ship.h/Ship.C)**
    - Feature: `velocity-limits`
    - Called from: `Drift()` method
    - Private methods: `ProcessThrustDriftOld()`, `ProcessThrustDriftNew()`
-   - Legacy: Current drift behavior
-   - New: Improved drift (to be implemented)
+   - Legacy: Buggy drift behavior with fuel double-spend
+   - New: Correct drift using CalcThrustCost with dt-sized amounts
+
+4. **Turn Order Processing (Ship.C Drift() method)**
+   - Feature: `velocity-limits`
+   - Location: Inline in `Drift()` method, O_TURN handling section
+   - Legacy: Calls `SetOrder(O_TURN, turnamt)` for full turn, causing premature fuel clamping on low fuel
+   - New: Calls `SetOrder(O_TURN, turnamt * dt)` for dt-sized turn, fixes premature clamping bug
+   - Note: Also affects orient update - legacy uses `orient += omega * dt`, new uses `orient += omega`
 
 ### When to Use This Pattern
 

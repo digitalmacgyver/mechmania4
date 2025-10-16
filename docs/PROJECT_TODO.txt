@@ -173,6 +173,11 @@ Re-enabled with --legacy-velocity-limits:
     in the legacy code where fuel availability checks were made, but
     then original requested thrust or turn amounts were used anyway.
 
+  * Low fuel underturn/underthrust - The original implementation
+    required ships to have enough fuel for their entire turn/thrust
+    order at each subtick in the game, which caused these orders to be
+    artificually clamped in very low fuel conditions.
+
 Re-enabled with --legacy-collision-detection:
 
   * Collision Detection - Proper minimal time to intercept
@@ -188,6 +193,12 @@ Re-enabled with --legacy-asteroid-eat-damage:
     damage to the ship when colliding with an asteroid regardless of
     whether the asteroid was "eaten" by the ship. Now the default
     behavior is eaten asteroids deal no damage to the ship.
+
+Not re-enableable:
+
+  * Create Vinyl With Jettison Bug - you could jettison any amount of
+    Vinyl as the bounds check to not jettison more than you had an
+    incorrect inequality.
 
 ==================================
 
@@ -224,32 +235,7 @@ Lasers are modeled as colliding masses for damage purposes.
 
 ========================== ENGINE TODO ============================================
 
-I think there is a further bug in low fuel situations potentially for turn and thrust orders in Drift() in Ship.C for O_TURN and possibly O_THRUST.
-
-I'll stat the bug for O_TURN. The bug is that on each sub-turn dt tick we begin by calculating:
-    fuelcons = SetOrder(O_TURN, turnamt);
-However this is the fuel consumption of _the entire turn_.
-
-If the ship had very low fuel, but exactly enough fuel to turn pi radians, then here is what would happen:
-
-1. On the first tick fuelcons would equal the entire fuel amount, f
-2. The ship would turn pi*dt radians, and spend f*dt fuel
-3. On the second tick, we'd run fuelcons = SetOrdeer(O_TURN, pi) again and now SetOrder would clamp our fuelcons, because we only have 80% of the fuel needed to make a full pi turn. However we shouldn't be clamped here - as we only need to pay 80% of the fuel.
-
-The fix is to make the SetOrder for O_TURN try to turn turnamt*dt, and then not multiply omega by *dt further below. 
-
-Check whether my understanding of the O_TURN bug is correct.
-
-Then check whether a similar bug impacts the legacy O_THRUST "Old" system.
-
-Then check whether a similar bug impacts the defult O_THRUST "New" system.
-
-Ultrathink for this answer.
-
-1. Double check if we get free lasers when we burn through all our
-fuel otherwise - e.g. does it have a similar bug of using laserpower
-without checking current fuel.
-
+TBD - Fix the laser exploit, but have a flag in it.
 
 ?!?!?! Concurrency / race double eating behaviors ?!?!?!??!
 
@@ -352,14 +338,6 @@ Why The Guard Fails:
 
 The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks it, the asteroid has already overwritten pThEat to point to Ship B instead of Ship A!
 ================== double yum ===========================
-
-IN_PROGRESS Fix turning bug where we do for each dt tick:
-fuelcons = SetOrder( full_turn )
-fuel -= fuelcons * dt
-omega = full_turn
-... many lines later
-rotateShip( omega*dt )
-This has bugs when we are low on fuel.
 
 Q. Physics engine: drift is called every 0.2 ticks, it looks to me
 like ship.Drift doesn't clear O_TURN and O_THURST orders when drifing
