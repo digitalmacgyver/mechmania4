@@ -56,22 +56,23 @@ class Groonew : public CTeam {
   // Called after PopulateMagicBag to assign base orders based on strategic planning
   void AssignShipOrders();
 
-  private:
-    // TODO:
-    // We need a way to store and retrieve the prior targets we had last turn.
-    std::map<CShip*,CThing*> PriorTargets();
+ private:
+  // Track the resource target each ship pursued on the prior turn so we can
+  // reward plan continuity when utilities tie.
+  std::map<CShip*, CThing*> last_turn_targets_;
 
-    // Calculate the utility of a given path.
-    double CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e);
+  // Calculate the utility of a given path.
+  double CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e,
+                          bool favor_previous_target);
 
-    // Helper function to apply orders and log the decision.
-    void ApplyOrders(CShip* pShip, const PathInfo& best_e);
+  // Helper function to apply orders and log the decision.
+  void ApplyOrders(CShip* pShip, const PathInfo& best_e);
 
-    // Solves the assignment problem for resource collection using a lightweight
-    // brute-force approach.
-    void SolveResourceAssignment(
-        const std::vector<CShip*>& agents,
-        const std::map<CShip*, unsigned int>& ship_ptr_to_shipnum);
+  // Solves the assignment problem for resource collection using a lightweight
+  // brute-force approach.
+  void SolveResourceAssignment(
+      const std::vector<CShip*>& agents,
+      const std::map<CShip*, unsigned int>& ship_ptr_to_shipnum);
 };
 
 /////////////////////////////////////

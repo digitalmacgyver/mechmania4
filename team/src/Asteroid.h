@@ -32,6 +32,11 @@ class CAsteroid : public CThing {
 
   virtual CAsteroid* MakeChildAsteroid(double dm = 40.0);
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
+
+ private:
+  // Fragmentation implementations
+  void CreateFragmentsOld(CThing* pOthThing, CWorld* pWorld, ThingKind OthKind);
+  void CreateFragmentsNew(CThing* pOthThing, CWorld* pWorld, ThingKind OthKind);
 };
 
 #endif  // _ASTEROID_H_KEFLKJSEHFLKJWEHFKWEHFWEHFLJHEF

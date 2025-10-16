@@ -80,6 +80,10 @@ extern double g_ship_default_shield_capacity;
 // Default starting shield amount assigned to ships on spawn.
 extern double g_ship_default_shield_amount;
 
+// Extra clearance distance added when separating ships after collision
+// to prevent immediate re-collision due to overlapping collision bounds.
+extern double g_ship_collision_separation_clearance;
+
 // ---------------------------------------------------------------------------
 // Combat economy and maneuvering constants
 // ---------------------------------------------------------------------------

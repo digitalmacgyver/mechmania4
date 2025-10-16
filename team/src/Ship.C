@@ -474,9 +474,32 @@ void CShip::Drift(double dt) {
       }
     } else {
       // New mode: calculate fuel for dt-sized turn (fixes premature clamping bug)
-      fuelcons = SetOrder(O_TURN, turnamt * dt);
-      // Use fuel-limited value from SetOrder (already dt-sized)
-      omega = GetOrder(O_TURN);
+      // Calculate fuel directly without calling SetOrder to preserve original order
+      double dt_turn = turnamt * dt;  // The turn we want to do this tick
+
+      // Calculate fuel cost for this dt-sized turn
+      // Formula from SetOrder(O_TURN): fuel = |angle| * mass / (6 * 2PI * naked_mass)
+      fuelcons = fabs(dt_turn) * GetMass() /
+                 (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
+
+      if (IsDocked()) {
+        fuelcons = 0.0;  // No fuel cost while docked
+      }
+
+      // Clamp turn amount to available fuel
+      double maxfuel = GetAmount(S_FUEL);
+      if (fuelcons > maxfuel && !IsDocked()) {
+        fuelcons = maxfuel;
+        // Scale down the turn proportionally
+        double valtmp = (mass * g_ship_turn_full_rotations_per_fuel * PI2 * fuelcons) / GetMass();
+        if (dt_turn <= 0.0) {
+          dt_turn = -valtmp;
+        } else {
+          dt_turn = valtmp;
+        }
+      }
+
+      omega = dt_turn;  // Use the fuel-limited dt-sized turn
 
       double oldFuel = GetAmount(S_FUEL);
       double newFuel = oldFuel - fuelcons;
@@ -762,17 +785,21 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
       return;
     }
 
-    // Update ship velocity with conservation of linear momentum for a perfectly
-    // inelastic collision, clamped by maxspeed.
-    CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
-    double othmass = pOthThing->GetMass();
-    double masstot = GetMass() + othmass;
-    Vel = MomTot / masstot;
-    if (Vel.rho > g_game_max_speed) {
-      Vel.rho = g_game_max_speed;
-    }
+    bool asteroidFits = AsteroidFits((CAsteroid *)pOthThing);
 
-    if (AsteroidFits((CAsteroid *)pOthThing)) {
+    if (asteroidFits) {
+      // SMALL ASTEROID (fits in cargo): Perfectly inelastic collision
+      // Ship absorbs the asteroid, combining masses and conserving momentum.
+      // This is correct physics for an inelastic collision.
+      CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
+      double othmass = pOthThing->GetMass();
+      double masstot = GetMass() + othmass;
+      Vel = MomTot / masstot;
+      if (Vel.rho > g_game_max_speed) {
+        Vel.rho = g_game_max_speed;
+      }
+
+      // Add asteroid mass to ship's cargo
       switch (((CAsteroid *)pOthThing)->GetMaterial()) {
         case VINYL:
           adStatCur[(unsigned int)S_CARGO] += othmass;
@@ -782,6 +809,23 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
           break;
         default:
           break;
+      }
+    } else {
+      // LARGE ASTEROID (doesn't fit): Collision physics depends on mode
+      if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+        // Legacy mode: Inelastic collision (even though asteroid doesn't stick!)
+        // This is physically incorrect but preserves old behavior
+        CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
+        double othmass = pOthThing->GetMass();
+        double masstot = GetMass() + othmass;
+        Vel = MomTot / masstot;
+        if (Vel.rho > g_game_max_speed) {
+          Vel.rho = g_game_max_speed;
+        }
+      } else {
+        // New mode: Perfectly elastic collision
+        // Ship and asteroid bounce off each other, conserving momentum and energy
+        HandleElasticShipCollision(pOthThing);
       }
     }
   }
@@ -793,19 +837,29 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     pmyTeam = pTmpTm;
   }
 
-  // Apply a separation impulse to a ship to bump it clear of other ships or
-  // asteroid bits that may have been created as a result of collision.
-  double dang = pOthThing->GetPos().AngleTo(GetPos());
-  double dsmov = pOthThing->GetSize() + 3.0;
-  CTraj MovVec(dsmov, dang);
-  CCoord MovCoord(MovVec);
-  Pos += MovCoord;
+  // Handle separation/positioning after collision
+  // This section is only for ship-ship collisions in both legacy and new modes
+  // Ship-asteroid collision physics is handled above (lines 758-808)
+  if (OthKind == SHIP && pOthThing->GetTeam() != NULL) {
+    if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+      // Legacy mode: Non-physical separation impulse (violates momentum conservation)
+      double dang = pOthThing->GetPos().AngleTo(GetPos());
+      double dsmov = pOthThing->GetSize() + 3.0;
+      CTraj MovVec(dsmov, dang);
+      CCoord MovCoord(MovVec);
+      Pos += MovCoord;
 
-  double dmassrat = pOthThing->GetMass() / GetMass();
-  MovVec = MovVec * dmassrat;
-  Vel += MovVec;
-  if (Vel.rho > g_game_max_speed) {
-    Vel.rho = g_game_max_speed;
+      double dmassrat = pOthThing->GetMass() / GetMass();
+      MovVec = MovVec * dmassrat;
+      Vel += MovVec;
+      if (Vel.rho > g_game_max_speed) {
+        Vel.rho = g_game_max_speed;
+      }
+    } else {
+      // New physics mode: Perfectly elastic collision between ships
+      // Conserves both momentum and kinetic energy
+      HandleElasticShipCollision(pOthThing);
+    }
   }
 }
 
@@ -1327,5 +1381,209 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
     uImgSet = 2;
   } else {
     uImgSet = 1;
+  }
+}
+
+void CShip::HandleElasticShipCollision(CThing* pOtherShip) {
+  // Implements proper elastic collision physics between two ships
+  // using standard 2D elastic collision formulas that conserve both
+  // momentum and kinetic energy.
+  //
+  // Reference: https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional_collision_with_two_moving_objects
+  //
+  // For elastic collisions in 2D:
+  // v1' = v1 - (2*m2 / (m1+m2)) * ((v1-v2) · (x1-x2)) / |x1-x2|² * (x1-x2)
+  // v2' = v2 - (2*m1 / (m1+m2)) * ((v2-v1) · (x2-x1)) / |x2-x1|² * (x2-x1)
+  //
+  // Where:
+  // - v1, v2 are initial velocities (vectors)
+  // - v1', v2' are final velocities (vectors)
+  // - x1, x2 are positions (vectors)
+  // - m1, m2 are masses
+  // - · denotes dot product
+
+  extern CParser* g_pParser;
+
+  // Get masses
+  double m1 = GetMass();
+  double m2 = pOtherShip->GetMass();
+
+  // Get positions and velocities as Cartesian coordinates
+  CCoord pos1 = GetPos();
+  CCoord pos2 = pOtherShip->GetPos();
+
+  CCoord vel1 = GetVelocity().ConvertToCoord();
+  CCoord vel2 = pOtherShip->GetVelocity().ConvertToCoord();
+
+  // Calculate position difference vector (x1 - x2)
+  CCoord dx;
+  dx.fX = pos1.fX - pos2.fX;
+  dx.fY = pos1.fY - pos2.fY;
+
+  // Calculate velocity difference vector (v1 - v2)
+  CCoord dv;
+  dv.fX = vel1.fX - vel2.fX;
+  dv.fY = vel1.fY - vel2.fY;
+
+  // Calculate dot product (v1-v2) · (x1-x2)
+  double dot_dv_dx = dv.fX * dx.fX + dv.fY * dx.fY;
+
+  // Calculate squared distance |x1-x2|²
+  double dx_squared = dx.fX * dx.fX + dx.fY * dx.fY;
+
+  // Handle special case: ships at same position (can happen when multiple ships
+  // leave station together with same orientation and thrust)
+  if (dx_squared < g_fp_error_epsilon) {
+    if (g_pParser && g_pParser->verbose) {
+      printf("[ELASTIC] %s <-> %s: SAME POSITION (dist²=%.6f)\n",
+             GetName(), pOtherShip->GetName(), dx_squared);
+    }
+
+    // Ships are at same position - check relative velocity
+    double dv_squared = dv.fX * dv.fX + dv.fY * dv.fY;
+
+    if (dv_squared > g_fp_error_epsilon) {
+      // CASE 1: Ships moving through each other - use relative velocity as collision normal
+      // This is a head-on collision: reflect velocities along relative velocity axis
+      if (g_pParser && g_pParser->verbose) {
+        printf("[ELASTIC]   CASE 1: Moving through each other (dv²=%.3f)\n", dv_squared);
+        printf("[ELASTIC]   Before: vel1=(%.2f,%.2f) vel2=(%.2f,%.2f)\n",
+               vel1.fX, vel1.fY, vel2.fX, vel2.fY);
+      }
+
+      double dv_mag = sqrt(dv_squared);
+      CCoord collision_normal;
+      collision_normal.fX = dv.fX / dv_mag;  // Normalize
+      collision_normal.fY = dv.fY / dv_mag;
+
+      // For head-on collision, use simplified elastic formula
+      // v1' = ((m1-m2)*v1 + 2*m2*v2) / (m1+m2)
+      // v2' = ((m2-m1)*v2 + 2*m1*v1) / (m1+m2)
+      double total_mass = m1 + m2;
+      CCoord new_vel1;
+      new_vel1.fX = ((m1 - m2) * vel1.fX + 2.0 * m2 * vel2.fX) / total_mass;
+      new_vel1.fY = ((m1 - m2) * vel1.fY + 2.0 * m2 * vel2.fY) / total_mass;
+
+      CTraj new_vel1_polar(new_vel1);
+      if (new_vel1_polar.rho > g_game_max_speed) {
+        new_vel1_polar.rho = g_game_max_speed;
+      }
+      Vel = new_vel1_polar;
+
+      // Separate ships along relative velocity direction
+      double separation_distance = GetSize() + pOtherShip->GetSize() + g_ship_collision_separation_clearance;
+      CTraj separation_vec(separation_distance, atan2(collision_normal.fY, collision_normal.fX));
+      CCoord new_pos = Pos + separation_vec.ConvertToCoord();
+      Pos = new_pos;
+
+      if (g_pParser && g_pParser->verbose) {
+        printf("[ELASTIC]   After: vel1=(%.2f,%.2f) separation=%.1f@%.1f° pos=(%.1f,%.1f)\n",
+               Vel.ConvertToCoord().fX, Vel.ConvertToCoord().fY,
+               separation_distance, atan2(collision_normal.fY, collision_normal.fX) * 180.0 / PI,
+               Pos.fX, Pos.fY);
+      }
+    } else {
+      // Ships have same velocity - check if moving or stationary
+      double v1_speed_squared = vel1.fX * vel1.fX + vel1.fY * vel1.fY;
+      double separation_distance = GetSize() + pOtherShip->GetSize() + g_ship_collision_separation_clearance;
+
+      // Deterministic assignment based on ship addresses
+      uintptr_t this_addr = reinterpret_cast<uintptr_t>(this);
+      uintptr_t other_addr = reinterpret_cast<uintptr_t>(pOtherShip);
+      bool this_goes_forward = (this_addr < other_addr);
+
+      if (v1_speed_squared > g_fp_error_epsilon) {
+        // CASE 2: Both moving with same velocity - separate along/opposite velocity direction
+        if (g_pParser && g_pParser->verbose) {
+          printf("[ELASTIC]   CASE 2: Same velocity, moving (v²=%.3f) %s goes %s\n",
+                 v1_speed_squared, GetName(), this_goes_forward ? "forward" : "backward");
+        }
+
+        double v1_angle = atan2(vel1.fY, vel1.fX);
+        double separation_angle = this_goes_forward ? v1_angle : (v1_angle + PI);
+
+        CTraj separation_vec(separation_distance, separation_angle);
+        CCoord new_pos = Pos + separation_vec.ConvertToCoord();
+        Pos = new_pos;
+
+        if (g_pParser && g_pParser->verbose) {
+          printf("[ELASTIC]   After: separation=%.1f@%.1f° pos=(%.1f,%.1f)\n",
+                 separation_distance, separation_angle * 180.0 / PI, Pos.fX, Pos.fY);
+        }
+      } else {
+        // CASE 3: Both stationary at same position - random separation
+        if (g_pParser && g_pParser->verbose) {
+          printf("[ELASTIC]   CASE 3: Both stationary, %s goes %s\n",
+                 GetName(), this_goes_forward ? "forward" : "backward");
+        }
+
+        // Use ship addresses to generate deterministic random angle
+        uintptr_t addr_sum = this_addr + other_addr;
+        double random_angle = -PI + (addr_sum % 10000) * PI2 / 10000.0;
+
+        // Ship with lower address gets angle θ, higher address gets θ + π
+        if (!this_goes_forward) {
+          random_angle += PI;  // Opposite direction
+        }
+
+        CTraj separation_vec(separation_distance, random_angle);
+        CCoord new_pos = Pos + separation_vec.ConvertToCoord();
+        Pos = new_pos;
+
+        if (g_pParser && g_pParser->verbose) {
+          printf("[ELASTIC]   After: separation=%.1f@%.1f° pos=(%.1f,%.1f)\n",
+                 separation_distance, random_angle * 180.0 / PI, Pos.fX, Pos.fY);
+        }
+      }
+
+      // Velocities remain unchanged in degenerate same-velocity cases
+    }
+    return;
+  }
+
+  // Normal case: ships at different positions
+  if (g_pParser && g_pParser->verbose) {
+    double dist = sqrt(dx_squared);
+    printf("[ELASTIC] %s <-> %s: NORMAL (dist=%.3f)\n",
+           GetName(), pOtherShip->GetName(), dist);
+    printf("[ELASTIC]   Before: pos1=(%.1f,%.1f) vel1=(%.2f,%.2f) m1=%.1f\n",
+           pos1.fX, pos1.fY, vel1.fX, vel1.fY, m1);
+    printf("[ELASTIC]   Before: pos2=(%.1f,%.1f) vel2=(%.2f,%.2f) m2=%.1f\n",
+           pos2.fX, pos2.fY, vel2.fX, vel2.fY, m2);
+  }
+
+  // Calculate scalar factor for this ship: (2*m2 / (m1+m2)) * dot / dx²
+  double factor1 = (2.0 * m2) / (m1 + m2) * (dot_dv_dx / dx_squared);
+
+  // Calculate new velocity for this ship: v1' = v1 - factor1 * (x1-x2)
+  CCoord new_vel1;
+  new_vel1.fX = vel1.fX - factor1 * dx.fX;
+  new_vel1.fY = vel1.fY - factor1 * dx.fY;
+
+  // Convert to polar and apply to this ship
+  CTraj new_vel1_polar(new_vel1);
+
+  // Apply speed clamp (game constraint)
+  if (new_vel1_polar.rho > g_game_max_speed) {
+    new_vel1_polar.rho = g_game_max_speed;
+  }
+
+  Vel = new_vel1_polar;
+
+  // Separate the ships to prevent overlap
+  // Move this ship away from the other ship
+  double separation_angle = pos2.AngleTo(pos1);  // Direction from ship2 to ship1
+  double separation_distance = GetSize() + pOtherShip->GetSize() + g_ship_collision_separation_clearance;
+  CTraj separation_vec(separation_distance, separation_angle);
+  CCoord old_pos = Pos;
+  Pos = pos2;  // Start from other ship's position
+  Pos += separation_vec.ConvertToCoord();  // Move away
+
+  if (g_pParser && g_pParser->verbose) {
+    printf("[ELASTIC]   After: vel1'=(%.2f,%.2f) speed=%.2f factor=%.4f\n",
+           Vel.ConvertToCoord().fX, Vel.ConvertToCoord().fY, Vel.rho, factor1);
+    printf("[ELASTIC]   After: pos moved (%.1f,%.1f)->(%.1f,%.1f) separation=%.1f@%.1f°\n",
+           old_pos.fX, old_pos.fY, Pos.fX, Pos.fY,
+           separation_distance, separation_angle * 180.0 / PI);
   }
 }

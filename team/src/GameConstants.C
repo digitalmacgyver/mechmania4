@@ -28,6 +28,7 @@ double g_ship_default_cargo_capacity =
     g_ship_total_stat_capacity - g_ship_default_fuel_capacity;
 double g_ship_default_shield_capacity = 8000.0;
 double g_ship_default_shield_amount = 30.0;
+double g_ship_collision_separation_clearance = 3.0;
 
 // Combat economics and maneuvering
 double g_laser_range_per_fuel_unit = 50.0;

@@ -92,6 +92,13 @@ double MyClass::PublicMethodNew(/* params */) {
    - Legacy: Multiplies asteroid momentum by 2.0, causing excessive recoil (violates conservation of momentum)
    - New: Correct Newtonian conservation of momentum (1.0x multiplier)
 
+6. **Ship-Ship Collision Physics (Ship.C HandleCollision() method)**
+   - Feature: `physics`
+   - Location: Inline in `HandleCollision()` method, ship collision handling section
+   - Private method: `HandleElasticShipCollision()` implements new physics
+   - Legacy: Non-physical separation impulse that creates momentum from nothing (both ships gain velocity)
+   - New: Proper 2D elastic collision using standard formulas that conserve momentum and kinetic energy
+
 ### When to Use This Pattern
 
 Use the simple method dispatch pattern when:

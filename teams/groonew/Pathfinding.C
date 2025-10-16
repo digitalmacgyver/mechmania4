@@ -21,6 +21,12 @@ namespace Pathfinding {
   // Internal namespace for implementation details
   namespace {
 
+    inline double NormalizeAngle(double angle) {
+      while (angle > PI) angle -= PI2;
+      while (angle < -PI) angle += PI2;
+      return angle;
+    }
+
     // Represents a failure case for pathfinding
     const FuelTraj FAILURE_TRAJ = FuelTraj(false, O_SHIELD, 0.0, -1.0, 0.0, 0, 0.0);
 
@@ -70,6 +76,10 @@ namespace Pathfinding {
       calculator->ResetOrders();
 
       // 2. Calculate Cost (Use authoritative game logic)
+      if (kind == O_TURN) {
+        magnitude = NormalizeAngle(magnitude);
+      }
+
       double cost = calculator->SetOrder(kind, magnitude);
 
       return cost;
@@ -403,7 +413,7 @@ namespace Pathfinding {
         // Even through we can thrust forward and backward, prefer to be facing our
         // target so we can shoot it if we want to.
 
-        double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
+        double turn_order_amt = NormalizeAngle(thrust_vec_t1.theta - ship_orient_t0);
 
         double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt, ship->IsDocked());
         unsigned int num_orders = 2;
@@ -449,7 +459,7 @@ namespace Pathfinding {
 
       if (t1_dist_ok && t1_thrust_ok) {
         
-        double turn_order_amt = thrust_vec_t1.theta - ship_orient_t0;
+        double turn_order_amt = NormalizeAngle(thrust_vec_t1.theta - ship_orient_t0);
 
         double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt, ship->IsDocked());
         unsigned int num_orders = 2;
@@ -617,7 +627,10 @@ namespace Pathfinding {
                 // turn).
                 // Add the rotation to bring our orient onto the direction the
                 // first thrust got us on.
-                + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, t_ship_vel_t1.theta - ship_orient_t0, false);
+                + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0,
+                                             O_TURN,
+                                             NormalizeAngle(t_ship_vel_t1.theta - ship_orient_t0),
+                                             false);
                 // Add the acceleration towards the target.
                 + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, fabs(t_intercept_vec_t2.rho - t_ship_vel_t1.rho), false);
               double time_to_intercept = ctx.time;

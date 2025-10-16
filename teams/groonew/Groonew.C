@@ -446,6 +446,10 @@ void Groonew::SolveResourceAssignment(
 
         // Apply the orders and log the decision.
         ApplyOrders(pShip, best_e);
+        last_turn_targets_[pShip] = target;
+      } else {
+        CShip* pShip = agents[i];
+        last_turn_targets_.erase(pShip);
       }
     }
   } else {
@@ -534,6 +538,8 @@ void Groonew::AssignShipOrders() {
 
     // Execute non-contentious goals or prepare for assignment problem.
     if (wants == HOME) {
+      // We're heading home; clear any remembered resource target.
+      last_turn_targets_.erase(pShip);
       if (g_pParser && g_pParser->verbose) {
         printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
       }
@@ -574,9 +580,16 @@ void Groonew::AssignShipOrders() {
           AsteroidKind material =
               static_cast<CAsteroid*>(e.dest)->GetMaterial();
 
+          bool favor_previous_target = false;
+          auto remembered = last_turn_targets_.find(pShip);
+          if (remembered != last_turn_targets_.end() &&
+              remembered->second == e.dest) {
+            favor_previous_target = true;
+          }
+
           if ((wants == POINTS && material == VINYL) ||
               (wants == FUEL && material == URANIUM)) {
-            e.utility = CalculateUtility(pShip, wants, e);
+            e.utility = CalculateUtility(pShip, wants, e, favor_previous_target);
           } else {
             e.utility = 0.0;  // Not the desired material
           }
@@ -585,6 +598,7 @@ void Groonew::AssignShipOrders() {
         }
       }
     } else if (wants == VIOLENCE) {
+      last_turn_targets_.erase(pShip);
       // VIOLENCE mode: Converge on enemy ships/stations
       // We issue orders directly - no need for utility optimization since
       // combat targeting is generally robust against uncoordinated action.
@@ -607,8 +621,15 @@ void Groonew::AssignShipOrders() {
           PathInfo& e = pair.second;
           if (e.dest != NULL && e.dest->GetKind() == ASTEROID) {
             AsteroidKind material = static_cast<CAsteroid*>(e.dest)->GetMaterial();
+            bool favor_previous_target = false;
+            auto remembered = last_turn_targets_.find(pShip);
+            if (remembered != last_turn_targets_.end() &&
+                remembered->second == e.dest) {
+              favor_previous_target = true;
+            }
+
             if (material == URANIUM) {
-              e.utility = CalculateUtility(pShip, wants, e);
+              e.utility = CalculateUtility(pShip, wants, e, favor_previous_target);
             } else {
               e.utility = 0.0;
             }
@@ -1050,7 +1071,8 @@ void Groonew::AssignShipOrders() {
 }
 
 double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
-                                 const PathInfo& e) {
+                                 const PathInfo& e,
+                                 bool favor_previous_target) {
   double utility = 0.0;
 
   double cur_fuel = pShip->GetAmount(S_FUEL);
@@ -1058,15 +1080,16 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
   double max_fuel = pShip->GetCapacity(S_FUEL);
   double max_cargo = pShip->GetCapacity(S_CARGO);
 
-  // For POINTS and FUEL we want to tiebreak the material/time utility so that:
-  // 1. All things being equal we prefer lower fuel consumption.
-  // 2. All things being equal after that we prefer fewer orders
-  // (e.g. more certain plans).
-  //
-  // We approach this with the "big Multiplier" method...
-  // ...
-  // Total utilitiy = Materials - Fuel - Orders
-  double multiplier = 1000.0;
+  // Use a lexicographic-style scoring:
+  //   (1) higher utility/sec (primary)
+  //   (2) lower fuel spent
+  //   (3) reuse prior target when tied
+  //   (4) fewer issued orders
+  // Implemented via large base multipliers.
+  const double multiplier = 1000.0;
+  const double multiplier_sq = multiplier * multiplier;
+  const double multiplier_cubed = multiplier_sq * multiplier;
+  double prior_penalty = favor_previous_target ? 0.0 : 1.0;
 
   if (wants == POINTS) {
     // TODO: This relies on our ships 40 ton cargo hold being big enough to hold
@@ -1086,8 +1109,10 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
     // This should be positive due to min asteroid size of 3, however just in
     // case we wish to preserve utility=0.0 as a sentinel value meaning "issue
     // no orders."
-    utility = utility_per_second * std::pow(multiplier, 2) -
-              fuel_spent * multiplier - num_orders;
+    utility = utility_per_second * multiplier_cubed -
+              fuel_spent * multiplier_sq -
+              prior_penalty * multiplier -
+              num_orders;
     if (utility < 0.0) {
       utility = 0.0;
     }
@@ -1121,8 +1146,10 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
     // our shields when eating fuel.
 
     // Only grant positive utility if we're actually gaining fuel.
-    utility = utility_per_second * std::pow(multiplier, 2) -
-              fuel_spent * multiplier - num_orders;
+    utility = utility_per_second * multiplier_cubed -
+              fuel_spent * multiplier_sq -
+              prior_penalty * multiplier -
+              num_orders;
     if (utility < 0.0) {
       utility = 0.0;
     }

@@ -125,6 +125,8 @@ void CThing::Drift(double dt) {
 }
 
 bool CThing::Collide(CThing* pOthThing, CWorld* pWorld) {
+  extern CParser* g_pParser;
+
   if (pOthThing == NULL) {
     printf("Colliding with NULL!\n");
     return false;  // How did THAT happen!!??
@@ -142,6 +144,24 @@ bool CThing::Collide(CThing* pOthThing, CWorld* pWorld) {
     bIsGettingShot = dAng;
   } else {
     bIsColliding = dAng;
+  }
+
+  // Verbose logging for collision detection
+  if (g_pParser && g_pParser->verbose) {
+    CCoord pos1 = GetPos();
+    CCoord pos2 = pOthThing->GetPos();
+    double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
+                       (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
+    double combined_size = GetSize() + pOthThing->GetSize();
+    double overlap = combined_size - dist;
+
+    CTraj vel1 = GetVelocity();
+    CTraj vel2 = pOthThing->GetVelocity();
+
+    printf("[COLLISION] %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f) <-> %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f): dist=%.3f overlap=%.3f\n",
+           GetName(), pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, GetSize(),
+           pOthThing->GetName(), pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, pOthThing->GetSize(),
+           dist, overlap);
   }
 
   HandleCollision(pOthThing, pWorld);

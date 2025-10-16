@@ -171,19 +171,41 @@ The examples above assume the standard constants defined in `team/src/GameConsta
 
 ## Collisions
 
+The engine models collisions with Newtonian physics. All collision handling follows conservation of momentum and energy principles.
+
 ### Ship-Asteroid Collisions
-- **Small Asteroids (fits in hold):**
-  - Uranium → Added to fuel tank
-  - Vinyl → Added to cargo hold
-  - Asteroid destroyed
-- **Large Asteroids (doesn't fit):**
-  - Ship takes collision damage (relative_velocity*asteroid_mass / 1000)
-  - Asteroid destroyed and either 3 smaller asteroids are created, or the asteroid is reduced to useless space dust if the resulting size would be too small
-  - Both objects bounce apart
+
+#### Small Asteroids (fits in cargo hold)
+- **Collection:** Asteroid absorbed by ship
+  - Uranium → Added to fuel tank (up to capacity)
+  - Vinyl → Added to cargo hold (up to capacity)
+  - Overflow is lost (no jettison on collection)
+- **Physics:** Perfectly inelastic collision
+  - Final velocity = `(m_ship × v_ship + m_asteroid × v_asteroid) / (m_ship + m_asteroid)`
+  - Momentum conserved, kinetic energy lost
+- **Damage:** No shield damage (successful collection)
+- **Result:** Asteroid destroyed (absorbed into ship)
+
+#### Large Asteroids (doesn't fit in cargo hold)
+- **Damage:** Ship takes `(asteroid_mass × relative_speed) / 1000` shield damage
+- **Physics:** Perfectly elastic collision
+  - Both objects bounce according to elastic collision formulas
+  - Momentum and kinetic energy conserved
+  - Each object's velocity changes based on mass ratio
+- **Fragmentation:** Asteroid shatters into 3 equal-mass pieces
+  - Fragments inherit asteroid's post-collision velocity (center of mass)
+  - Plus symmetric spread pattern at 120° intervals
+  - If resulting fragments < 3 tons each, asteroid vaporizes (no fragments)
 
 ### Ship-Ship Collisions
-- **Damage:** Both ships take relative_momentum / 1000 shield damage
-- **Physics:** Elastic collision (both ships bounce)
+- **Damage:** Each ship takes `(other_ship_mass × relative_speed) / 1000` shield damage
+  - Damage based on OTHER ship's mass (not your own)
+  - Heavier ships deal more damage when they hit
+- **Physics:** Perfectly elastic collision
+  - Both ships bounce using 2D elastic collision formulas
+  - Momentum and kinetic energy conserved
+  - Velocity changes depend on mass ratio and impact angle
+- **Result:** Both ships survive (unless shields depleted)
 
 ### Ship-Station Collisions
 
@@ -196,13 +218,47 @@ The examples above assume the standard constants defined in `team/src/GameConsta
 - **Protection:** Immune to damage while docked
 - **Orientation:** You can change your heading while docked (costs no fuel)
 - **Departure:** Thrust to leave station (costs no fuel while still docked)
+- **Physics:** Ship velocity set to zero (inelastic docking)
 
 #### Enemy Station
 - **Same as your station:** THIS MEANS YOU CAN GIVE VINYL TO THE ENEMY STATION!
+- Docking mechanics identical regardless of team affiliation
+- No concept of "locked" stations or combat while docked
 
-### Station-Asteroid Collisions
-- **Damage:** No damage - stations are indestructible to asteroid impacts
-- **Physics:** Asteroid bounces off (perfectly elastic collision)
+### Asteroid-Station Collisions
+- **Damage:** No damage to station (indestructible)
+- **Physics:** Perfectly elastic collision with infinite mass
+  - Asteroid velocity reflects off station surface (specular reflection)
+  - Asteroid speed unchanged, only direction reversed
+  - Station does not move (infinite mass approximation)
+  - Momentum NOT conserved (station has infinite mass)
+  - Kinetic energy IS conserved (asteroid speed constant)
+
+### Asteroid-Laser "Collisions"
+- **Threshold:** Laser must deal ≥1 shield damage to shatter asteroid
+  - Damage = `(laser_virtual_mass × relative_speed) / 1000`
+  - Virtual mass = `30.0 × max(0, beam_length - distance_to_target)`
+- **Physics:** Perfectly inelastic collision with laser energy
+  - Laser treated as virtual object with mass proportional to beam energy
+  - Asteroid absorbs laser momentum
+  - Final velocity = `(m_asteroid × v_asteroid + m_laser × v_laser) / (m_asteroid + m_laser)`
+- **Fragmentation:** If damage ≥1, asteroid shatters into 3 pieces
+  - Fragments inherit post-collision velocity (center of mass)
+  - Plus spread pattern scaled by laser energy
+  - If fragments < 3 tons each, asteroid vaporizes
+
+### Collision Physics Summary
+
+| Collision Type | Physics Model | Momentum | Energy | Fragments |
+|---|---|---|---|---|
+| Ship ↔ Small Asteroid | Perfectly inelastic | Conserved | Lost | No (absorbed) |
+| Ship ↔ Large Asteroid | Perfectly elastic | Conserved | Conserved | Yes (3 pieces) |
+| Ship ↔ Ship | Perfectly elastic | Conserved | Conserved | No |
+| Ship ↔ Own Station | Inelastic docking | Not conserved | Lost | No |
+| Asteroid ↔ Station | Elastic (infinite mass) | Not conserved* | Conserved | No |
+| Asteroid ↔ Laser | Perfectly inelastic | Conserved | Lost | Yes (if damage ≥1) |
+
+\* Momentum not conserved due to infinite station mass; station acts as immovable object.
 
 ## Orders and Actions
 

@@ -92,6 +92,9 @@ class CShip : public CThing {
   void ProcessThrustDriftOld(double thrustamt, double dt);    // Legacy
   void ProcessThrustDriftNew(double thrustamt, double dt);    // Improved
 
+  // Collision physics implementations
+  void HandleElasticShipCollision(CThing* pOtherShip);  // Proper elastic collision
+
   // Helper function used in both SetOrder and Drift. Ship users should use
   // SetOrder() to evaluate the fuel cost of any order.
   struct ThrustCost {

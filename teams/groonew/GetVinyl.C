@@ -10,6 +10,7 @@
 #include "Thing.h"
 #include "World.h"
 #include "ParserModern.h"
+#include "GameConstants.h"
 
 #include <limits>
 
@@ -21,6 +22,12 @@ GetVinyl::GetVinyl() {}
 GetVinyl::~GetVinyl() {}
 
 namespace {
+double NormalizeAngle(double angle) {
+  while (angle > PI) angle -= PI2;
+  while (angle < -PI) angle += PI2;
+  return angle;
+}
+
 struct FacingTargets {
   CStation* station = NULL;
   double station_dist = std::numeric_limits<double>::max();
@@ -480,6 +487,7 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
           // Face opposite of the station for dumping cargo in a second.
           double intercept_angle = pShip->GetPos().AngleTo(athing->GetPos());
           double turn_angle = intercept_angle - pShip->GetOrient();
+          turn_angle = NormalizeAngle(turn_angle);
           emergency_orders.exclusive_order = O_TURN;
           emergency_orders.exclusive_order_amount = turn_angle;
           order_allowed = false;
