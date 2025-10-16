@@ -428,10 +428,21 @@ void CShip::Drift(double dt) {
   // First handle shields
   if (shieldamt > 0.0) {
     fuelcons = SetOrder(O_SHIELD, shieldamt);
+
+    // In new mode, use fuel-limited value; in legacy mode, use original (buggy) behavior
+    double shieldBoost;
+    if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+      // Legacy mode: use original value (allows double-spend bug)
+      shieldBoost = shieldamt;
+    } else {
+      // New mode: use fuel-limited value from SetOrder
+      shieldBoost = GetOrder(O_SHIELD);
+    }
+
     double oldFuel = GetAmount(S_FUEL);
     double newFuel = oldFuel - fuelcons;
     SetAmount(S_FUEL, newFuel);
-    SetAmount(S_SHIELD, GetAmount(S_SHIELD) + shieldamt);
+    SetAmount(S_SHIELD, GetAmount(S_SHIELD) + shieldBoost);
     SetOrder(O_SHIELD, 0.0);  // Shield set, ignore it now
 
     // Check if out of fuel
@@ -445,10 +456,19 @@ void CShip::Drift(double dt) {
   omega = 0.0;
   if (turnamt != 0.0) {
     fuelcons = SetOrder(O_TURN, turnamt);
+
+    // In new mode, use fuel-limited value; in legacy mode, use original (buggy) behavior
+    if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+      // Legacy mode: use original value (allows double-spend bug)
+      omega = turnamt;
+    } else {
+      // New mode: use fuel-limited value from SetOrder
+      omega = GetOrder(O_TURN);
+    }
+
     double oldFuel = GetAmount(S_FUEL);
     double newFuel = oldFuel - fuelcons * dt;
     SetAmount(S_FUEL, newFuel);
-    omega = turnamt;
 
     // Check if out of fuel
     if (oldFuel > 0.01 && newFuel <= 0.01) {
