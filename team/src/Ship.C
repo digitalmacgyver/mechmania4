@@ -232,33 +232,69 @@ double CShip::SetOrder(OrderKind ord, double value) {
         return ProcessThrustOrderNew(ord, value);
       }
 
-    case O_TURN:  // "value" is angle, in radians, to turn
+    case O_TURN: {  // "value" is angle, in radians, to turn
       if (value == 0.0) {
         return 0.0;
       }
       adOrders[(unsigned int)O_THRUST] = 0.0;
       adOrders[(unsigned int)O_JETTISON] = 0.0;
 
-      // 1 ton of fuel rotates naked ship full-circle six times
-      fuelcon = fabs(value) * GetMass() /
+      auto normalize_angle = [](double angle) {
+        while (angle > PI) angle -= PI2;
+        while (angle < -PI) angle += PI2;
+        return angle;
+      };
+
+      bool use_velocity_limits = true;
+      if (g_pParser != NULL) {
+        use_velocity_limits = g_pParser->UseNewFeature("velocity-limits");
+      }
+
+      if (!use_velocity_limits) {
+        // Legacy behavior: take the requested angle verbatim.
+        fuelcon = fabs(value) * GetMass() /
+                  (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
+        if (IsDocked() == true) {
+          fuelcon = 0.0;
+        }
+        if (fuelcon > maxfuel) {
+          fuelcon = maxfuel;
+          valtmp =
+              (mass * g_ship_turn_full_rotations_per_fuel * PI2 * fuelcon) /
+              GetMass();
+          if (value <= 0.0) {
+            value = -valtmp;
+          } else {
+            value = valtmp;
+          }
+        }
+        adOrders[(unsigned int)O_TURN] = value;
+        return fuelcon;
+      }
+
+      // New behavior: normalize the requested turn before charging fuel.
+      double normalized_value = normalize_angle(value);
+      fuelcon = fabs(normalized_value) * GetMass() /
                 (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
       if (IsDocked() == true) {
         fuelcon = 0.0;
       }
       if (fuelcon > maxfuel) {
         fuelcon = maxfuel;
-        valtmp =
+        double limited =
             (mass * g_ship_turn_full_rotations_per_fuel * PI2 * fuelcon) /
             GetMass();
-        if (value <= 0.0) {
-          value = -valtmp;
+        if (normalized_value <= 0.0) {
+          normalized_value = -limited;
         } else {
-          value = valtmp;
+          normalized_value = limited;
         }
+        normalized_value = normalize_angle(normalized_value);
       }
 
-      adOrders[(unsigned int)O_TURN] = value;
+      adOrders[(unsigned int)O_TURN] = normalized_value;
       return fuelcon;
+    }
 
     case O_JETTISON: {  // "value" is tonnage: positive for fuel, neg for cargo
       // NOTE: Use SetJettison() and GetJettison() helper functions instead of

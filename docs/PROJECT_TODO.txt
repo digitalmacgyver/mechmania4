@@ -165,6 +165,12 @@ Re-enabled with --legacy-velocity-limits:
     b. Charge an additional fuel penalty equal to the amount of
        thrust this truncation effectively gives to the ship "for free."
 
+  * Turn Clamping - The original game engine allowed any value to the
+    SetOrder for turns, and would charge fuel even though for example
+    turns of: pi/4 and 200*pi + pi/4 both leave the ship with the same
+    orientation. Now we normalize the input requested turn to
+    [-pi,pi].
+
   * Station Departure Thrust - The original engine granted free thrust
     to departing ships only on the first 0.2 second subtick - once
     that time elapsed the ships were no longer docked, and hence
