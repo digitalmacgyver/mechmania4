@@ -86,6 +86,12 @@ double MyClass::PublicMethodNew(/* params */) {
    - New: Calls `SetOrder(O_TURN, turnamt * dt)` for dt-sized turn, fixes premature clamping bug
    - Note: Also affects orient update - legacy uses `orient += omega * dt`, new uses `orient += omega`
 
+5. **Jettison Physics (Ship.C HandleJettison() method)**
+   - Feature: `physics`
+   - Location: Inline in `HandleJettison()` method, momentum calculation section
+   - Legacy: Multiplies asteroid momentum by 2.0, causing excessive recoil (violates conservation of momentum)
+   - New: Correct Newtonian conservation of momentum (1.0x multiplier)
+
 ### When to Use This Pattern
 
 Use the simple method dispatch pattern when:

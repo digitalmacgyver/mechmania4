@@ -74,6 +74,23 @@ GetShip(1)->SetCapacity(S_CARGO, 40.0);  // 40 tons cargo
 GetShip(1)->SetCapacity(S_FUEL, 20.0);   // 20 tons fuel (automatic)
 ```
 
+> **CRITICAL WARNING - SetCapacity() Restrictions:**
+>
+> `SetCapacity()` should **ONLY** be called during the `Init()` method. This is when capacity settings are serialized and sent to the server to configure your ships for the entire game.
+>
+> **What happens if you call SetCapacity() outside Init():**
+> - The call will modify your team's **local copy** of the ship data
+> - The server will **NOT** receive or apply this change
+> - Every turn, the server sends your team a fresh world state that **overwrites** your local changes
+> - **Result:** Your team's view will briefly show the wrong capacities, then revert to the actual values, causing confusing behavior
+>
+> **Why this matters:**
+> - There are no O_ orders (O_THRUST, O_LASER, O_TURN, etc.) that modify ship capacities
+> - After `Init()`, the ONLY way teams influence the game is through O_ orders
+> - Ship capacities are fixed for the entire game after initialization
+>
+> **Correct usage:** Configure capacities once in `Init()`, then use `GetCapacity()` to read them during gameplay.
+
 ### AI Brain Assignment
 
 Ships need a brain (AI controller) to make decisions:

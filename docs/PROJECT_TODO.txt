@@ -194,6 +194,15 @@ Re-enabled with --legacy-asteroid-eat-damage:
     whether the asteroid was "eaten" by the ship. Now the default
     behavior is eaten asteroids deal no damage to the ship.
 
+
+Re-enabled with --legacy-physics:
+
+  * Non-conservation of momentum on jettison - When jettisoning
+    asteroids the simulation "fires" them out the front of the ship at
+    the ships current velocity - however it registered a momentum
+    kickback of twice the jettisoned asteroid. We conserve momentum by
+    default now.
+
 Not re-enableable:
 
   * Create Vinyl With Jettison Bug - you could jettison any amount of
@@ -338,21 +347,6 @@ Why The Guard Fails:
 
 The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks it, the asteroid has already overwritten pThEat to point to Ship B instead of Ship A!
 ================== double yum ===========================
-
-Q. Physics engine: drift is called every 0.2 ticks, it looks to me
-like ship.Drift doesn't clear O_TURN and O_THURST orders when drifing
-and generally does the right stuff in terms of multiplying
-displacement and orientation changes by dt=0.2; however: Does the code
-in SetJettison do this propertly? Or are we getting ~5x the
-accelerated kick of out Set Jettison as we should?
-
-Q. Check if Ship::AngleToIntercept differs from Groogroo's angle
-turning - it seems like it makes the wrong angle to intercept in that
-it finds the angle you'd need to be at in 1 turn to be flying towards
-the target, but if your velocity isn't zero that won't be quite right.
-
-Q. Can yhou reconfigure ship capacity after start? At any time?  While
-docked? If so, should we add a game mode to cc_claude where you can't?
 
 Q. If station radius is 30, or in general if ship+station radius > x,
 how does launching handle not immediately collidign / redocking?

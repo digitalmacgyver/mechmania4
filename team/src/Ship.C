@@ -853,10 +853,19 @@ void CShip::HandleJettison() {
   pAst->SetVel(AstVel);
   pWld->AddThingToWorld(pAst);
 
-  // Set your own stats to accomodate
+  // Set your own stats to accommodate
   double dnewmass = GetMass() - dMass;
   MovVec = GetMomentum();
-  MovVec -= (pAst->GetMomentum() * 2.0);  // Give it some extra Kick
+
+  // Use feature flag to control momentum conservation
+  if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+    // Legacy mode: 2x recoil (buggy but historical)
+    MovVec -= (pAst->GetMomentum() * 2.0);
+  } else {
+    // New mode: Correct conservation of momentum
+    MovVec -= pAst->GetMomentum();
+  }
+
   MovVec = MovVec / dnewmass;
 
   Vel = MovVec;

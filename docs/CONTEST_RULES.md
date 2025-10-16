@@ -34,6 +34,15 @@ At initialization, each team can allocate their ships' capacity between fuel and
 - **Maximum Speed:** 30 units/second
 - **Size:** A radius 12 circle
 
+### Ship Initialization Timing
+
+**IMPORTANT:** Ship capacity configuration (fuel/cargo split) must be set during the `Init()` method at game start. This is the ONLY time when capacity changes affect the actual game world.
+
+- **During Init():** `SetCapacity()` calls are serialized and sent to the server, establishing each ship's configuration for the entire game
+- **After Init():** The server sends a fresh world state to teams every turn, which includes all ship capacities
+- **No capacity orders exist:** There are no O_ orders (like O_THRUST, O_LASER, etc.) that can modify ship capacities during gameplay
+- **Result:** Any `SetCapacity()` calls after `Init()` will only modify your team's local view, creating a discrepancy between what your team sees and the actual game state
+
 ### Ship Capabilities
 Ships can perform the following actions each turn:
 1. **Thrust** - Accelerate forward or backward
