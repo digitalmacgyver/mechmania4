@@ -79,7 +79,7 @@ CTraj& CTraj::Rotate(double dtheta) {
   return *this;
 }
 
-double CTraj::Dot(const CTraj& OthTraj) {
+double CTraj::Dot(const CTraj& OthTraj) const {
   double dres = 0, dth;
 
   dth = OthTraj.theta - theta;
@@ -87,7 +87,7 @@ double CTraj::Dot(const CTraj& OthTraj) {
   return dres;
 }
 
-double CTraj::Cross(const CTraj& OthTraj) {
+double CTraj::Cross(const CTraj& OthTraj) const {
   double dres = 0, dth;
 
   dth = OthTraj.theta - theta;

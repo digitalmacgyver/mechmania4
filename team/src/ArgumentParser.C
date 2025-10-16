@@ -21,6 +21,7 @@ void ArgumentParser::InitializeFeatures() {
   // Physics features
   features["collision-detection"] = true;  // New collision detection is default
   features["velocity-limits"] = true;      // New velocity/acceleration limits is default
+  features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
 
   // Announcer features
   features["announcer-velocity-clamping"] = false;  // Disabled by default
@@ -55,6 +56,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     options.add_options("Features")("legacy-collision-detection",
                                     "Use legacy collision detection")(
         "legacy-velocity-limits", "Use legacy velocity and acceleration limits")(
+        "legacy-asteroid-eat-damage", "Ships take damage when eating asteroids (legacy behavior)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -160,6 +162,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-velocity-limits")) {
       features["velocity-limits"] = false;
     }
+    if (result.count("legacy-asteroid-eat-damage")) {
+      features["asteroid-eat-damage"] = false;
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -184,9 +189,11 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
   if (bundle == "improved-physics") {
     features["collision-detection"] = true;
     features["velocity-limits"] = true;
+    features["asteroid-eat-damage"] = true;
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
+    features["asteroid-eat-damage"] = false;
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

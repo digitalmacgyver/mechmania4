@@ -27,8 +27,8 @@ class CTraj : public CSendable {
   CTraj& FromCoord(const CCoord& OCrd);
   CTraj& Rotate(double dtheta);
 
-  double Dot(const CTraj& OthTraj);
-  double Cross(const CTraj& OthTraj);
+  double Dot(const CTraj& OthTraj) const;
+  double Cross(const CTraj& OthTraj) const;
 
   // Operators
   CTraj& operator=(const CTraj& OthTraj);

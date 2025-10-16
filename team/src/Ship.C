@@ -658,39 +658,60 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
     return;
   }
 
-  double damage = (RelativeMomentum(*pOthThing).rho) / g_laser_damage_mass_divisor;
-  dshield -= damage;
-  SetAmount(S_SHIELD, dshield);
-
-  // Announce collision even if ship survives
-  if (pWorld && damage > 0.1) {  // Only announce significant collisions
-    char msg[256];
-    const char *targetName = "unknown";
-    if (pOthThing->GetKind() == SHIP) {
-      targetName = pOthThing->GetName();
-    } else if (pOthThing->GetKind() == ASTEROID) {
-      targetName = "asteroid";
-    }
-    snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
-             GetName(), targetName, damage);
-    pWorld->AddAnnouncerMessage(msg);
+  // Check if this is an asteroid that fits (can be "eaten")
+  bool is_eatable_asteroid = false;
+  if (OthKind == ASTEROID) {
+    is_eatable_asteroid = AsteroidFits((CAsteroid *)pOthThing);
   }
-  if (dshield < 0.0) {
-    const char *causeType = "unknown";
-    if (pOthThing->GetKind() == SHIP) {
-      causeType = "ship collision";
-    } else if (pOthThing->GetKind() == ASTEROID) {
-      causeType = "asteroid collision";
+
+  // Determine if we should apply collision damage
+  bool apply_damage = true;
+  if (is_eatable_asteroid) {
+    // Use feature flag to determine behavior
+    // New behavior (asteroid-eat-damage = true): no damage when eating
+    // Legacy behavior (asteroid-eat-damage = false): damage even when eating
+    if (g_pParser && g_pParser->UseNewFeature("asteroid-eat-damage")) {
+      apply_damage = false;  // New: no damage when eating asteroids that fit
+    } else {
+      apply_damage = true;   // Legacy: damage even when eating
     }
-    printf("[DESTROYED] Ship %s (%s) destroyed by %s\n", GetName(),
-           GetTeam() ? GetTeam()->GetName() : "Unknown", causeType);
-    if (pWorld) {
+  }
+
+  if (apply_damage) {
+    double damage = (RelativeMomentum(*pOthThing).rho) / g_laser_damage_mass_divisor;
+    dshield -= damage;
+    SetAmount(S_SHIELD, dshield);
+
+    // Announce collision even if ship survives
+    if (pWorld && damage > 0.1) {  // Only announce significant collisions
       char msg[256];
-      const char *shortCause = (pOthThing->GetKind() == SHIP) ? "ship" : "asteroid";
-      snprintf(msg, sizeof(msg), "%s destroyed by %s", GetName(), shortCause);
+      const char *targetName = "unknown";
+      if (pOthThing->GetKind() == SHIP) {
+        targetName = pOthThing->GetName();
+      } else if (pOthThing->GetKind() == ASTEROID) {
+        targetName = "asteroid";
+      }
+      snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
+               GetName(), targetName, damage);
       pWorld->AddAnnouncerMessage(msg);
     }
-    KillThing();
+    if (dshield < 0.0) {
+      const char *causeType = "unknown";
+      if (pOthThing->GetKind() == SHIP) {
+        causeType = "ship collision";
+      } else if (pOthThing->GetKind() == ASTEROID) {
+        causeType = "asteroid collision";
+      }
+      printf("[DESTROYED] Ship %s (%s) destroyed by %s\n", GetName(),
+             GetTeam() ? GetTeam()->GetName() : "Unknown", causeType);
+      if (pWorld) {
+        char msg[256];
+        const char *shortCause = (pOthThing->GetKind() == SHIP) ? "ship" : "asteroid";
+        snprintf(msg, sizeof(msg), "%s destroyed by %s", GetName(), shortCause);
+        pWorld->AddAnnouncerMessage(msg);
+      }
+      KillThing();
+    }
   }
 
   if (OthKind == ASTEROID) {

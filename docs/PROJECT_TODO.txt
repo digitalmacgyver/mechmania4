@@ -125,10 +125,10 @@ is_docked and fuel costs while docked.
 Contest results:
 
 Game 1-5 as team #2:
-1: 80  | 120
-2: 120 | 80
-3: 160 | 160
-4: 80  | 160
+1: 80  | 120 | Win by ~93
+2: 120 | 80 | Win by 160
+3: 160 | 160 | Win by 120
+4: 80  | 160 | Win by ~55
 5: 160 | 97.777 (tie some vinyl destroyed)
 
 Game 6-10 as team #1:
@@ -210,6 +210,8 @@ Lasers are modeled as colliding masses for damage purposes.
 
 
 * Game fix of collision eat bug - colliding with an asteroid you can eat shouldn't cause any shield damage (but it does). (Add this to our flagged behavior under a category of behavior fixes, as this isn't strictly a physics fix)
+  TODO: QA this with no-op and a single groonew team member - should be able to observe things correctly
+
 
 ?!?!?! Concurrency / race double eating behaviors ?!?!?!??!
 
