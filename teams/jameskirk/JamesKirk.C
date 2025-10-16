@@ -2,14 +2,24 @@
  * Combat-focused team demonstrating engine exploits
  * MechMania IV: The Vinyl Frontier
  *
+ * ╔═══════════════════════════════════════════════════════════════════════╗
+ * ║  CRITICAL: THIS EXPLOIT ONLY WORKS WITH --legacy-laser-exploit FLAG  ║
+ * ║                    OR --legacy-mode FLAG                              ║
+ * ║                                                                       ║
+ * ║  Run with: ./mm4serv --legacy-laser-exploit                          ║
+ * ║         OR ./mm4serv --legacy-mode                                   ║
+ * ║                                                                       ║
+ * ║  Without these flags, the modern engine patches the TOCTOU           ║
+ * ║  vulnerability and this exploit will NOT work.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════╝
+ *
  * PURPOSE: This team demonstrates various exploits that existed in the
  * original MechMania IV codebase. These exploits show interesting
  * vulnerabilities in the game engine that teams could have discovered.
  *
- * NOTE: The game may need to be run with --legacy flag for exploits to work.
  * In the current implementation, only the laser power exploit is active,
- * which allows firing extremely high-powered lasers (2000 miles) while only
- * paying the fuel cost of the maximum validated laser (512 miles).
+ * which allows firing extremely high-powered lasers (9999 miles) while only
+ * paying the fuel cost of the maximum validated laser (~512 miles for 10 fuel).
  *
  * The exploit works by directly manipulating the orders array after the
  * engine has already read the laser value but before it validates it,
@@ -407,10 +417,28 @@ void Shooter::Decide() {
       strncat(pmyTeam->MsgText, shipmsg, maxTextLen - strlen(pmyTeam->MsgText) - 1);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
     // KOBAYASHI MARU EXPLOIT: Bypass SetOrder validation via direct array manipulation
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ⚠️  CRITICAL: ONLY WORKS WITH --legacy-laser-exploit OR --legacy-mode FLAG
+    //
     // This exploits the TOCTOU vulnerability in World::LaserModel()
     // The server reads GetOrder(O_LASER) before calling SetOrder(O_LASER) to validate
     // We set the raw array value to X, fire massive laser, but only pay for validated amount
+    //
+    // Attack sequence:
+    //   1. Set adOrders[O_LASER] = 9999 directly (bypassing SetOrder validation)
+    //   2. Server calls GetOrder(O_LASER) → reads 9999 from raw array
+    //   3. Server fires 9999-mile laser dealing massive damage
+    //   4. Server calls SetOrder(O_LASER, 9999) → caps to ~512 based on fuel
+    //   5. We only pay ~10 fuel but dealt 20x damage!
+    //
+    // Modern engine (without legacy flags) validates FIRST:
+    //   1. Server calls SetOrder(O_LASER, requested) → caps to fuel available
+    //   2. Server reads validated value back from GetOrder(O_LASER)
+    //   3. Server fires laser with validated power only
+    //
     double* orders = KobayashiMaru::GetOrdersArray(pShip);
     orders[O_LASER] = 9999.0;  // Exploit: massive laser power (9999 miles!)
 

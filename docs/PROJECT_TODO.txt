@@ -178,6 +178,13 @@ Re-enabled with --legacy-velocity-limits:
     order at each subtick in the game, which caused these orders to be
     artificually clamped in very low fuel conditions.
 
+Re-enabled with --legacy-asteroid-eat-damage:
+
+  * Eatable Asteroid Collision Handling - The original simulation dealt
+    damage to the ship when colliding with an asteroid regardless of
+    whether the asteroid was "eaten" by the ship. Now the default
+    behavior is eaten asteroids deal no damage to the ship.
+
 Re-enabled with --legacy-collision-detection:
 
   * Collision Detection - Proper minimal time to intercept
@@ -187,13 +194,19 @@ Re-enabled with --legacy-collision-detection:
     approach is was not robust and would miss glancing collisions from
     oblique angles.
 
-Re-enabled with --legacy-asteroid-eat-damage:
+Re-enabled with --legacy-laser-exploit:
 
-  * Eatable Asteroid Collision Handling - The original simulation dealt
-    damage to the ship when colliding with an asteroid regardless of
-    whether the asteroid was "eaten" by the ship. Now the default
-    behavior is eaten asteroids deal no damage to the ship.
-
+  * Laser Power Determined Exclusively by Order Magnitude - This
+    presented a mundane fuel tracking error where a laser order would
+    always operate on the requested order amount, not on available
+    fuel, and since shields and some portion of turn and thrust orders
+    are processed before lasers this could generate slight errors in
+    low fuel conditions. However, it also presented the opportunity
+    for a substantial exploit where a clever attacker could make a
+    derived class from Ship and use it to set arbitrarily large laser
+    orders and one shot anything. This is demonstrated in the
+    jameskirk/ team, and can only be seen when the exploit is enabled
+    via the flag.
 
 Re-enabled with --legacy-physics:
 

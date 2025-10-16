@@ -53,8 +53,9 @@ static const bool DEBUG_MODE = false;
 //////////////////////////////////////////
 // Groonew class implementation
 
-Groonew::Groonew() : calculator_ship(NULL), mb(NULL) {
+Groonew::Groonew() : calculator_ship(NULL), mb(NULL), ramming_speed(false) {
   // Constructor - initialize member pointers to NULL
+  // ramming_speed defaults to true for endgame ramming tactics
 }
 
 Groonew::~Groonew() {
@@ -885,8 +886,52 @@ void Groonew::AssignShipOrders() {
             }
           }
         } else {
-          // Phase-based ship-to-ship combat
-          const double SHOOTING_DISTANCE = 160.0;
+          // Ship-to-ship combat: Choose between ramming or shooting
+
+          // RAMMING SPEED MODE: When enabled and enemy base has no vinyl,
+          // ram enemy ships instead of shooting them
+          if (ramming_speed && enemy_base_vinyl <= g_fp_error_epsilon) {
+            // === RAMMING SPEED TACTICS ===
+            // Strategy: Use shields as a battering ram, maintain shields >= 13 until t >= 280
+
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ [RAMMING SPEED] Engaging '%s' for collision attack\n",
+                     best_target->GetName());
+            }
+
+            // Shield management: Keep shields high until very endgame
+            double current_shields = pShip->GetAmount(S_SHIELD);
+            double shield_target = (pmyWorld->GetGameTime() >= 280.0) ? 0.0 : 13.0;
+
+            if (current_shields < shield_target && cur_fuel > 1.0) {
+              // Recharge shields to maintain ramming protection
+              double shield_boost = std::min(shield_target - current_shields, cur_fuel);
+              if (g_pParser && g_pParser->verbose) {
+                printf("\t→ [RAMMING SPEED] Boosting shields %.1f->%.1f (target=%.1f)\n",
+                       current_shields, current_shields + shield_boost, shield_target);
+              }
+              pShip->SetOrder(O_SHIELD, shield_boost);
+            }
+
+            // Navigation: Just head straight for the enemy ship using MagicBag pathfinding
+            // No fancy shooting logic - we WANT to collide!
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ [RAMMING SPEED] Ramming course to '%s' (dist=%.1f)\n",
+                     best_target->GetName(), pShip->GetPos().DistTo(best_target->GetPos()));
+              printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\tshields=%.1f\n",
+                     best_path.fueltraj.time_to_intercept,
+                     (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                     : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
+                     best_path.fueltraj.order_mag, current_shields);
+            }
+
+            // Use MagicBag pathfinding to ram the enemy
+            pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
+
+          } else {
+            // === STANDARD SHOOTING TACTICS ===
+            // Phase-based ship-to-ship combat
+            const double SHOOTING_DISTANCE = 160.0;
 
           // Scan for NON-DOCKED enemy ships within shooting distance
           // Re-evaluated every turn - no mode locking
@@ -1054,6 +1099,7 @@ void Groonew::AssignShipOrders() {
               }
             }
           }
+          }  // End of ramming_speed vs shooting tactics
         }
       } else if (g_pParser && g_pParser->verbose) {
         printf("t=%.1f\t%s [VIOLENCE]:\n", pmyWorld->GetGameTime(), pShip->GetName());

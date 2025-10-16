@@ -19,13 +19,17 @@ The team currently demonstrates one primary exploit:
 
 ## Running the Team
 
-**Important**: This team may require the `--legacy` flag to function properly with exploits enabled:
+**CRITICAL REQUIREMENT**: This team's exploits ONLY work with the legacy laser exploit flag enabled:
 
 ```bash
-./mm4serv --legacy
+# Option 1: Enable only the laser exploit
+./mm4serv --legacy-laser-exploit
+
+# Option 2: Enable all legacy features (includes laser exploit)
+./mm4serv --legacy-mode
 ```
 
-Without the legacy flag, modern engine protections may prevent the exploits from working.
+**Without one of these flags, the exploits will NOT work.** The modern engine (default behavior) has patched the TOCTOU vulnerability. The laser exploit validates laser power BEFORE firing in the new mode, preventing the KobayashiMaru attack from working.
 
 ## Team Behavior
 

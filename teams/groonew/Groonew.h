@@ -41,7 +41,11 @@ class Groonew : public CTeam {
   double uranium_left;  // Total uranium in world
   double vinyl_left;    // Total vinyl in world
 
-    // Scratchpad ship used for accurate fuel simulations.
+  // Combat mode flag: when true, ships will ram enemy ships instead of shooting
+  // Effective when enemy station has 0 vinyl (endgame VIOLENCE mode)
+  bool ramming_speed;
+
+  // Scratchpad ship used for accurate fuel simulations.
   // Initialized once and reused throughout the game.
   CShip* calculator_ship;
 

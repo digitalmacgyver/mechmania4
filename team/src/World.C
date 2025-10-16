@@ -9,6 +9,7 @@
 
 #include <ctime>
 
+#include "ArgumentParser.h"
 #include "Asteroid.h"
 #include "GameConstants.h"
 #include "Ship.h"
@@ -156,30 +157,12 @@ unsigned int CWorld::PhysicsModel(double dt) {
 }
 
 void CWorld::LaserModel() {
-  // TODO: SECURITY VULNERABILITY - Time-of-check to time-of-use (TOCTOU) bug
-  // This function uses GetOrder(O_LASER) to determine laser power/damage BEFORE
-  // calling SetOrder(O_LASER) to validate and cap the value. A malicious client
-  // can bypass SetOrder() validation by directly manipulating the adOrders array
-  // (e.g., via KobayashiMaru exploit using C-style casts to access protected members).
-  // The exploit allows firing a massive laser while only paying fuel for the capped value.
+  // LASER PROCESSING - OPTIONAL TOCTOU VULNERABILITY
   //
-  // Attack scenario:
-  //   1. Client sets adOrders[O_LASER] = 999999 (bypassing SetOrder validation)
-  //   2. Server reads raw value via GetOrder() and fires 999999-unit laser
-  //   3. Server calls SetOrder() which caps to fuel available (~500 for 10 fuel)
-  //   4. Client gets 20x damage for same fuel cost
-  //
-  // Fix would be: Call SetOrder() FIRST to validate/cap, THEN use GetOrder() for damage.
-  // However, this is preserved as a historical 1998-era vulnerability for educational purposes.
+  // By default, laser power is validated BEFORE firing. When --legacy-laser-exploit
+  // or --legacy-mode flags are set, the original 1998 vulnerability is re-enabled.
 
-  // TODO: Accuracy of fuel consumption. In our game loop effectively this
-  // happens:
-  // 1. Shileds order is processed.
-  // 2. The first physics step is done.
-  // 3. The laser order is processed - using GetOrder to determine magnitude. In
-  //    addition to the exploit above, this can also cause us to spend more fuel
-  //    than we have - the fix to both is to make LaserModel respect the
-  //    SetOrder guardrails.
+  extern ArgumentParser* g_pParser;
 
   unsigned int nteam, nship;
   CTeam* pTeam;
@@ -220,13 +203,49 @@ void CWorld::LaserModel() {
       if (pShip == NULL) {
         continue;
       }
-      // TODO: VULNERABILITY - Reading raw client data before validation
-      // This GetOrder() returns the unvalidated adOrders[O_LASER] value that
-      // the client sent. A malicious client can set this to any value by
-      // directly manipulating the array, bypassing SetOrder() checks.
-      dLasPwr = pShip->GetOrder(O_LASER);
-      if (dLasPwr <= 0.0) {
-        continue;
+
+      // Check for legacy exploit mode
+      bool legacy_exploit = (g_pParser && g_pParser->UseNewFeature("laser-exploit"));
+
+      if (legacy_exploit) {
+        // LEGACY MODE: TOCTOU VULNERABILITY ENABLED
+        // Reading raw client data BEFORE validation (exploitable)
+        // This GetOrder() returns the unvalidated adOrders[O_LASER] value.
+        // A malicious client can set this to any value by directly manipulating
+        // the array, bypassing SetOrder() checks.
+        //
+        // Attack scenario:
+        //   1. Client sets adOrders[O_LASER] = 999999 (bypassing SetOrder validation)
+        //   2. Server reads raw value here and fires 999999-unit laser
+        //   3. Server calls SetOrder() later which caps to fuel available (~500 for 10 fuel)
+        //   4. Client gets 20x damage for same fuel cost
+        dLasPwr = pShip->GetOrder(O_LASER);
+        if (dLasPwr <= 0.0) {
+          continue;
+        }
+      } else {
+        // NEW MODE: VULNERABILITY PATCHED
+        // Validate and cap laser power BEFORE using it for damage
+        double oldFuel = pShip->GetAmount(S_FUEL);
+        double requested_power = pShip->GetOrder(O_LASER);
+        if (requested_power <= 0.0) {
+          continue;
+        }
+
+        // Call SetOrder to validate/cap the power based on available fuel
+        double fuel_cost = pShip->SetOrder(O_LASER, requested_power);
+
+        // Use the VALIDATED power (read it back after SetOrder clamped it)
+        dLasPwr = pShip->GetOrder(O_LASER);
+
+        // Deduct fuel immediately
+        pShip->SetAmount(S_FUEL, oldFuel - fuel_cost);
+
+        // Check if out of fuel
+        if (oldFuel > 0.01 && (oldFuel - fuel_cost) <= 0.01) {
+          printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
+                 pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+        }
       }
 
       // Compute the nominal end-of-beam position from shooter
@@ -286,21 +305,24 @@ void CWorld::LaserModel() {
         pTarget->Collide(&LasThing, this);
       }
 
-      double oldFuel = pShip->GetAmount(S_FUEL);
-      dfuel = oldFuel;
-      // TODO: VULNERABILITY - Validation happens AFTER laser was already fired
-      // SetOrder() validates and caps the laser power based on fuel available,
-      // but the laser beam was already computed and fired using the raw dLasPwr
-      // value above. Client only pays for the validated amount, not what they used.
-      // This should be called BEFORE using dLasPwr for damage calculations.
-      dfuel -= pShip->SetOrder(O_LASER, dLasPwr);
-      pShip->SetAmount(S_FUEL, dfuel);
+      // LEGACY MODE: Deduct fuel AFTER firing (TOCTOU vulnerability)
+      if (legacy_exploit) {
+        double oldFuel = pShip->GetAmount(S_FUEL);
+        dfuel = oldFuel;
+        // VULNERABILITY: Validation happens AFTER laser was already fired
+        // SetOrder() validates and caps the laser power based on fuel available,
+        // but the laser beam was already computed and fired using the raw dLasPwr
+        // value above. Client only pays for the validated amount, not what they used.
+        dfuel -= pShip->SetOrder(O_LASER, dLasPwr);
+        pShip->SetAmount(S_FUEL, dfuel);
 
-      // Check if out of fuel
-      if (oldFuel > 0.01 && dfuel <= 0.01) {
-        printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
-               pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+        // Check if out of fuel
+        if (oldFuel > 0.01 && dfuel <= 0.01) {
+          printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
+                 pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+        }
       }
+      // NEW MODE: Fuel already deducted before firing (lines 228-247)
     }
   }
 

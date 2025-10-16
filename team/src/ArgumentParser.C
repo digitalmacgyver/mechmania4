@@ -24,6 +24,9 @@ void ArgumentParser::InitializeFeatures() {
   features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
   features["physics"] = true;              // New: correct momentum conservation in jettison
 
+  // Security features
+  features["laser-exploit"] = false;       // New: TOCTOU vulnerability patched (validate before firing)
+
   // Announcer features
   features["announcer-velocity-clamping"] = false;  // Disabled by default
 
@@ -59,6 +62,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-velocity-limits", "Use legacy velocity and acceleration limits")(
         "legacy-asteroid-eat-damage", "Ships take damage when eating asteroids (legacy behavior)")(
         "legacy-physics", "Use legacy jettison physics (2x recoil)")(
+        "legacy-laser-exploit", "Enable TOCTOU laser exploit (fire before validation)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -170,6 +174,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-physics")) {
       features["physics"] = false;
     }
+    if (result.count("legacy-laser-exploit")) {
+      features["laser-exploit"] = true;  // Enable exploit (true = exploit enabled)
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -196,11 +203,13 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["velocity-limits"] = true;
     features["asteroid-eat-damage"] = true;
     features["physics"] = true;
+    features["laser-exploit"] = false;  // Patch exploit
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
     features["asteroid-eat-damage"] = false;
     features["physics"] = false;
+    features["laser-exploit"] = true;   // Enable exploit for legacy mode
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

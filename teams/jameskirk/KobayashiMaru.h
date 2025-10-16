@@ -3,6 +3,17 @@
  * Shows how teams could have exploited the engine's architecture
  * in the original MechMania IV framework (circa 1998)
  *
+ * ╔═══════════════════════════════════════════════════════════════════════╗
+ * ║  CRITICAL: THIS EXPLOIT ONLY WORKS WITH --legacy-laser-exploit FLAG  ║
+ * ║                    OR --legacy-mode FLAG                              ║
+ * ║                                                                       ║
+ * ║  Run with: ./mm4serv --legacy-laser-exploit                          ║
+ * ║         OR ./mm4serv --legacy-mode                                   ║
+ * ║                                                                       ║
+ * ║  Without these flags, the modern engine patches the TOCTOU           ║
+ * ║  vulnerability and this exploit will NOT work.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════╝
+ *
  * PURPOSE: Demonstrates the laser power exploit by exposing protected
  * members of CShip through inheritance and C-style casting.
  * This allows direct manipulation of the orders array to bypass
