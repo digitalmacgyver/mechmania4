@@ -193,6 +193,17 @@ add_executable(mm4team_jameskirk
 target_link_libraries(mm4team_jameskirk mm4_common pthread)
 target_include_directories(mm4team_jameskirk PRIVATE teams/jameskirk)
 
+# Low Thrust test team executable (demonstrates launch re-docking bug)
+add_executable(mm4team_lowthrust
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/test_lowthrust/LowThrust.C
+)
+target_link_libraries(mm4team_lowthrust mm4_common pthread)
+target_include_directories(mm4team_lowthrust PRIVATE teams/test_lowthrust)
+
 # Observer executable (only if graphics enabled)
 if(BUILD_WITH_GRAPHICS)
     if(USE_SDL2)

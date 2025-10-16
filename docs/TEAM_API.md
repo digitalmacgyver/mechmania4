@@ -153,6 +153,34 @@ pShip->SetOrder(O_SHIELD, 5.0);
 pShip->SetJettison(VINYL, 3.0);
 ```
 
+### Launch from Station (Undocking)
+
+When a ship issues `O_THRUST` while docked at a station, it will **automatically undock** and be **teleported** to a safe launch position before physics begins:
+
+**Launch Distance:**
+- **Distance from station**: `Station_Size + Ship_Size + (Ship_Size / 2)`
+- With default sizes (Station=30, Ship=12): **48 units from station center**
+- This ensures the ship is beyond collision range (30+12=42 units)
+
+**Launch Direction:**
+- **Forward thrust (`O_THRUST > 0`)**: Ship placed **in front** (along ship's orientation)
+- **Reverse thrust (`O_THRUST < 0`)**: Ship placed **behind** (opposite to orientation)
+
+**Example:**
+```cpp
+// Ship docked at station (256, 256) with orientation 0° (pointing east)
+
+// Forward launch - ship placed to the east
+pShip->SetOrder(O_THRUST, 10.0);
+// Result: Ship teleports to (256+48, 256) = (304, 256)
+
+// Reverse launch - ship placed to the west
+pShip->SetOrder(O_THRUST, -10.0);
+// Result: Ship teleports to (256-48, 256) = (208, 256)
+```
+
+> **Important:** The launch position is calculated along the line defined by the ship's **current orientation** at the moment of undocking. Ships always face a specific direction (orient angle in radians), and the launch teleport moves them 48 units along (or opposite to) that direction vector from the station center.
+
 ### Fuel Costs
 
 Each order returns a **fuel estimate**:

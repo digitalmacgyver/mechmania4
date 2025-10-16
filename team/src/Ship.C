@@ -668,8 +668,15 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   ThingKind OthKind = pOthThing->GetKind();
 
   if (OthKind == STATION) {
+    double old_dDockDist = dDockDist;
     dDockDist = Pos.DistTo(pOthThing->GetPos());
     bIsColliding = g_no_damage_sentinel;
+
+    // Verbose logging for docking/re-docking
+    if (g_pParser && g_pParser->verbose) {
+      printf("[RE-DOCK] Ship %s docking at station (distance=%.2f, vel=%.2f, old_dDockDist=%.2f, new_dDockDist=%.2f)\n",
+             GetName(), Pos.DistTo(pOthThing->GetPos()), Vel.rho, old_dDockDist, dDockDist);
+    }
 
     Pos = pOthThing->GetPos();
     Vel = CTraj(0.0, 0.0);
@@ -1303,17 +1310,38 @@ void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
 
   // Special Docking Departure Positional Adjustment.
   if (IsDocked()) {
-    // Put us 5 units further off than we were from the center of the station
-    // when we docked.
-    // 
-    // TODO: Clean this up - we can get stuck in the station if
-    // we're not careful.
-    CTraj VOff(dDockDist + 5.0, orient);
+    // Calculate launch distance based on docking feature flag
+    double launch_distance;
+    CStation* pStation = pmyTeam->GetStation();
+
+    if (g_pParser && !g_pParser->UseNewFeature("docking")) {
+      // Legacy mode: use historical dDockDist + 5.0 (can cause re-docking bug)
+      launch_distance = dDockDist + 5.0;
+    } else {
+      // New mode: fixed safe distance = station_radius + ship_radius + (ship_radius / 2.0)
+      // = 30 + 12 + 6 = 48 units
+      // This guarantees clearance beyond collision threshold (30 + 12 = 42 units)
+      double station_radius = pStation->GetSize();
+      double ship_radius = GetSize();
+      launch_distance = station_radius + ship_radius + (ship_radius / 2.0);
+    }
+
+    CTraj VOff(launch_distance, orient);
     if (thrustamt > 0.0) {
       Pos += VOff.ConvertToCoord();
     } else {
       Pos -= VOff.ConvertToCoord();
     }
+
+    // Verbose logging for undocking
+    if (g_pParser && g_pParser->verbose) {
+      CCoord station_pos = pStation->GetPos();
+      double actual_distance = Pos.DistTo(station_pos);
+      const char* mode = (g_pParser->UseNewFeature("docking")) ? "NEW" : "LEGACY";
+      printf("[UNDOCK-%s] Ship %s launching from station (dDockDist=%.2f, launch_distance=%.2f, actual_distance=%.2f, orient=%.2f, vel=%.2f)\n",
+             mode, GetName(), dDockDist, launch_distance, actual_distance, orient, Vel.rho);
+    }
+
     bDockFlag = false;
   }
 
@@ -1367,7 +1395,21 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   }
 
   if (bDockFlag == true) {
-    CTraj VOff(dDockDist + 5.0, orient);
+    // Calculate launch distance based on docking feature flag (same logic as new mode)
+    double launch_distance;
+    CStation* pStation = pmyTeam->GetStation();
+
+    if (g_pParser && !g_pParser->UseNewFeature("docking")) {
+      // Legacy mode: use historical dDockDist + 5.0 (can cause re-docking bug)
+      launch_distance = dDockDist + 5.0;
+    } else {
+      // New mode: fixed safe distance = station_radius + ship_radius + (ship_radius / 2.0)
+      double station_radius = pStation->GetSize();
+      double ship_radius = GetSize();
+      launch_distance = station_radius + ship_radius + (ship_radius / 2.0);
+    }
+
+    CTraj VOff(launch_distance, orient);
     if (GetOrder(O_THRUST) > 0.0) {
       Pos += VOff.ConvertToCoord();
     } else {

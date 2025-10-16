@@ -194,6 +194,19 @@ Re-enabled with --legacy-collision-detection:
     approach is was not robust and would miss glancing collisions from
     oblique angles.
 
+Re-enabled with --legacy-docking:
+
+  * Failed Launches - The existing code remembered the separation
+    distance between a ship and a station at the time it docked, and
+    then added 5 to this number on undocking (with an initial distance
+    of 0). This caused - especially in the initial game turns - a
+    behavior of ships launching, and being immediatly redocked, and
+    then having to launch again as the docking distance is "walked
+    out" in steps of 5 until it exceeds 42. The new behavior just
+    always places launching ships a distance of: StationSize +
+    ShipSize + ShipSize/2 away (the last ShipSize/2 is to give a
+    safety margin.
+
 Re-enabled with --legacy-laser-exploit:
 
   * Laser Power Determined Exclusively by Order Magnitude - This
@@ -256,8 +269,6 @@ Lasers are modeled as colliding masses for damage purposes.
 
 
 ========================== ENGINE TODO ============================================
-
-TBD - Fix the laser exploit, but have a flag in it.
 
 ?!?!?! Concurrency / race double eating behaviors ?!?!?!??!
 

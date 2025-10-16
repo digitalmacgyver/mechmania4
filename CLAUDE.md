@@ -99,6 +99,14 @@ double MyClass::PublicMethodNew(/* params */) {
    - Legacy: Non-physical separation impulse that creates momentum from nothing (both ships gain velocity)
    - New: Proper 2D elastic collision using standard formulas that conserve momentum and kinetic energy
 
+7. **Ship Launch Docking Distance (Ship.C ProcessThrustDriftNew/Old() methods)**
+   - Feature: `docking`
+   - Location: Inline in `ProcessThrustDriftNew()` and `ProcessThrustDriftOld()` methods, undocking section
+   - Legacy: Uses `dDockDist + 5.0` for launch distance, causing re-docking bug with low thrust (<35 units/sec)
+   - New: Fixed safe distance = `station_radius + ship_radius + (ship_radius / 2.0)` = 48 units
+   - Bug Details: Legacy mode ships with thrust < 35 u/s launch to 35 units (< collision threshold of 42), re-dock, incrementing dDockDist each turn until escape
+   - Fix: New mode always launches to 48 units (> 42 threshold), guaranteeing immediate escape regardless of thrust
+
 ### When to Use This Pattern
 
 Use the simple method dispatch pattern when:

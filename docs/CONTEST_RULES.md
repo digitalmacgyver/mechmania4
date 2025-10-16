@@ -220,6 +220,17 @@ The engine models collisions with Newtonian physics. All collision handling foll
 - **Departure:** Thrust to leave station (costs no fuel while still docked)
 - **Physics:** Ship velocity set to zero (inelastic docking)
 
+**Launch Position (Undocking):**
+When a ship issues `O_THRUST` while docked, it is **teleported to a safe distance** before physics begins:
+- **Launch Distance:** `Station_Size + Ship_Size + (Ship_Size / 2)` = **48 units from station center** (with default sizes)
+- **Launch Direction:**
+  - Forward thrust (`O_THRUST > 0`): Ship placed **forward** along its orientation vector
+  - Reverse thrust (`O_THRUST < 0`): Ship placed **backward** opposite to its orientation vector
+- **Purpose:** Ensures ship starts beyond collision range (30+12=42 units) to prevent immediate re-docking
+- **Example:** Ship docked at (256, 256) with orientation 0° (east):
+  - `O_THRUST = 10.0` → Teleport to (304, 256) - 48 units east
+  - `O_THRUST = -10.0` → Teleport to (208, 256) - 48 units west
+
 #### Enemy Station
 - **Same as your station:** THIS MEANS YOU CAN GIVE VINYL TO THE ENEMY STATION!
 - Docking mechanics identical regardless of team affiliation
