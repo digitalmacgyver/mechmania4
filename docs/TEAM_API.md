@@ -166,6 +166,11 @@ When a ship issues `O_THRUST` while docked at a station, it will **automatically
 - **Forward thrust (`O_THRUST > 0`)**: Ship placed **in front** (along ship's orientation)
 - **Reverse thrust (`O_THRUST < 0`)**: Ship placed **behind** (opposite to orientation)
 
+**Launch Fuel Cost:**
+- **While docked**: `O_THRUST` orders are NOT limited by current fuel or fuel capacity
+- **Entire launch turn**: The full turn when launching (including after undocking) consumes NO fuel
+- **Subsequent turns**: Normal fuel costs apply after the launch turn completes
+
 **Example:**
 ```cpp
 // Ship docked at station (256, 256) with orientation 0° (pointing east)
@@ -173,13 +178,21 @@ When a ship issues `O_THRUST` while docked at a station, it will **automatically
 // Forward launch - ship placed to the east
 pShip->SetOrder(O_THRUST, 10.0);
 // Result: Ship teleports to (256+48, 256) = (304, 256)
+// Fuel cost: 0.0 (entire launch turn is free)
 
 // Reverse launch - ship placed to the west
 pShip->SetOrder(O_THRUST, -10.0);
 // Result: Ship teleports to (256-48, 256) = (208, 256)
+// Fuel cost: 0.0 (entire launch turn is free)
+
+// Can launch with ANY thrust value, even with zero fuel
+pShip->SetOrder(O_THRUST, 60.0);  // Maximum thrust allowed
+// Fuel cost: 0.0 (no fuel required for launch)
 ```
 
 > **Important:** The launch position is calculated along the line defined by the ship's **current orientation** at the moment of undocking. Ships always face a specific direction (orient angle in radians), and the launch teleport moves them 48 units along (or opposite to) that direction vector from the station center.
+>
+> **Fuel Note:** Because launch turns are completely free, you can issue thrust orders of any magnitude (up to ±60) when docked, regardless of your current fuel level or fuel capacity. This allows ships to launch even with empty fuel tanks, though they will need fuel for subsequent turns.
 
 ### Fuel Costs
 

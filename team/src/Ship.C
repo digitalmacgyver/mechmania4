@@ -32,6 +32,7 @@ CShip::CShip(CCoord StPos, CTeam *pteam, unsigned int ShNum)
   pBrain = NULL;
 
   bDockFlag = true;
+  bLaunchedThisTurn = false;
   dDockDist = g_ship_default_docking_distance;
   dLaserDist = 0.0;
   omega = 0.0;
@@ -159,6 +160,7 @@ CBrain *CShip::SetBrain(CBrain *pBr) {
 
 void CShip::ResetOrders() {
   dLaserDist = 0.0;
+  bLaunchedThisTurn = false;  // Reset launch flag for new turn
   for (unsigned int ord = (unsigned int)O_SHIELD; ord < (unsigned int)O_ALL_ORDERS; ++ord) {
     adOrders[ord] = 0.0;
   }
@@ -1015,7 +1017,8 @@ CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
                                         double orient,
                                         double current_mass,
                                         double fuel_avail,
-                                        bool is_docked) const {
+                                        bool is_docked,
+                                        bool launched_this_turn) const {
   if (thrustamt == 0.0) {
     return ThrustCost{false, 0.0, 0.0, 0.0, CTraj(0.0, 0.0)};
   }
@@ -1042,9 +1045,12 @@ CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
   // Cost-per-unit-delta-v for this impulse (uses current total mass and hull mass `mass`)
   const double fuel_cost_per_delta_v = FuelPerDV(current_mass, mass);
 
+  // Check if thrust should be free (docked or launched this turn)
+  bool is_free_thrust = (is_docked || launched_this_turn);
+
   // Budget in "dv-equivalent" units (so geometry & penalty share the same units)
   double max_delta_v_budget;
-  if (is_docked) {
+  if (is_free_thrust) {
     max_delta_v_budget = 1.0e300;  // Effectively unlimited
   } else if (fuel_cost_per_delta_v > 0.0) {
     max_delta_v_budget = fuel_avail / fuel_cost_per_delta_v;
@@ -1068,13 +1074,13 @@ CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
 
   // === Phase 6: Calculate initial costs ===
   // Thrust cost is on applied_thrust_mag; governor cost is on overshoot length
-  double thrust_cost   = is_docked ? 0.0 : (fuel_cost_per_delta_v * applied_thrust_mag);
-  double governor_cost = is_docked ? 0.0 : (fuel_cost_per_delta_v * overshoot);
+  double thrust_cost   = is_free_thrust ? 0.0 : (fuel_cost_per_delta_v * applied_thrust_mag);
+  double governor_cost = is_free_thrust ? 0.0 : (fuel_cost_per_delta_v * overshoot);
   double total_cost    = thrust_cost + governor_cost;
 
   // === Phase 7: Handle fuel budget overflow (rescaling if needed) ===
   // Numeric safety: never exceed available fuel by rounding
-  if (!is_docked && total_cost > fuel_avail + g_fp_error_epsilon) {
+  if (!is_free_thrust && total_cost > fuel_avail + g_fp_error_epsilon) {
     const double scale = fuel_avail / total_cost;
     double scaled_thrust = (scale > g_fp_error_epsilon) ? (applied_thrust_mag * scale) : 0.0;
     const double scaled_signed_thrust = (thrustamt >= g_fp_error_epsilon) ? scaled_thrust : -scaled_thrust;
@@ -1091,8 +1097,8 @@ CShip::ThrustCost CShip::CalcThrustCost(double thrustamt,
 
   // === Phase 8: Determine if thrust was fuel-limited ===
   const bool fuel_limited =
-      (!is_docked) && (thrust_magnitude > applied_thrust_mag + g_fp_error_epsilon ||
-                       total_cost + g_fp_error_epsilon >= fuel_avail);
+      (!is_free_thrust) && (thrust_magnitude > applied_thrust_mag + g_fp_error_epsilon ||
+                            total_cost + g_fp_error_epsilon >= fuel_avail);
 
   // === Phase 9: Build and return result structure ===
   ThrustCost out;
@@ -1233,7 +1239,7 @@ double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
       break;
     }
 
-    ThrustCost tc = CalcThrustCost(value*g_physics_simulation_dt, v_sim, GetOrient(), current_mass, fuel_avail, IsDocked());
+    ThrustCost tc = CalcThrustCost(value*g_physics_simulation_dt, v_sim, GetOrient(), current_mass, fuel_avail, IsDocked(), bLaunchedThisTurn);
     fuel_avail -= tc.total_cost;
     est_cost += tc.total_cost;
     current_mass -= tc.total_cost; // -1 fuel == -1 ton of mass
@@ -1296,9 +1302,16 @@ double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
 void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
   const double fuel_avail = GetAmount(S_FUEL);
 
-  ThrustCost tc = CalcThrustCost(thrustamt*dt, Vel, GetOrient(), GetMass(), fuel_avail, IsDocked());
+  ThrustCost tc = CalcThrustCost(thrustamt*dt, Vel, GetOrient(), GetMass(), fuel_avail, IsDocked(), bLaunchedThisTurn);
 
   SetAmount(S_FUEL, fuel_avail - tc.total_cost);
+
+  // Verbose logging for thrust/fuel during launch turns
+  if (g_pParser && g_pParser->verbose && (bLaunchedThisTurn || IsDocked())) {
+    printf("[THRUST-DRIFT] %s: thrust=%.2f dt=%.2f docked=%d launched_this_turn=%d fuel_before=%.2f fuel_cost=%.4f fuel_after=%.2f\n",
+           GetName(), thrustamt, dt, IsDocked() ? 1 : 0, bLaunchedThisTurn ? 1 : 0,
+           fuel_avail, tc.total_cost, GetAmount(S_FUEL));
+  }
 
   Vel += tc.dv_achieved;
 
@@ -1343,6 +1356,7 @@ void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
     }
 
     bDockFlag = false;
+    bLaunchedThisTurn = true;  // Mark that we launched this turn (makes thrust free)
   }
 
   if (thrustamt < 0.0) {
@@ -1358,7 +1372,7 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   double fuelcons;
 
   // Calculate fuel consumption directly using legacy method
-  //  
+  //
   // NOTE: There was a bug (or maybe intentional game balancing?) here where the
   // full fuel cost of the thrust is applied on each game tick. Since elsewhere
   // we document the fuel costs it seems more like a bug, but maybe that's why
@@ -1369,6 +1383,13 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   double oldFuel = GetAmount(S_FUEL);
   double newFuel = oldFuel - fuelcons;
   SetAmount(S_FUEL, newFuel);
+
+  // Verbose logging for thrust/fuel in legacy mode (should show fuel costs after undocking)
+  if (g_pParser && g_pParser->verbose && (IsDocked() || oldFuel != newFuel)) {
+    printf("[THRUST-DRIFT-LEGACY] %s: thrust=%.2f dt=%.2f docked=%d fuel_before=%.2f fuel_cost=%.4f fuel_after=%.2f\n",
+           GetName(), thrustamt, dt, IsDocked() ? 1 : 0,
+           oldFuel, fuelcons, newFuel);
+  }
 
   // Check if out of fuel
   if (oldFuel > 0.01 && newFuel <= 0.01) {

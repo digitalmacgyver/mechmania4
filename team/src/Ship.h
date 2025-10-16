@@ -75,6 +75,7 @@ class CShip : public CThing {
  protected:
   unsigned int myNum;
   bool bDockFlag;
+  bool bLaunchedThisTurn;  // True if ship undocked this turn (makes thrust free for entire turn)
   double dDockDist, dLaserDist;
   CBrain* pBrain;
 
@@ -104,7 +105,7 @@ class CShip : public CThing {
     double total_cost; // thrust_cost + governor_cost
     CTraj dv_achieved; // .rho is the magnitude of the achieved thurst, .theta is the heading
   };
-  ThrustCost CalcThrustCost(double thrustamt, CTraj v, double orient, double mass, double fuel_avail, bool is_docked) const;
+  ThrustCost CalcThrustCost(double thrustamt, CTraj v, double orient, double mass, double fuel_avail, bool is_docked, bool launched_this_turn) const;
 
 };
 

@@ -72,7 +72,8 @@ Ships can perform the following actions each turn:
 - **Fuel Cost:** 1 ton of fuel accelerates a 40-ton hull from 0 to 180 units/second (6 × max speed)
 - **Formula:** Fuel = |thrust| × ship_mass / (6 × max_speed × empty_mass)
 - **Direction:** Can thrust forward (positive) or backward (negative)
-- **While Docked:** No fuel consumed for thrust
+- **While Docked:** No fuel consumed for thrust orders
+- **Launch Turn:** When launching from a station, the entire turn is free (no fuel consumed even after undocking)
 
 ### Rotation Mechanics
 - **Fuel Cost:** 1 ton of fuel rotates a 40-ton hull 6 full circles (12π radians)

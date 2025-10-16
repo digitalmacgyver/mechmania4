@@ -107,6 +107,17 @@ double MyClass::PublicMethodNew(/* params */) {
    - Bug Details: Legacy mode ships with thrust < 35 u/s launch to 35 units (< collision threshold of 42), re-dock, incrementing dDockDist each turn until escape
    - Fix: New mode always launches to 48 units (> 42 threshold), guaranteeing immediate escape regardless of thrust
 
+8. **Free Launch Thrust (Ship.h/Ship.C)**
+   - Feature: `velocity-limits` (controlled by same flag as thrust processing)
+   - Member: `bool bLaunchedThisTurn` - tracks if ship undocked during current turn
+   - Reset: In `ResetOrders()` at start of each turn
+   - Set: In `ProcessThrustDriftNew()` when `bDockFlag` changes from true to false
+   - Used: Passed to `CalcThrustCost()` as 7th parameter for free thrust calculation
+   - Legacy: Only first dt tick (while docked) is free, remaining ticks charge fuel (~0.0097 per tick)
+   - New: Entire turn (all dt ticks) when ship launches is free, no fuel cost
+   - Implementation: `CalcThrustCost()` checks `is_free_thrust = (is_docked || launched_this_turn)` for unlimited budget
+   - Note: Flag is server-side only, not serialized to clients (clients see free thrust via SetOrder simulation)
+
 ### When to Use This Pattern
 
 Use the simple method dispatch pattern when:

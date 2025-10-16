@@ -165,6 +165,14 @@ Re-enabled with --legacy-velocity-limits:
     b. Charge an additional fuel penalty equal to the amount of
        thrust this truncation effectively gives to the ship "for free."
 
+  * Station Departure Thrust - The original engine granted free thrust
+    to departing ships only on the first 0.2 second subtick - once
+    that time elapsed the ships were no longer docked, and hence
+    thrust was no longer free. However since the only interface to
+    players is the SetOrders method and that acts in 1 second
+    increments, now all thrust for the entire duration of the O_THRUST
+    order when departing a station is free of fuel costs.
+
   * Double spend bug with Shields and Thurst, or Shields and Turn -
     The game engine allows you to submit more orders than you have
     fuel for - only each individual order is clamped to current
@@ -372,9 +380,6 @@ Why The Guard Fails:
 The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks it, the asteroid has already overwritten pThEat to point to Ship B instead of Ship A!
 ================== double yum ===========================
 
-Q. If station radius is 30, or in general if ship+station radius > x,
-how does launching handle not immediately collidign / redocking?
-
 Q. Double check that Coord DistTo and AngleTo produce proper toroidal
 measures with some test cases and a hello_world style program that
 just runs these functions.
@@ -384,25 +389,12 @@ someone wants to do a spinarooney and puts in a rotate of 1000*PI?
 
 Engine enhancements:
   * Physically costed rotation based on assumption of linear accel and decel to change angle X and end up at a dead stop? (Normalized to physicall acceleration costs?)
-  * Momentum handling on jettison
   * Review momentum handling on laser strike
-  * Momentum handling on collision
   * asteroid mass correctly correlates with volume? Or I guess we're in 2d so area is OK?
   * Our ship collision logic deals damage to us based on our relative
     velocity with the thing we collide, and that things mass, our mass
     doesn't matter. Is this a "momentum swap" or normal physical /
     collision type? If not maybe adjust it.
-
-* We do change momentum when capturing an asteroid, but this is OK -
-  see if we conserve momentum or not - we should correctly conserve
-  momentum. (This is a physics fix if we need to make one).
-
-Ship.C HandleJettison : Conserve momentum in ship ejecting an asteroid
-- as it is the asteroid leaves with our velocity, and we slow down
-some (which doesn't conserve momentum), and als owe just place the
-asteroid out a bit to avoid collisiono - that part is fine (Alghout
-maybe it hsould be placed more 3+ship radius or something rather than
-3!?!?
 
 ???????????? LASER TARGETING BUG ?????????????????????????
   Q. Is there a bug in LaserTarget?
@@ -457,19 +449,6 @@ Subtle Bug (The Antipode): There is an edge case bug when the target is exactly 
 
 
 ????????????????? LASER BUG ???????????????????
-
-Q. Verify undocking thrust and turn cost are not gated by fuel tank
-size in engine (or document if they are).
-
-Q. The undocking logic wiht dDockDist seems a big mess - both the bad
-Cursor AI and Codex say it has something to do with recording the
-center to center distance from prior docking and sending the ship out
-on that trajectory or something (maybe so ships can dock -> launch
-without taking a game turn to rotate and if so they head out the way
-they came in? This seems to open the door to accidental redocking on
-low velockty exits. Shouldn't all initial velocities for docked ships
-be radially out from the center of the station, and at an initial
-position of at least station radius + ship radius + epison?
 
 * Game option to prevent docking at enemy bases (set at start time of
   either the server or observer) (counts as collision with asteroid
@@ -650,6 +629,9 @@ Any of those would be clearer than toggling the team pointer, which is
 ####################### END ENGINE TODO ##########################################
 
 ========================== Groonew TODO ============================================
+
+Handle undocking logic: When we undock we are teleported 48 units
+along our launch direction before drift.
 
 FOR EVOAI - Give it groogroo as a base, and then have the evoai
 compete against groonew? Once Groonew is conistently beating groogroo!
