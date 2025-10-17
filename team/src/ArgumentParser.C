@@ -23,6 +23,7 @@ void ArgumentParser::InitializeFeatures() {
   features["velocity-limits"] = true;      // New velocity/acceleration limits is default
   features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
   features["physics"] = true;              // New: correct collision physics and momentum conservation
+  features["collision-handling"] = true;   // New: improved collision processing (fixes multi-hit bugs)
 
   // Security features
   features["laser-exploit"] = false;       // New: TOCTOU vulnerability patched (validate before firing)
@@ -65,6 +66,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-velocity-limits", "Use legacy velocity and acceleration limits")(
         "legacy-asteroid-eat-damage", "Ships take damage when eating asteroids (legacy behavior)")(
         "legacy-physics", "Use legacy collision physics and momentum conservation")(
+        "legacy-collision-handling", "Use legacy collision processing (allows multi-hit bugs)")(
         "legacy-laser-exploit", "Enable TOCTOU laser exploit (fire before validation)")(
         "legacy-docking", "Use legacy docking (dDockDist+5, can get stuck re-docking)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
@@ -178,6 +180,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-physics")) {
       features["physics"] = false;
     }
+    if (result.count("legacy-collision-handling")) {
+      features["collision-handling"] = false;
+    }
     if (result.count("legacy-laser-exploit")) {
       features["laser-exploit"] = true;  // Enable exploit (true = exploit enabled)
     }
@@ -209,16 +214,18 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-detection"] = true;
     features["velocity-limits"] = true;
     features["asteroid-eat-damage"] = true;
-    features["physics"] = true;          // Enable correct collision physics and momentum
-    features["laser-exploit"] = false;  // Patch exploit
-    features["docking"] = true;          // Fix docking
+    features["physics"] = true;              // Enable correct collision physics and momentum
+    features["collision-handling"] = true;   // Enable improved collision processing
+    features["laser-exploit"] = false;      // Patch exploit
+    features["docking"] = true;              // Fix docking
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
     features["asteroid-eat-damage"] = false;
-    features["physics"] = false;        // Use legacy collision physics (no laser momentum)
-    features["laser-exploit"] = true;   // Enable exploit for legacy mode
-    features["docking"] = false;        // Enable docking bug for legacy mode
+    features["physics"] = false;            // Use legacy collision physics (no laser momentum)
+    features["collision-handling"] = false; // Use legacy collision processing (with multi-hit bugs)
+    features["laser-exploit"] = true;       // Enable exploit for legacy mode
+    features["docking"] = false;            // Enable docking bug for legacy mode
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

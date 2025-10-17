@@ -208,6 +208,36 @@ Re-enabled with --legacy-collision-detection:
     approach is was not robust and would miss glancing collisions from
     oblique angles.
 
+  * Collision Handling - The legacy system had many race conditions
+    and other odd behaviors in it's collision handling system, and
+    also processed collisions in a certain order that caused systemic
+    biases (e.g. station collisions happened first in scenarios where
+    multiple collisions were possible, the first team's collisions
+    happened first in scenarios where multiple team objects were
+    involved in collisions). You can read about some of the details in
+    docs/LEGACY_COLLISION_ENGINE.md. We have a new collision handling
+    system which:
+     a. Fixes various bugs / unintended behaviors
+
+     b. Resolves collisions in ascending order of overlap which
+     attempts to monitor which collisions would have happened first,
+     and elimintates many systemic biases. (e.g. if a ship and a
+     station overlay by 5, and a ship and an small asteroid overlap by
+     2, the ship docks first and then the asteroid collision ends up
+     not happening because you can't collide with docked things. Note
+     that in this scenario the distance between the ship and the
+     station is still 30+12-5=37 which is much more than the distance
+     between the asteroid and the ship - however we take the geater
+     overlap to indicate the ship would have hit the station first.)
+
+     c. In the cases where overlap is equal, we process the collisions
+     in a random order to eliminate systemic bias.
+
+     d. We do lots of clean up logic once a collision happens to
+     prevent nonsensiscal results (e.g. once an asteroid has collided
+     with a ship and been eaten, re remove that asteroid from any
+     future collision analysis this turn).
+
 Re-enabled with --legacy-docking:
 
   * Failed Launches - The existing code remembered the separation

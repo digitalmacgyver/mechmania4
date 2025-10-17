@@ -83,6 +83,8 @@ class CWorld : public CSendable {
   unsigned int AddNewThings();
   unsigned int KillDeadThings();
   unsigned int CollisionEvaluation();
+  unsigned int CollisionEvaluationOld();  // Legacy collision processing
+  unsigned int CollisionEvaluationNew();  // Improved collision processing
   void ReLinkList();
 
   double gametime;

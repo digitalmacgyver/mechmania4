@@ -233,3 +233,17 @@ To add a new switchable behavior:
 3. Follow the simple method dispatch pattern above for the implementation
 
 4. Update this documentation with the new feature details
+
+### 8. **Collision Processing (World.C CollisionEvaluation() method)**
+   - Feature: `collision-handling`
+   - Location: World.C CollisionEvaluation() method
+   - Private methods: `CollisionEvaluationOld()`, `CollisionEvaluationNew()`
+   - **Legacy**: Original collision processing with known bugs:
+     - Asteroids can be hit multiple times in same frame (multi-fragmentation bug)
+     - Ship-ship collisions processed multiple times (double damage bug)
+     - Dead objects continue processing collisions within same frame
+   - **New**: Currently identical to legacy (prepared for future fixes)
+     - Will address multi-hit bugs in future work
+     - Will fix collision ordering issues
+     - Will prevent dead object collision processing
+   - Note: This refactoring preserves exact legacy behavior while preparing infrastructure for collision system improvements

@@ -7,7 +7,9 @@
 
 #include <sys/time.h>
 
+#include <algorithm>
 #include <ctime>
+#include <vector>
 
 #include "ArgumentParser.h"
 #include "Asteroid.h"
@@ -440,6 +442,22 @@ void CWorld::RemoveIndex(unsigned int index) {
 }
 
 unsigned int CWorld::CollisionEvaluation() {
+  extern ArgumentParser* g_pParser;
+
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    return CollisionEvaluationOld();
+  } else {
+    return CollisionEvaluationNew();
+  }
+}
+
+unsigned int CWorld::CollisionEvaluationOld() {
+  // LEGACY COLLISION PROCESSING
+  // This implementation preserves the original behavior, including known bugs:
+  // - Asteroids can be hit multiple times in same frame (multi-fragmentation)
+  // - Ship-ship collisions processed multiple times (double damage)
+  // - Dead objects continue processing collisions within same frame
+
   CThing *pTItr, *pTTm;
   unsigned int i, j, iteam, iship, numtmth, URes = 0;
   CTeam* pTeam;
@@ -493,6 +511,150 @@ unsigned int CWorld::CollisionEvaluation() {
   }
 
   return URes;
+}
+
+// Collision pair data structure for physics-ordered collision processing
+struct CollisionPair {
+  CThing* object1;
+  CThing* object2;
+  double overlap_distance;  // (r1 + r2) - center_distance
+
+  // Constructor for convenience
+  CollisionPair(CThing* obj1, CThing* obj2, double overlap)
+      : object1(obj1), object2(obj2), overlap_distance(overlap) {}
+};
+
+unsigned int CWorld::CollisionEvaluationNew() {
+  // NEW COLLISION PROCESSING - PHYSICS-ORDERED APPROACH
+  //
+  // Design principles:
+  // 1. NO CASCADING COLLISIONS: We process only collisions that exist at the
+  //    current snapshot of positions. If resolving collision A moves an object
+  //    into overlap with object B, we do NOT process the A-B collision this frame.
+  //    This prevents chain reactions and keeps collision resolution deterministic.
+  //
+  // 2. PHYSICS-ORDERED PROCESSING: We resolve collisions in order of decreasing
+  //    overlap distance. Greater overlap suggests the collision occurred earlier
+  //    in the physics timestep, so we process it first. This is more physically
+  //    intuitive than arbitrary iteration order.
+  //
+  // 3. RANDOM TIE-BREAKING: When two collision pairs have equal overlap, we
+  //    randomly choose which to process first. This prevents subtle gameplay
+  //    biases from bookkeeping order (e.g., Team 1 always winning ties).
+
+  // Build list of team-controlled objects (stations + ships) for collision checking
+  CThing* team_objects[MAX_THINGS];
+  unsigned int num_team_objects = 0;
+
+  // First pass: Collect all team-controlled objects into array
+  for (unsigned int team_idx = 0; team_idx < GetNumTeams(); ++team_idx) {
+    CTeam* team = GetTeam(team_idx);
+    if (team == NULL) {
+      continue;
+    }
+
+    // Add station to collision list
+    CThing* station = team->GetStation();
+    team_objects[num_team_objects] = station;
+    num_team_objects++;
+
+    // Skip ships if game is over (they become invisible)
+    if (bGameOver == true) {
+      continue;
+    }
+
+    // Add all ships from this team to collision list
+    for (unsigned int ship_idx = 0; ship_idx < team->GetShipCount(); ++ship_idx) {
+      CThing* ship = team->GetShip(ship_idx);
+      if (ship == NULL) {
+        continue;
+      }
+      team_objects[num_team_objects] = ship;
+      num_team_objects++;
+    }
+  }
+
+  // Second pass: Build list of all currently-overlapping object pairs
+  // We snapshot all collisions NOW and will NOT process cascading collisions
+  // that result from resolving these collisions.
+  std::vector<CollisionPair> collisions;
+
+  for (unsigned int world_idx = UFirstIndex; world_idx != (unsigned int)-1;
+       world_idx = GetNextIndex(world_idx)) {
+    CThing* world_object = GetThing(world_idx);
+
+    // Skip dead objects
+    if (world_object == NULL || !world_object->IsAlive()) {
+      continue;
+    }
+
+    // Check this world object against all team objects
+    for (unsigned int team_obj_idx = 0; team_obj_idx < num_team_objects; ++team_obj_idx) {
+      CThing* team_object = team_objects[team_obj_idx];
+      if (team_object == NULL) {
+        continue;
+      }
+
+      // Calculate overlap distance: (r1 + r2) - center_distance
+      // Positive overlap means the objects are currently intersecting
+      double radius1 = world_object->GetSize();
+      double radius2 = team_object->GetSize();
+      double center_distance = world_object->GetPos().DistTo(team_object->GetPos());
+      double overlap = (radius1 + radius2) - center_distance;
+
+      // If objects are overlapping, add to collision list
+      if (overlap > 0.0) {
+        collisions.push_back(CollisionPair(world_object, team_object, overlap));
+      }
+    }
+  }
+
+  // Third pass: Sort collisions by overlap (most overlap first)
+  // Greater overlap suggests collision occurred earlier in timestep.
+  // We use std::stable_sort to maintain deterministic behavior within ties.
+  std::stable_sort(collisions.begin(), collisions.end(),
+                   [](const CollisionPair& a, const CollisionPair& b) {
+                     // Sort by overlap distance (descending - most overlap first)
+                     return a.overlap_distance > b.overlap_distance;
+                   });
+
+  // Fourth pass: Randomize order within each tie group to prevent bookkeeping bias
+  // We identify groups of collisions with identical overlap and shuffle each group.
+  size_t group_start = 0;
+  while (group_start < collisions.size()) {
+    // Find end of current tie group (all elements with same overlap distance)
+    size_t group_end = group_start + 1;
+    while (group_end < collisions.size() &&
+           collisions[group_end].overlap_distance == collisions[group_start].overlap_distance) {
+      group_end++;
+    }
+
+    // Shuffle this tie group using Fisher-Yates algorithm
+    for (size_t i = group_start; i < group_end - 1; ++i) {
+      size_t j = i + (rand() % (group_end - i));
+      if (i != j) {
+        CollisionPair temp = collisions[i];
+        collisions[i] = collisions[j];
+        collisions[j] = temp;
+      }
+    }
+
+    group_start = group_end;
+  }
+
+  // Fifth pass: Process collisions in physics-ordered sequence
+  unsigned int collision_count = 0;
+  for (size_t i = 0; i < collisions.size(); ++i) {
+    const CollisionPair& pair = collisions[i];
+
+    // Symmetric collision processing (same as legacy)
+    pair.object1->Collide(pair.object2, this);
+    if (pair.object2->Collide(pair.object1, this)) {
+      collision_count++;
+    }
+  }
+
+  return collision_count;
 }
 
 unsigned int CWorld::AddNewThings() {
