@@ -764,6 +764,296 @@ AsteroidKind CShip::StatToAst(ShipStat ShStat) const {
 // Protected methods
 
 void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
+  extern CParser* g_pParser;
+
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    HandleCollisionOld(pOthThing, pWorld);
+  } else {
+    HandleCollisionNew(pOthThing, pWorld);
+  }
+}
+
+void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
+  // LEGACY COLLISION HANDLING
+  // Preserves original behavior including recursive Collide() call for ship-ship collisions.
+  // Known issues: can process same collision multiple times in legacy CollisionEvaluation.
+
+  if (*pOthThing == *this ||  // Can't collide with yourself!
+      IsDocked() == true) {   // Nothing can hurt you at a station
+    bIsColliding = g_no_damage_sentinel;
+    return;
+  }
+  if (pWorld == NULL) {
+    ;  // Okay for world to be NULL, this suppresses warning
+  }
+
+  ThingKind OthKind = pOthThing->GetKind();
+
+  if (OthKind == STATION) {
+    double old_dDockDist = dDockDist;
+    dDockDist = Pos.DistTo(pOthThing->GetPos());
+    bIsColliding = g_no_damage_sentinel;
+
+    // Verbose logging for docking/re-docking
+    if (g_pParser && g_pParser->verbose) {
+      printf("[RE-DOCK] Ship %s docking at station (distance=%.2f, vel=%.2f, old_dDockDist=%.2f, new_dDockDist=%.2f)\n",
+             GetName(), Pos.DistTo(pOthThing->GetPos()), Vel.rho, old_dDockDist, dDockDist);
+    }
+
+    Pos = pOthThing->GetPos();
+    Vel = CTraj(0.0, 0.0);
+    SetOrder(O_THRUST, 0.0);
+
+    // Log vinyl delivery
+    double vinylDelivered = GetAmount(S_CARGO);
+    if (vinylDelivered > 0.01) {
+      CStation *pStation = (CStation *)pOthThing;
+      if (pStation->GetTeam() == this->GetTeam()) {
+        printf("[DELIVERY] Ship %s delivered %.2f vinyl to HOME base (%s)\n",
+               GetName(), vinylDelivered, GetTeam()->GetName());
+        if (pWorld) {
+          char msg[256];
+          snprintf(msg, sizeof(msg), "%s delivered %.1f vinyl to %s",
+                   GetName(), vinylDelivered, pStation->GetName());
+          pWorld->AddAnnouncerMessage(msg);
+        }
+      } else {
+        printf(
+            "[ENEMY DELIVERY] Ship %s delivered %.2f vinyl to ENEMY base (%s "
+            "to %s)\n",
+            GetName(), vinylDelivered, GetTeam()->GetName(),
+            pStation->GetTeam()->GetName());
+      }
+    }
+    ((CStation *)pOthThing)->AddVinyl(vinylDelivered);
+    adStatCur[(unsigned int)S_CARGO] = 0.0;
+
+    bDockFlag = true;
+    return;
+  }
+
+  double msh, dshield = GetAmount(S_SHIELD);
+  if (OthKind == GENTHING) {  // Laser object
+    msh = (pOthThing->GetMass());
+    dshield -= (msh / g_laser_damage_mass_divisor);
+
+    SetAmount(S_SHIELD, dshield);
+    if (dshield < 0.0) {
+      printf("[DESTROYED] Ship %s (%s) destroyed by laser\n", GetName(),
+             GetTeam() ? GetTeam()->GetName() : "Unknown");
+      if (pWorld) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "%s destroyed by laser", GetName());
+        pWorld->AddAnnouncerMessage(msg);
+      }
+      KillThing();
+    }
+
+    // Apply momentum transfer from laser (new physics mode)
+    if (g_pParser && g_pParser->UseNewFeature("physics")) {
+      // LASER MOMENTUM TRANSFER: Photon momentum physics
+      //
+      // Lasers impart momentum based on photon physics: p = E/c
+      // - Laser "mass" represents beam energy (30 × remaining_length)
+      // - Speed of light in game: c = 30 u/s (max ship speed)
+      // - Laser velocity set to c along beam direction (World.C:277-285)
+      // - Momentum transfer: p = (laser_mass / 30) × 30 = laser_mass
+      //
+      // For a perfectly inelastic collision (photon absorbed):
+      //   v_final = (m_ship × v_ship + m_laser × v_laser) / (m_ship + m_laser)
+      //
+      // Since m_laser << m_ship, this simplifies to:
+      //   Δv ≈ (m_laser / m_ship) × (v_laser - v_ship_projected)
+      //
+      // Result: Ship velocity changes by ~1-7 u/s (4-24% of max speed) depending on
+      // beam strength and ship mass, pushing the ship along the beam direction.
+
+      double m_ship = GetMass();
+      double m_laser = pOthThing->GetMass();
+      double total_mass = m_ship + m_laser;
+
+      CCoord vel_ship = Vel.ConvertToCoord();
+      CCoord vel_laser = pOthThing->GetVelocity().ConvertToCoord();
+
+      // Calculate momentum-weighted average velocity (perfectly inelastic collision)
+      CCoord v_final;
+      v_final.fX = (m_ship * vel_ship.fX + m_laser * vel_laser.fX) / total_mass;
+      v_final.fY = (m_ship * vel_ship.fY + m_laser * vel_laser.fY) / total_mass;
+
+      // Convert back to trajectory and apply
+      CTraj new_vel(v_final);
+
+      // Enforce maximum speed
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+
+      Vel = new_vel;
+    }
+
+    return;
+  }
+
+  // Check if this is an asteroid that fits (can be "eaten")
+  bool is_eatable_asteroid = false;
+  if (OthKind == ASTEROID) {
+    is_eatable_asteroid = AsteroidFits((CAsteroid *)pOthThing);
+  }
+
+  // Determine if we should apply collision damage
+  bool apply_damage = true;
+  if (is_eatable_asteroid) {
+    // Use feature flag to determine behavior
+    // New behavior (asteroid-eat-damage = true): no damage when eating
+    // Legacy behavior (asteroid-eat-damage = false): damage even when eating
+    if (g_pParser && g_pParser->UseNewFeature("asteroid-eat-damage")) {
+      apply_damage = false;  // New: no damage when eating asteroids that fit
+    } else {
+      apply_damage = true;   // Legacy: damage even when eating
+    }
+  }
+
+  if (apply_damage) {
+    double damage;
+
+    // Use feature flag to determine damage model
+    if (g_pParser && g_pParser->UseNewFeature("physics")) {
+      // NEW PHYSICS: Damage based on momentum change |Δp|
+      // Both ships in a collision experience equal magnitude momentum change
+      // (Newton's 3rd law), so both take the same damage.
+      // Formula: damage = |Δp| / divisor
+      damage = CalculateCollisionMomentumChange(pOthThing) / g_laser_damage_mass_divisor;
+    } else {
+      // LEGACY: Damage based on relative momentum = m_other × v_rel
+      // This causes asymmetric damage: lighter ships take more damage.
+      damage = (RelativeMomentum(*pOthThing).rho) / g_laser_damage_mass_divisor;
+    }
+
+    dshield -= damage;
+    SetAmount(S_SHIELD, dshield);
+
+    // Announce collision even if ship survives
+    if (pWorld && damage > 0.1) {  // Only announce significant collisions
+      char msg[256];
+      const char *targetName = "unknown";
+      if (pOthThing->GetKind() == SHIP) {
+        targetName = pOthThing->GetName();
+      } else if (pOthThing->GetKind() == ASTEROID) {
+        targetName = "asteroid";
+      }
+      snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
+               GetName(), targetName, damage);
+      pWorld->AddAnnouncerMessage(msg);
+    }
+    if (dshield < 0.0) {
+      const char *causeType = "unknown";
+      if (pOthThing->GetKind() == SHIP) {
+        causeType = "ship collision";
+      } else if (pOthThing->GetKind() == ASTEROID) {
+        causeType = "asteroid collision";
+      }
+      printf("[DESTROYED] Ship %s (%s) destroyed by %s\n", GetName(),
+             GetTeam() ? GetTeam()->GetName() : "Unknown", causeType);
+      if (pWorld) {
+        char msg[256];
+        const char *shortCause = (pOthThing->GetKind() == SHIP) ? "ship" : "asteroid";
+        snprintf(msg, sizeof(msg), "%s destroyed by %s", GetName(), shortCause);
+        pWorld->AddAnnouncerMessage(msg);
+      }
+      KillThing();
+    }
+  }
+
+  if (OthKind == ASTEROID) {
+    CThing *pEat = ((CAsteroid *)pOthThing)->EatenBy();
+    if (pEat != NULL && !(*pEat == *this)) {
+      // Already taken by another ship
+      return;
+    }
+
+    bool asteroidFits = AsteroidFits((CAsteroid *)pOthThing);
+
+    if (asteroidFits) {
+      // SMALL ASTEROID (fits in cargo): Perfectly inelastic collision
+      // Ship absorbs the asteroid, combining masses and conserving momentum.
+      // This is correct physics for an inelastic collision.
+      CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
+      double othmass = pOthThing->GetMass();
+      double masstot = GetMass() + othmass;
+      Vel = MomTot / masstot;
+      if (Vel.rho > g_game_max_speed) {
+        Vel.rho = g_game_max_speed;
+      }
+
+      // Add asteroid mass to ship's cargo
+      switch (((CAsteroid *)pOthThing)->GetMaterial()) {
+        case VINYL:
+          adStatCur[(unsigned int)S_CARGO] += othmass;
+          break;
+        case URANIUM:
+          adStatCur[(unsigned int)S_FUEL] += othmass;
+          break;
+        default:
+          break;
+      }
+    } else {
+      // LARGE ASTEROID (doesn't fit): Collision physics depends on mode
+      if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+        // Legacy mode: Inelastic collision (even though asteroid doesn't stick!)
+        // This is physically incorrect but preserves old behavior
+        CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
+        double othmass = pOthThing->GetMass();
+        double masstot = GetMass() + othmass;
+        Vel = MomTot / masstot;
+        if (Vel.rho > g_game_max_speed) {
+          Vel.rho = g_game_max_speed;
+        }
+      } else {
+        // New mode: Perfectly elastic collision
+        // Ship and asteroid bounce off each other, conserving momentum and energy
+        HandleElasticShipCollision(pOthThing);
+      }
+    }
+  }
+
+  if (OthKind == SHIP && pOthThing->GetTeam() != NULL) {
+    CTeam *pTmpTm = pmyTeam;
+    pmyTeam = NULL;  // Prevents an infinite recursive call.
+    pOthThing->Collide(this, pWorld);
+    pmyTeam = pTmpTm;
+  }
+
+  // Handle separation/positioning after collision
+  // This section is only for ship-ship collisions in both legacy and new modes
+  // Ship-asteroid collision physics is handled above (lines 758-808)
+  if (OthKind == SHIP && pOthThing->GetTeam() != NULL) {
+    if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+      // Legacy mode: Non-physical separation impulse (violates momentum conservation)
+      double dang = pOthThing->GetPos().AngleTo(GetPos());
+      double dsmov = pOthThing->GetSize() + 3.0;
+      CTraj MovVec(dsmov, dang);
+      CCoord MovCoord(MovVec);
+      Pos += MovCoord;
+
+      double dmassrat = pOthThing->GetMass() / GetMass();
+      MovVec = MovVec * dmassrat;
+      Vel += MovVec;
+      if (Vel.rho > g_game_max_speed) {
+        Vel.rho = g_game_max_speed;
+      }
+    } else {
+      // New physics mode: Perfectly elastic collision between ships
+      // Conserves both momentum and kinetic energy
+      HandleElasticShipCollision(pOthThing);
+    }
+  }
+}
+
+void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
+  // NEW COLLISION HANDLING
+  // Currently identical to legacy - will be updated to remove recursive Collide() calls
+  // and fix multi-processing issues.
+
   if (*pOthThing == *this ||  // Can't collide with yourself!
       IsDocked() == true) {   // Nothing can hurt you at a station
     bIsColliding = g_no_damage_sentinel;

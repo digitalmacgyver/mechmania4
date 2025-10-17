@@ -1,0 +1,19 @@
+# Example test moves file for TestTeam
+# Format: shipnum,turn,ORDER_KIND,magnitude
+#
+# shipnum: 0-3 (which ship)
+# turn: 1-based turn number
+# ORDER_KIND: THRUST, TURN, JETTISON, or LASER
+# magnitude: order magnitude (thrust power, turn angle, jettison mass, or laser length)
+#
+# Example collision test: Ship 0 thrusts forward on turn 1
+0,1,THRUST,100.0
+
+# Example turn test: Ship 1 turns 90 degrees on turn 2
+1,2,TURN,1.57
+
+# Example jettison test: Ship 2 jettisons 5 tons on turn 3
+2,3,JETTISON,5.0
+
+# Example laser test: Ship 3 fires a 50-unit laser on turn 4
+3,4,LASER,50.0

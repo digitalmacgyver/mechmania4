@@ -34,6 +34,10 @@ class CAsteroid : public CThing {
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
 
  private:
+  // Collision processing implementations
+  void HandleCollisionOld(CThing* pOthThing, CWorld* pWorld);
+  void HandleCollisionNew(CThing* pOthThing, CWorld* pWorld);
+
   // Fragmentation implementations
   void CreateFragmentsOld(CThing* pOthThing, CWorld* pWorld, ThingKind OthKind);
   void CreateFragmentsNew(CThing* pOthThing, CWorld* pWorld, ThingKind OthKind);

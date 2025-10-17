@@ -4,10 +4,13 @@
  * Misha Voloshin 5/28/98
  */
 
+#include "ArgumentParser.h"
 #include "GameConstants.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
+
+extern ArgumentParser* g_pParser;
 
 ///////////////////////////////////////////
 // Construction/Destruction
@@ -50,6 +53,61 @@ double CStation::AddVinyl(double dvtons) {
 // Protected methods
 
 void CStation::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    HandleCollisionOld(pOthThing, pWorld);
+  } else {
+    HandleCollisionNew(pOthThing, pWorld);
+  }
+}
+
+void CStation::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
+  // LEGACY COLLISION HANDLING
+  // Preserves original behavior for station collisions
+
+  ThingKind OthKind = pOthThing->GetKind();
+  CTraj myVel(GetVelocity());
+  CCoord myPos(GetPos());
+
+  if (OthKind == SHIP) {
+    bIsColliding = g_no_damage_sentinel;
+    return;
+  }
+
+  if (OthKind != GENTHING) {
+    return;  // Only gets lased
+  }
+  if (pWorld == NULL) {
+    return;  // Colliding in a vaccuum?
+  }
+
+  double dDmg = pOthThing->GetMass();  // Laser object, whuppage is mass
+  dDmg /= g_laser_damage_mass_divisor;  // Takes a kilowhup
+  double oldCargo = dCargo;
+  dCargo -= dDmg;
+  if (dCargo < 0.0) {
+    dCargo = 0.0;
+  }
+
+  // Log station damage
+  if (dDmg > 0.01) {
+    printf(
+        "[STATION DAMAGE] Station %s (%s) lost %.2f vinyl from laser (%.2f -> "
+        "%.2f)\n",
+        GetName(), GetTeam() ? GetTeam()->GetName() : "Unknown", dDmg, oldCargo,
+        dCargo);
+    if (pWorld) {
+      char msg[256];
+      snprintf(msg, sizeof(msg), "%s hit by laser, %.1f vinyl lost",
+               GetName(), dDmg);
+      pWorld->AddAnnouncerMessage(msg);
+    }
+  }
+}
+
+void CStation::HandleCollisionNew(CThing* pOthThing, CWorld* pWorld) {
+  // NEW COLLISION HANDLING
+  // Will be updated to remove duplicate collision processing and improve physics
+
   ThingKind OthKind = pOthThing->GetKind();
   CTraj myVel(GetVelocity());
   CCoord myPos(GetPos());

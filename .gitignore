@@ -52,3 +52,4 @@ Makefile
 
 # Debug files
 *.dSYM/
+scripts/venv/

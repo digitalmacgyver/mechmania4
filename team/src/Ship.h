@@ -97,6 +97,10 @@ class CShip : public CThing {
   void HandleElasticShipCollision(CThing* pOtherShip);  // Proper elastic collision
   double CalculateCollisionMomentumChange(const CThing* pOtherThing) const;  // Calculate |Δp| for collision
 
+  // Collision processing implementations
+  void HandleCollisionOld(CThing* pOthThing, CWorld* pWorld);  // Legacy
+  void HandleCollisionNew(CThing* pOthThing, CWorld* pWorld);  // New system
+
   // Helper function used in both SetOrder and Drift. Ship users should use
   // SetOrder() to evaluate the fuel cost of any order.
   struct ThrustCost {

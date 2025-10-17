@@ -128,6 +128,64 @@ void CThing::Drift(double dt, double turn_phase) {
 bool CThing::Collide(CThing* pOthThing, CWorld* pWorld) {
   extern CParser* g_pParser;
 
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    return CollideOld(pOthThing, pWorld);
+  } else {
+    return CollideNew(pOthThing, pWorld);
+  }
+}
+
+bool CThing::CollideOld(CThing* pOthThing, CWorld* pWorld) {
+  // LEGACY COLLISION BEHAVIOR
+  // Preserves original MechMania IV collision processing.
+  extern CParser* g_pParser;
+
+  if (pOthThing == NULL) {
+    printf("Colliding with NULL!\n");
+    return false;  // How did THAT happen!!??
+  }
+  if (*pOthThing == *this) {
+    return false;  // Can't collide with yourself!
+  }
+
+  if (Overlaps(*pOthThing) == false) {
+    return false;
+  }
+
+  double dAng = GetPos().AngleTo(pOthThing->GetPos());
+  if (pOthThing->GetKind() == GENTHING) {
+    bIsGettingShot = dAng;
+  } else {
+    bIsColliding = dAng;
+  }
+
+  // Verbose logging for collision detection
+  if (g_pParser && g_pParser->verbose) {
+    CCoord pos1 = GetPos();
+    CCoord pos2 = pOthThing->GetPos();
+    double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
+                       (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
+    double combined_size = GetSize() + pOthThing->GetSize();
+    double overlap = combined_size - dist;
+
+    CTraj vel1 = GetVelocity();
+    CTraj vel2 = pOthThing->GetVelocity();
+
+    printf("[COLLISION] %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f) <-> %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f): dist=%.3f overlap=%.3f\n",
+           GetName(), pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, GetSize(),
+           pOthThing->GetName(), pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, pOthThing->GetSize(),
+           dist, overlap);
+  }
+
+  HandleCollision(pOthThing, pWorld);
+  return true;
+}
+
+bool CThing::CollideNew(CThing* pOthThing, CWorld* pWorld) {
+  // NEW COLLISION BEHAVIOR
+  // Currently identical to legacy - will be updated to fix multi-processing issues.
+  extern CParser* g_pParser;
+
   if (pOthThing == NULL) {
     printf("Colliding with NULL!\n");
     return false;  // How did THAT happen!!??
@@ -419,6 +477,29 @@ bool CThing::operator!=(const CThing& OthThing) const {
 // Protected methods
 
 void CThing::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
+  extern CParser* g_pParser;
+
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    HandleCollisionOld(pOthThing, pWorld);
+  } else {
+    HandleCollisionNew(pOthThing, pWorld);
+  }
+}
+
+void CThing::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
+  // LEGACY COLLISION HANDLING
+  // Base CThing does nothing on collision
+  if (pOthThing == NULL) {
+    return;
+  }
+  if (pWorld == NULL) {
+    return;
+  }
+}
+
+void CThing::HandleCollisionNew(CThing* pOthThing, CWorld* pWorld) {
+  // NEW COLLISION HANDLING
+  // Currently identical to legacy - will be updated for new collision system
   if (pOthThing == NULL) {
     return;
   }

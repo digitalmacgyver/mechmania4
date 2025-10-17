@@ -1,0 +1,2 @@
+# Python dependencies for test scripts
+# Currently no external dependencies required - all scripts use stdlib only

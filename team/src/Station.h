@@ -29,6 +29,11 @@ class CStation : public CThing {
   double dCargo;
 
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
+
+ private:
+  // Collision processing implementations
+  void HandleCollisionOld(CThing* pOthThing, CWorld* pWorld);
+  void HandleCollisionNew(CThing* pOthThing, CWorld* pWorld);
 };
 
 #endif  // ! _STATION_H_SDJKHSELKJFFAEJFLKA

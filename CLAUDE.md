@@ -247,3 +247,60 @@ To add a new switchable behavior:
      - Will fix collision ordering issues
      - Will prevent dead object collision processing
    - Note: This refactoring preserves exact legacy behavior while preparing infrastructure for collision system improvements
+
+## Testing Engine Changes
+
+After making code changes to the engine, use the Python test harness to verify both legacy and new modes work correctly.
+
+### Quick Test (Recommended)
+
+```bash
+# From project root
+source scripts/venv/bin/activate
+python3 scripts/test_collision_modes.py
+```
+
+This runs a full game in both legacy and new collision handling modes with groogroo teams and verifies completion.
+
+### Test Options
+
+```bash
+# Test with different teams
+python3 scripts/test_collision_modes.py --team1 noop --team2 noop
+python3 scripts/test_collision_modes.py --team1 testteam --team2 noop
+
+# View all options
+python3 scripts/test_collision_modes.py --help
+```
+
+### Available Test Teams
+
+- **groogroo**: Full AI team for realistic testing
+- **noop**: Does nothing, useful for isolation testing
+- **testteam**: Reads scripted moves from `test_moves.txt` for controlled scenarios
+
+### Creating Test Scenarios with testteam
+
+Create a `test_moves.txt` file in the project root with format:
+```
+# shipnum,turn,ORDER_KIND,magnitude
+0,1,THRUST,100.0
+1,2,TURN,1.57
+2,3,JETTISON,5.0
+3,4,LASER,50.0
+```
+
+See `test_moves_example.txt` for examples and `scripts/QUICK_TESTING.md` for detailed documentation.
+
+### First-Time Setup
+
+If the virtual environment doesn't exist:
+
+```bash
+cd scripts/
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt  # Currently no dependencies needed
+```
+
+For complete testing documentation, see [scripts/QUICK_TESTING.md](scripts/QUICK_TESTING.md).

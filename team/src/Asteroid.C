@@ -85,6 +85,112 @@ CAsteroid* CAsteroid::MakeChildAsteroid(double dm) {
 }
 
 void CAsteroid::HandleCollision(CThing* pOthThing, CWorld* pWorld) {
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    HandleCollisionOld(pOthThing, pWorld);
+  } else {
+    HandleCollisionNew(pOthThing, pWorld);
+  }
+}
+
+void CAsteroid::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
+  // LEGACY COLLISION HANDLING
+  // Preserves original behavior for asteroid collisions
+
+  ThingKind OthKind = pOthThing->GetKind();
+
+  bIsColliding = g_no_damage_sentinel;
+  bIsGettingShot = g_no_damage_sentinel;
+
+  // Asteroid-to-asteroid interactions are not simulated in the engine.
+  // World::CollisionEvaluation only pairs team-controlled things
+  // (ships/stations) with other world things (e.g., asteroids). As a defensive
+  // guard, ignore asteroid-asteroid "collisions" if ever invoked.
+  if (OthKind == ASTEROID) {
+    return;
+  }
+
+  if (OthKind == STATION) {
+    // ASTEROID-STATION COLLISION PHYSICS
+    // This implements a perfectly elastic collision between an asteroid (point
+    // mass) and a stationary station (immovable circular object with infinite
+    // mass).
+    //
+    // PHYSICS NOTE: This is a correct elastic collision with an infinite mass.
+    // Momentum is NOT conserved (station has infinite mass and doesn't move),
+    // but kinetic energy IS conserved (asteroid speed unchanged, only direction
+    // changes via specular reflection).
+
+    // Step 1: Calculate the surface normal at the collision point
+    // This is the direction from station to asteroid (impact direction)
+    double angbo = pOthThing->GetPos().AngleTo(this->GetPos());
+
+    // Step 2: Implement specular reflection physics
+    // For elastic collisions: reflection_angle = 2 * surface_normal -
+    // incident_angle - PI
+    angbo *= 2.0;        // Double the surface normal angle
+    angbo -= Vel.theta;  // Subtract the incident velocity direction
+    angbo -= PI;  // Account for velocity vector vs approach vector convention
+
+    // Step 3: Set the asteroid's new velocity direction to the calculated
+    // reflection
+    Vel.theta = angbo;
+    Vel.Normalize();  // Ensure angle is in proper range [-PI, PI]
+
+    // Step 4: Position the asteroid outside the station to prevent overlap
+    // Recalculate the surface normal for positioning (not velocity)
+    angbo = pOthThing->GetPos().AngleTo(this->GetPos());
+    CTraj TMove(size + pOthThing->GetSize() + 1, angbo);
+    Pos = pOthThing->GetPos();
+    Pos += TMove.ConvertToCoord();
+
+    // Step 5: Set collision angle for visual damage effects
+    // The graphics system uses this angle to render damage sprites at the
+    // impact point
+    pOthThing->bIsColliding = angbo;  // How convenient
+
+    return;
+  }
+
+  // Handle laser-blast:
+  // --------------------
+  // Lasers are delivered as a temporary GENTHING synthesized by
+  // CWorld::LaserModel. That temporary "laser thing" is positioned
+  // one unit shy of the target along the beam, and its mass encodes
+  // the remaining beam power at impact:
+  //   mass = g_laser_mass_scale_per_remaining_unit * (L - D)
+  // where L is the requested beam length and D is the shooter-to-
+  // impact distance. We require at least g_asteroid_laser_shatter_threshold
+  // units of laser mass to
+  // shatter the asteroid. If below threshold, the beam glances off.
+  if (OthKind == GENTHING &&
+      pOthThing->GetMass() < g_asteroid_laser_shatter_threshold) {
+    return;
+  }
+
+  DeadFlag = true;
+  if (OthKind == SHIP) {
+    // ASTEROID-SHIP COLLISION PHYSICS
+    // Implements momentum exchange between asteroid and ship.
+    // Ships can absorb asteroids if they're small enough or take damage from
+    // larger ones.
+    pThEat = pOthThing;
+    if (((CShip*)pOthThing)->AsteroidFits(this)) {
+      return;  // Don't make child asteroids if this one got eaten
+    }
+  }
+
+  // Dispatch to appropriate fragmentation implementation
+  if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+    CreateFragmentsOld(pOthThing, pWorld, OthKind);
+  } else {
+    CreateFragmentsNew(pOthThing, pWorld, OthKind);
+  }
+}
+
+void CAsteroid::HandleCollisionNew(CThing* pOthThing, CWorld* pWorld) {
+  // NEW COLLISION HANDLING
+  // Will be updated to remove duplicate collision processing and improve physics
+
   ThingKind OthKind = pOthThing->GetKind();
 
   bIsColliding = g_no_damage_sentinel;

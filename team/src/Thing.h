@@ -108,6 +108,12 @@ class CThing : public CSendable {
   // Collision detection implementations (Private)
   double DetectCollisionCourseOld(const CThing& OthThing) const; // Legacy
   double DetectCollisionCourseNew(const CThing& OthThing) const; // Quadratic
+
+  // Collision processing implementations (Private)
+  bool CollideOld(CThing* pOthThing, CWorld* pWorld);
+  bool CollideNew(CThing* pOthThing, CWorld* pWorld);
+  void HandleCollisionOld(CThing* pOthThing, CWorld* pWorld);
+  void HandleCollisionNew(CThing* pOthThing, CWorld* pWorld);
 };
 
 #endif  // !_THING_H_SFEFLKJEFLJESNF

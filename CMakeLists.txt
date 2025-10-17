@@ -181,6 +181,17 @@ add_executable(mm4team_noop
 target_link_libraries(mm4team_noop mm4_common pthread)
 target_include_directories(mm4team_noop PRIVATE teams/noop)
 
+# TestTeam executable (scripted test team that reads moves from file)
+add_executable(mm4team_testteam
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/testteam/TestTeam.C
+)
+target_link_libraries(mm4team_testteam mm4_common pthread)
+target_include_directories(mm4team_testteam PRIVATE teams/testteam)
+
 # James Kirk team executable (demonstrates engine exploits)
 add_executable(mm4team_jameskirk
     ${SRC_DIR}/mm4team.C
