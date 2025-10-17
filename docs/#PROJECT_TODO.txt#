@@ -243,6 +243,17 @@ Re-enabled with --legacy-physics:
     kickback of twice the jettisoned asteroid. We conserve momentum by
     default now.
 
+  * Non-conservation of momentum on various collision types -
+    Asteroid-Laser, Asteroid-Ship, Laser-Ship, and Ship-Ship
+    collisions used to use various different physics for collisions
+    now: All laser collisions are pefectly inelastic collisions, and
+    Asteroid-Ship and Ship-Ship collisions are perfectly
+    elastic. (Station interactionns are unchanged and for asteroids
+    correctly model collisions with "infinite" masses.
+
+?? Make rotational fuel costs go here too.
+
+
 Not re-enableable:
 
   * Create Vinyl With Jettison Bug - you could jettison any amount of
@@ -386,11 +397,7 @@ Why The Guard Fails:
 The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks it, the asteroid has already overwritten pThEat to point to Ship B instead of Ship A!
 ================== double yum ===========================
 
-
 Engine enhancements:
-  * Physically costed rotation based on assumption of linear accel and decel to change angle X and end up at a dead stop? (Normalized to physicall acceleration costs?)
-
-
   * Review momentum handling on laser strike
   * asteroid mass correctly correlates with volume? Or I guess we're in 2d so area is OK?
   * Our ship collision logic deals damage to us based on our relative

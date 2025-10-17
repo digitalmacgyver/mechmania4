@@ -243,6 +243,16 @@ Re-enabled with --legacy-physics:
     kickback of twice the jettisoned asteroid. We conserve momentum by
     default now.
 
+  * Non-conservation of momentum on various collision types -
+    Asteroid-Laser, Asteroid-Ship, Laser-Ship, and Ship-Ship
+    collisions used to use various different physics for collisions
+    now: All laser collisions are pefectly inelastic collisions, and
+    Asteroid-Ship and Ship-Ship collisions are perfectly
+    elastic. (Station interactionns are unchanged and for asteroids
+    correctly model collisions with "infinite" masses.
+
+?? Make rotational fuel costs go here too.
+
 Not re-enableable:
 
   * Create Vinyl With Jettison Bug - you could jettison any amount of
@@ -386,12 +396,7 @@ Why The Guard Fails:
 The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks it, the asteroid has already overwritten pThEat to point to Ship B instead of Ship A!
 ================== double yum ===========================
 
-
 Engine enhancements:
-  * Physically costed rotation based on assumption of linear accel and decel to change angle X and end up at a dead stop? (Normalized to physicall acceleration costs?)
-
-
-  * Review momentum handling on laser strike
   * asteroid mass correctly correlates with volume? Or I guess we're in 2d so area is OK?
   * Our ship collision logic deals damage to us based on our relative
     velocity with the thing we collide, and that things mass, our mass
@@ -471,40 +476,9 @@ Subtle Bug (The Antipode): There is an edge case bug when the target is exactly 
 
 ??????????????? Find the questions I asked here ?????????????????
 
-Q. Based on DeepThink's answer to Q1 in our doc fuel and other logic
-implicitly assume dt=1.0, but if the simulation is run with other
-values velocity and clamping and fuel calculations may be
-incorrect. How does this interact with our world being run at 0.2
-ticks and then laser blasts on the 1s?
-
-* As cleanup, should we generalize this to tick size and make that a
-  global constant or something?
-
-Q. Based on DeepThink's answer to Q2, the acceleration logic may be
-flawed, allowing for a final ship velicoty which exceeds maxspeed (I
-suspect this would quickly be clamped elsewhere, but... (we could add
-a log message if this ever happens somewhere)). Check the facts on
-this.
-
 Q. Based on DeepThik's answer to Q3, it claims my two scenarios result
 in different costs. get to ground truth on that with a hello world
 type example.
-
-Q. Based on DeepThink's answer to Q4, which is basically "this simple
-simulation models fuel cost linearly with the angle turned" - think
-deep throughts about how you might handle this differently. Our
-rotational inertia is set to 0 at the end of each turn, so to turn
-theta, we accelerate linearly to 2theta in 1/2 a second and then
-decelerate, or something like that. What would that cost in reality
-given our ship mass etc. This would be an add on in our "more
-realistic physics" package.
-
-Q. Based on DeepThink's answer to Q6/Q7, it agrees dDockDist is kind of stupid, and can create either a walk-out launch wherre we get 5 away each time, or even an infinite loop where we launch with negative velocity.
-  Maybe add diagnostic / warning code when we go throug launch cycles? e.g. server announce of each launch and dock and see if we get spammy notices?
-  Think deep throughts about:
-  * A. What is this even trying to do?
-  * B. WOuld it be better to just entirely replace it with a minimum launch distinace of server_radius + ship_radius + fudge factor?
-      * Or at least make the launch distance the max of B and what it actually does?
 
 ??????????????????????????????????????/
 
@@ -547,16 +521,6 @@ based on orders, repeat.
 
 Q. (Can you issue orders on other teams ships?  that the server will
 do)?
-
-
-Q. What is going on in the laser shooting code around line 171-181 in
-  World.c, why are we adding a distance of 1 of the targets velocity
-  onto the lasThing? Is this an effort to impart momentum due to the
-  blast, needed to hit the target? To get the damage correct?
-  Something else?
-    * It seems like this code should be changed and there should be a
-  "nudge" in movement away from the laser, perhaps proportional to
-  damage taken or whatever.
 
 Q. The logic around adding new things to the world based on MAX_THINGS
 is wrong/broken I think. It ends up not mattering because we are at

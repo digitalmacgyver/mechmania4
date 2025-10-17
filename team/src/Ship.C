@@ -834,6 +834,49 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
       }
       KillThing();
     }
+
+    // Apply momentum transfer from laser (new physics mode)
+    if (g_pParser && g_pParser->UseNewFeature("physics")) {
+      // LASER MOMENTUM TRANSFER: Photon momentum physics
+      //
+      // Lasers impart momentum based on photon physics: p = E/c
+      // - Laser "mass" represents beam energy (30 × remaining_length)
+      // - Speed of light in game: c = 30 u/s (max ship speed)
+      // - Laser velocity set to c along beam direction (World.C:277-285)
+      // - Momentum transfer: p = (laser_mass / 30) × 30 = laser_mass
+      //
+      // For a perfectly inelastic collision (photon absorbed):
+      //   v_final = (m_ship × v_ship + m_laser × v_laser) / (m_ship + m_laser)
+      //
+      // Since m_laser << m_ship, this simplifies to:
+      //   Δv ≈ (m_laser / m_ship) × (v_laser - v_ship_projected)
+      //
+      // Result: Ship velocity changes by ~1-7 u/s (4-24% of max speed) depending on
+      // beam strength and ship mass, pushing the ship along the beam direction.
+
+      double m_ship = GetMass();
+      double m_laser = pOthThing->GetMass();
+      double total_mass = m_ship + m_laser;
+
+      CCoord vel_ship = Vel.ConvertToCoord();
+      CCoord vel_laser = pOthThing->GetVelocity().ConvertToCoord();
+
+      // Calculate momentum-weighted average velocity (perfectly inelastic collision)
+      CCoord v_final;
+      v_final.fX = (m_ship * vel_ship.fX + m_laser * vel_laser.fX) / total_mass;
+      v_final.fY = (m_ship * vel_ship.fY + m_laser * vel_laser.fY) / total_mass;
+
+      // Convert back to trajectory and apply
+      CTraj new_vel(v_final);
+
+      // Enforce maximum speed
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+
+      Vel = new_vel;
+    }
+
     return;
   }
 

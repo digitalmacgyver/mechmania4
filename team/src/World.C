@@ -273,10 +273,25 @@ void CWorld::LaserModel() {
         dLasRng = TmpPos.DistTo(pShip->GetPos());
         LasThing.SetMass(g_laser_mass_scale_per_remaining_unit *
                          (dLasPwr - dLasRng));
-        // Give the laser thing a small velocity bias based on target motion
-        TarVel = pTarget->GetVelocity();
-        TarVel.rho += 1.0;
-        LasThing.SetVel(TarVel);
+
+        // Set laser velocity based on physics mode
+        if (g_pParser && g_pParser->UseNewFeature("physics")) {
+          // NEW PHYSICS: Photon momentum model
+          // Photons travel at speed of light along beam direction
+          // In our game: c = max_ship_speed (30 u/s)
+          // Momentum transfer: p = E/c where E is laser "mass" (energy)
+          // This gives momentum along beam, not target motion
+          double beam_direction = pShip->GetOrient();
+          double speed_of_light = g_game_max_speed;  // 30 u/s
+          CTraj laser_velocity(speed_of_light, beam_direction);
+          LasThing.SetVel(laser_velocity);
+        } else {
+          // LEGACY PHYSICS: Target-tracking laser
+          // Give the laser thing a small velocity bias based on target motion
+          TarVel = pTarget->GetVelocity();
+          TarVel.rho += 1.0;
+          LasThing.SetVel(TarVel);
+        }
 
         // Log laser hit
         const char* targetType = "unknown";

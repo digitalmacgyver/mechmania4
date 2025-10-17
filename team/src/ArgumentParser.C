@@ -22,7 +22,7 @@ void ArgumentParser::InitializeFeatures() {
   features["collision-detection"] = true;  // New collision detection is default
   features["velocity-limits"] = true;      // New velocity/acceleration limits is default
   features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
-  features["physics"] = true;              // New: correct momentum conservation in jettison
+  features["physics"] = true;              // New: correct collision physics and momentum conservation
 
   // Security features
   features["laser-exploit"] = false;       // New: TOCTOU vulnerability patched (validate before firing)
@@ -64,7 +64,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
                                     "Use legacy collision detection")(
         "legacy-velocity-limits", "Use legacy velocity and acceleration limits")(
         "legacy-asteroid-eat-damage", "Ships take damage when eating asteroids (legacy behavior)")(
-        "legacy-physics", "Use legacy jettison physics (2x recoil)")(
+        "legacy-physics", "Use legacy collision physics and momentum conservation")(
         "legacy-laser-exploit", "Enable TOCTOU laser exploit (fire before validation)")(
         "legacy-docking", "Use legacy docking (dDockDist+5, can get stuck re-docking)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
@@ -209,14 +209,14 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-detection"] = true;
     features["velocity-limits"] = true;
     features["asteroid-eat-damage"] = true;
-    features["physics"] = true;
+    features["physics"] = true;          // Enable correct collision physics and momentum
     features["laser-exploit"] = false;  // Patch exploit
     features["docking"] = true;          // Fix docking
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
     features["asteroid-eat-damage"] = false;
-    features["physics"] = false;
+    features["physics"] = false;        // Use legacy collision physics (no laser momentum)
     features["laser-exploit"] = true;   // Enable exploit for legacy mode
     features["docking"] = false;        // Enable docking bug for legacy mode
     // Set timing and physics parameters to default values for legacy mode

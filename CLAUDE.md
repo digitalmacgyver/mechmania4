@@ -108,20 +108,47 @@ double MyClass::PublicMethodNew(/* params */) {
    - New physical: 0.3513 tons (based on rotational kinetics, 2× peak KE)
    - SetOrder and Drift costs now match perfectly (no 5x error)
 
-5. **Jettison Physics (Ship.C HandleJettison() method)**
+5. **Collision Physics and Momentum Conservation (Multiple files)**
    - Feature: `physics`
+   - This flag controls ALL collision physics and momentum transfer in the game
+
+   **5a. Jettison Physics (Ship.C HandleJettison() method)**
    - Location: Inline in `HandleJettison()` method, momentum calculation section
    - Legacy: Multiplies asteroid momentum by 2.0, causing excessive recoil (violates conservation of momentum)
    - New: Correct Newtonian conservation of momentum (1.0x multiplier)
 
-6. **Ship-Ship Collision Physics (Ship.C HandleCollision() method)**
-   - Feature: `physics`
+   **5b. Ship-Ship Collision Physics (Ship.C HandleCollision() method)**
    - Location: Inline in `HandleCollision()` method, ship collision handling section
    - Private method: `HandleElasticShipCollision()` implements new physics
    - Legacy: Non-physical separation impulse that creates momentum from nothing (both ships gain velocity)
    - New: Proper 2D elastic collision using standard formulas that conserve momentum and kinetic energy
 
-7. **Ship Launch Docking Distance (Ship.C ProcessThrustDriftNew/Old() methods)**
+   **5c. Ship-Asteroid Collision Physics (Asteroid.C CreateFragmentsNew() method)**
+   - Location: Lines 233-276 in `CreateFragmentsNew()`, OthKind == SHIP section
+   - Legacy: Uses simple relative velocity (CreateFragmentsOld)
+   - New: Perfectly elastic collision with proper momentum and energy conservation
+
+   **5d. Laser-Asteroid Collision Physics (Asteroid.C CreateFragmentsNew() method)**
+   - Location: Lines 277-294 in `CreateFragmentsNew()`, OthKind == GENTHING section
+   - Legacy: Uses relative velocity for fragments (CreateFragmentsOld)
+   - New: Perfectly inelastic collision - laser mass and momentum absorbed by asteroid
+   - Formula: `v_final = (m_ast × v_ast + m_laser × v_laser) / (m_ast + m_laser)`
+   - Fragments inherit center-of-mass velocity plus symmetric spread pattern
+
+   **5e. Laser-Ship Collision Physics (Ship.C HandleCollision() method)**
+   - Location: Lines 838-878, OthKind == GENTHING section
+   - Legacy: No momentum transfer (ships unaffected by laser impacts beyond damage)
+   - New: Perfectly inelastic collision - photon momentum absorbed by ship
+   - Formula: `v_final = (m_ship × v_ship + m_laser × v_laser) / (m_ship + m_laser)`
+   - Effect: Ship velocity changes by ~1-7 u/s depending on beam strength and ship mass
+
+   **5f. Laser Velocity Model (World.C LaserModel() method)**
+   - Location: Lines 277-294, laser velocity initialization
+   - Legacy: `laser_vel = target_velocity + 1.0` (non-physical, target-tracking)
+   - New: `laser_vel = 30 u/s along beam direction` (photon physics: light travels at c)
+   - This affects ALL laser collisions (ships and asteroids) by changing laser momentum vector
+
+6. **Ship Launch Docking Distance (Ship.C ProcessThrustDriftNew/Old() methods)**
    - Feature: `docking`
    - Location: Inline in `ProcessThrustDriftNew()` and `ProcessThrustDriftOld()` methods, undocking section
    - Legacy: Uses `dDockDist + 5.0` for launch distance, causing re-docking bug with low thrust (<35 units/sec)
@@ -129,7 +156,7 @@ double MyClass::PublicMethodNew(/* params */) {
    - Bug Details: Legacy mode ships with thrust < 35 u/s launch to 35 units (< collision threshold of 42), re-dock, incrementing dDockDist each turn until escape
    - Fix: New mode always launches to 48 units (> 42 threshold), guaranteeing immediate escape regardless of thrust
 
-8. **Free Launch Thrust (Ship.h/Ship.C)**
+7. **Free Launch Thrust (Ship.h/Ship.C)**
    - Feature: `velocity-limits` (controlled by same flag as thrust processing)
    - Member: `bool bLaunchedThisTurn` - tracks if ship undocked during current turn
    - Reset: In `ResetOrders()` at start of each turn
