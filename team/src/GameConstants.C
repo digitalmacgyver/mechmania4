@@ -36,6 +36,11 @@ double g_laser_mass_scale_per_remaining_unit = 30.0;
 double g_laser_damage_mass_divisor = 1000.0;
 double g_ship_turn_full_rotations_per_fuel = 6.0;
 
+// Energy available from 1 ton of fuel, derived from thrust physics:
+// 1 ton accelerates 40-ton ship to 180 units/s (6 * max_speed)
+// KE = 0.5 * 40 * 180^2 = 648,000
+double g_ship_turn_energy_per_fuel_ton = 648000.0;
+
 // Station defaults
 double g_station_spawn_size = 30.0;
 double g_station_spawn_mass = 99999.9;

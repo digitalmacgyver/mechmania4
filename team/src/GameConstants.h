@@ -97,8 +97,13 @@ extern double g_laser_mass_scale_per_remaining_unit;
 // Divisor converting incoming laser mass into effective damage on shields.
 extern double g_laser_damage_mass_divisor;
 
-// Number of full ship revolutions achievable per ton of fuel consumed.
+// Number of full ship revolutions achievable per ton of fuel consumed (legacy).
 extern double g_ship_turn_full_rotations_per_fuel;
+
+// Energy available from 1 ton of fuel (derived from thrust physics).
+// Calculated as: 0.5 * hull_mass * (6 * max_speed)^2
+// With defaults (40 tons, 30 units/s): 0.5 * 40 * 180^2 = 648,000
+extern double g_ship_turn_energy_per_fuel_ton;
 
 // ---------------------------------------------------------------------------
 // Station defaults

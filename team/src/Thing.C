@@ -107,7 +107,8 @@ void CThing::KillThing() { DeadFlag = true; }
 ////////////////////////////////////////////////
 // Explicit methods
 
-void CThing::Drift(double dt) {
+void CThing::Drift(double dt, double turn_phase) {
+  // Base class ignores turn_phase parameter (only used by ships)
   bIsColliding = g_no_damage_sentinel;
   bIsGettingShot = g_no_damage_sentinel;
   if (Vel.rho > g_game_max_speed) {

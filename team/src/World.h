@@ -40,7 +40,7 @@ class CWorld : public CSendable {
   // Announcer system
   void AddAnnouncerMessage(const char* message);
 
-  unsigned int PhysicsModel(double dt = 1.0);  // Specify amt of time to pass
+  unsigned int PhysicsModel(double dt = 1.0, double turn_phase = 0.0);  // Specify amt of time to pass
   void LaserModel();                   // Compute all laser firings
   void AddThingToWorld(CThing* pNewThing);
 

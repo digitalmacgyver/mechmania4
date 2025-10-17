@@ -64,7 +64,7 @@ class CThing : public CSendable {
   void SetWorldIndex(unsigned int ind) { uWldIndex = ind; }
   void SetWorld(CWorld* pWld) { pmyWorld = pWld; }
 
-  virtual void Drift(double dt = 1.0);
+  virtual void Drift(double dt = 1.0, double turn_phase = 0.0);
   bool Collide(CThing* pOthThing, CWorld* pWorld = NULL);
   bool Overlaps(const CThing& OthThing) const;
 

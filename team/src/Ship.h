@@ -47,7 +47,7 @@ class CShip : public CThing {
 
   virtual double GetMass() const;
 
-  virtual void Drift(double dt = 1.0);
+  virtual void Drift(double dt = 1.0, double turn_phase = 0.0);
   bool AsteroidFits(const CAsteroid* pAst);
 
   CThing* LaserTarget();          // Returns what laserbeam will hit if fired

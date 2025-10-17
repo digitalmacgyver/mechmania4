@@ -79,12 +79,34 @@ double MyClass::PublicMethodNew(/* params */) {
    - Legacy: Buggy drift behavior with fuel double-spend
    - New: Correct drift using CalcThrustCost with dt-sized amounts
 
-4. **Turn Order Processing (Ship.C Drift() method)**
+4. **Turn Order Processing with Triangular Velocity Profile (Ship.C Drift() method)**
    - Feature: `velocity-limits`
    - Location: Inline in `Drift()` method, O_TURN handling section
-   - Legacy: Calls `SetOrder(O_TURN, turnamt)` for full turn, causing premature fuel clamping on low fuel
-   - New: Calls `SetOrder(O_TURN, turnamt * dt)` for dt-sized turn, fixes premature clamping bug
-   - Note: Also affects orient update - legacy uses `orient += omega * dt`, new uses `orient += omega`
+   - Helper functions: `GetTriangularOmega()`, `CalcTurnCostPhysical()`
+   - Physics model: Ship modeled as uniform disk with triangular angular velocity profile
+   - Legacy: Linear cost model, each dt tick processes `turnamt * dt`, accelerates/decelerates 5 times
+   - New: Physically accurate model with single triangular acceleration/deceleration over full 1-second turn
+
+   **Triangular Velocity Profile Physics:**
+   - Ship accelerates linearly to peak angular velocity ω_max at t=0.5s
+   - Ship decelerates linearly from ω_max back to zero at t=1.0s
+   - Peak angular velocity: ω_max = 2θ/T where θ is total angle, T=1 second
+   - Each sub-tick (dt=0.2s) uses angular velocities from the triangular profile
+   - Fuel cost per sub-tick = rotational kinetic energy change: ΔKE = 0.5×I×(ω_end² - ω_start²)
+   - Special handling for tick 2 (phase 0.4→0.6) which crosses peak: separates accel and decel energy
+   - Total fuel across all ticks matches SetOrder cost (no 5x discrepancy)
+
+   **Key Implementation Details:**
+   - Server.C passes `turn_phase` ∈ [0,1] to PhysicsModel → World.C → Thing/Ship Drift()
+   - `turn_phase = tick / num_ticks` gives progress through turn (0.0, 0.2, 0.4, 0.6, 0.8 for 5 ticks)
+   - Tick crossing peak (0.4→0.6): fuel = accel_energy(ω_start→ω_max) + decel_energy(ω_max→ω_end)
+   - Other ticks: fuel = 0.5×I×|ω_end² - ω_start²| / energy_per_fuel_ton
+   - Orient update: new mode uses `orient += omega` where omega is average of start/end angular velocities
+
+   **Cost Comparison (70-ton ship, full 360° rotation):**
+   - Legacy linear: 0.1667 tons (6 rotations per fuel ton)
+   - New physical: 0.3513 tons (based on rotational kinetics, 2× peak KE)
+   - SetOrder and Drift costs now match perfectly (no 5x error)
 
 5. **Jettison Physics (Ship.C HandleJettison() method)**
    - Feature: `physics`

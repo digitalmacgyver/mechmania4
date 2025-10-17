@@ -139,13 +139,13 @@ unsigned int CWorld::GetPrevIndex(unsigned int curindex) const {
 /////////////////////////////////////////////////////
 // Explicit functions
 
-unsigned int CWorld::PhysicsModel(double dt) {
+unsigned int CWorld::PhysicsModel(double dt, double turn_phase) {
   CThing* pThing;
   unsigned int i;
 
   for (i = UFirstIndex; i != (unsigned int)-1; i = GetNextIndex(i)) {
     pThing = GetThing(i);
-    pThing->Drift(dt);
+    pThing->Drift(dt, turn_phase);
   }
 
   CollisionEvaluation();

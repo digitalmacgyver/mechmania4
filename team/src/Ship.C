@@ -15,6 +15,55 @@
 
 extern CParser* g_pParser;
 
+///////////////////////////////////////////
+// Helper functions (must be defined before use in member functions)
+
+// Calculate fuel cost for rotation using physical model based on rotational kinetics.
+// Ship modeled as uniform disk with triangular angular velocity profile.
+static inline double CalcTurnCostPhysical(double angle_radians, double ship_mass, double ship_radius) {
+  // Physical model:
+  // - Ship is a uniform disk: moment of inertia I = 0.5 * M * R²
+  // - Angular velocity follows triangular profile (smooth acceleration/deceleration)
+  // - Peak angular velocity: ω_max = 2θ/T (occurs at midpoint)
+  // - Peak rotational kinetic energy: KE_peak = 0.5 * I * ω_max²
+  //
+  // Total energy expenditure includes BOTH acceleration and deceleration:
+  // - Energy to accelerate from 0 to ω_max: KE_peak
+  // - Energy to decelerate from ω_max to 0: KE_peak
+  // - Total work done: 2 * KE_peak
+  //
+  // Derivation:
+  //   I = 0.5 * M * R²
+  //   ω_max = 2θ/T
+  //   KE_peak = 0.5 * (0.5 * M * R²) * (2θ/T)²
+  //           = 0.5 * 0.5 * M * R² * 4θ²/T²
+  //           = M * R² * θ² / T²
+  //   Total energy = 2 * KE_peak = 2 * M * R² * θ² / T²
+  //
+  // Fuel cost = Total energy / energy_per_fuel_ton
+
+  const double T = 1.0;  // Turn duration in seconds (one game turn)
+  const double T_squared = T * T;
+
+  // Calculate peak rotational kinetic energy
+  double KE_peak = ship_mass * ship_radius * ship_radius * angle_radians * angle_radians / T_squared;
+
+  // Total energy is 2× peak (accel + decel), convert to fuel cost
+  return 2.0 * KE_peak / g_ship_turn_energy_per_fuel_ton;
+}
+
+// Calculate angular velocity at a specific phase in the triangular velocity profile.
+// Phase ∈ [0, 1] represents progress through the turn (0 = start, 1 = end).
+// The triangular profile accelerates linearly to peak at phase=0.5, then decelerates.
+static inline double GetTriangularOmega(double phase, double omega_max) {
+  if (phase <= 0.5) {
+    // Accelerating: ω increases linearly from 0 to ω_max
+    return 2.0 * omega_max * phase;
+  } else {
+    // Decelerating: ω decreases linearly from ω_max to 0
+    return 2.0 * omega_max * (1.0 - phase);
+  }
+}
 
 ///////////////////////////////////////////
 // Construction/Destruction
@@ -272,22 +321,28 @@ double CShip::SetOrder(OrderKind ord, double value) {
         return fuelcon;
       }
 
-      // New behavior: normalize the requested turn before charging fuel.
+      // New behavior: normalize the requested turn and use physical rotation model.
       double normalized_value = normalize_angle(value);
-      fuelcon = fabs(normalized_value) * GetMass() /
-                (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
+
+      // Calculate fuel using physically consistent rotation model (quadratic in angle)
+      fuelcon = CalcTurnCostPhysical(fabs(normalized_value), GetMass(), size);
+
       if (IsDocked() == true) {
         fuelcon = 0.0;
       }
+
+      // If we don't have enough fuel, calculate the maximum angle we can afford
       if (fuelcon > maxfuel) {
         fuelcon = maxfuel;
-        double limited =
-            (mass * g_ship_turn_full_rotations_per_fuel * PI2 * fuelcon) /
-            GetMass();
+        // Solve: M * R² * θ² / (T² * energy_per_ton) = fuelcon
+        // θ = sqrt(fuelcon * energy_per_ton * T² / (M * R²))
+        double limited_angle = sqrt(fuelcon * g_ship_turn_energy_per_fuel_ton / (GetMass() * size * size));
+
+        // Preserve sign of original turn
         if (normalized_value <= 0.0) {
-          normalized_value = -limited;
+          normalized_value = -limited_angle;
         } else {
-          normalized_value = limited;
+          normalized_value = limited_angle;
         }
         normalized_value = normalize_angle(normalized_value);
       }
@@ -426,7 +481,7 @@ double CShip::GetJettison(AsteroidKind Mat) {
 ////////////////////////////////////////////
 // Inherited methods
 
-void CShip::Drift(double dt) {
+void CShip::Drift(double dt, double turn_phase) {
   if (GetTeam()->GetWorld()->bGameOver == true) {
     CThing::Drift(0.0);  // Ships don't move when game is over
     return;
@@ -511,39 +566,55 @@ void CShip::Drift(double dt) {
                GetTeam() ? GetTeam()->GetName() : "Unknown");
       }
     } else {
-      // New mode: calculate fuel for dt-sized turn (fixes premature clamping bug)
-      // Calculate fuel directly without calling SetOrder to preserve original order
-      double dt_turn = turnamt * dt;  // The turn we want to do this tick
+      // New mode: triangular velocity profile - single accel/decel over full turn
+      double theta_total = fabs(turnamt);
+      double omega_max = 2.0 * theta_total / g_game_turn_duration;
 
-      // Calculate fuel cost for this dt-sized turn
-      // Formula from SetOrder(O_TURN): fuel = |angle| * mass / (6 * 2PI * naked_mass)
-      fuelcons = fabs(dt_turn) * GetMass() /
-                 (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
+      double phase_duration = dt / g_game_turn_duration;
+      double phase_start = turn_phase;
+      double phase_end = turn_phase + phase_duration;
+
+      double omega_start = GetTriangularOmega(phase_start, omega_max);
+      double omega_end = GetTriangularOmega(phase_end, omega_max);
+
+      // Calculate fuel as rotational kinetic energy change
+      double I = 0.5 * GetMass() * size * size;
+
+      // Check if this tick crosses the peak at phase=0.5
+      if (phase_start < 0.5 && phase_end > 0.5) {
+        // Tick spans the peak - calculate accel and decel separately
+        // Energy to accelerate from omega_start to omega_max
+        double accel_energy = 0.5 * I * (omega_max * omega_max - omega_start * omega_start);
+        // Energy to decelerate from omega_max to omega_end
+        double decel_energy = 0.5 * I * (omega_max * omega_max - omega_end * omega_end);
+        fuelcons = (accel_energy + decel_energy) / g_ship_turn_energy_per_fuel_ton;
+      } else {
+        // Tick doesn't cross peak - monotonic change
+        fuelcons = 0.5 * I * fabs(omega_end * omega_end - omega_start * omega_start)
+                   / g_ship_turn_energy_per_fuel_ton;
+      }
 
       if (IsDocked()) {
-        fuelcons = 0.0;  // No fuel cost while docked
+        fuelcons = 0.0;
       }
 
-      // Clamp turn amount to available fuel
+      // Average angular velocity for rotation
+      double avg_omega = (omega_start + omega_end) / 2.0;
+      omega = (turnamt >= 0) ? avg_omega : -avg_omega;
+
+      // Clamp to available fuel
       double maxfuel = GetAmount(S_FUEL);
       if (fuelcons > maxfuel && !IsDocked()) {
+        // Fuel-limited: scale down omega proportionally
+        double scale = (fuelcons > 0) ? (maxfuel / fuelcons) : 0.0;
+        omega *= scale;
         fuelcons = maxfuel;
-        // Scale down the turn proportionally
-        double valtmp = (mass * g_ship_turn_full_rotations_per_fuel * PI2 * fuelcons) / GetMass();
-        if (dt_turn <= 0.0) {
-          dt_turn = -valtmp;
-        } else {
-          dt_turn = valtmp;
-        }
       }
-
-      omega = dt_turn;  // Use the fuel-limited dt-sized turn
 
       double oldFuel = GetAmount(S_FUEL);
       double newFuel = oldFuel - fuelcons;
       SetAmount(S_FUEL, newFuel);
 
-      // Check if out of fuel
       if (oldFuel > 0.01 && newFuel <= 0.01) {
         printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
                GetTeam() ? GetTeam()->GetName() : "Unknown");
@@ -574,12 +645,11 @@ void CShip::Drift(double dt) {
   // TODO - factor this out in Thing.C to be a common function for CThing::Drift and us to use.
   Pos += (Vel * dt).ConvertToCoord();
 
-  // Apply rotation: in legacy mode omega is full turn (multiply by dt),
-  // in new mode omega is already dt-sized (apply directly)
+  // Apply rotation: omega is angular velocity (rad/s), multiply by dt to get radians
   if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
-    orient += omega * dt;  // Legacy: omega is full turn amount
+    orient += omega * dt;  // Legacy: omega is full turn amount (rad)
   } else {
-    orient += omega;       // New: omega is already dt-sized
+    orient += omega * dt;  // New: omega is angular velocity (rad/s), dt gives radians
   }
 
   if (orient < -PI || orient > PI) {

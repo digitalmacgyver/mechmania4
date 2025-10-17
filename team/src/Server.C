@@ -436,7 +436,11 @@ double CServer::Simulation() {
   }
 
   for (int step = 0; step < stepCount; ++step) {
-    pmyWorld->PhysicsModel(g_physics_simulation_dt);
+    // Calculate turn_phase: progress at START of this sub-tick [0.0, 1.0)
+    // For 5 steps (dt=0.2): phases are 0.0, 0.2, 0.4, 0.6, 0.8 (not including 1.0)
+    // Special case: if stepCount==1 (dt >= turn length), phase = 0.0
+    double turn_phase = (stepCount > 0) ? ((double)step / (double)stepCount) : 0.0;
+    pmyWorld->PhysicsModel(g_physics_simulation_dt, turn_phase);
     if (step == stepCount - 1) {
       pmyWorld->LaserModel();
     }
