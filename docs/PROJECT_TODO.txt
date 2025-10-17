@@ -397,7 +397,6 @@ The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks 
 ================== double yum ===========================
 
 Engine enhancements:
-  * asteroid mass correctly correlates with volume? Or I guess we're in 2d so area is OK?
   * Our ship collision logic deals damage to us based on our relative
     velocity with the thing we collide, and that things mass, our mass
     doesn't matter. Is this a "momentum swap" or normal physical /

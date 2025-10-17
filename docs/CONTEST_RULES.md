@@ -144,10 +144,19 @@ After both teams submit orders, the server resolves each turn in four phases:
 - **Line of Sight:** Beams strike the first object along their path, including friendly ships or stations.
 
 ### Collision Damage (Ships)
-- When a ship collides with an asteroid or another ship, it loses  
-  `damage = mass_other × relative_speed / g_laser_damage_mass_divisor` shield points (`g_laser_damage_mass_divisor` defaults to 1000).
-- Only the other object’s mass is used in the calculation; the striking ship’s mass is irrelevant to the damage it receives.
-- Ships weigh their 40-ton hull plus carried fuel and vinyl (0–60 tons combined), while naturally spawned asteroids range from roughly 3 to 40 tons. Because each object’s velocity is capped at `g_game_max_speed` (30 units/s), peak relative speeds hover around 60 units/s, yielding worst-case hits of ~6 shield points (ship vs. ship) or ~2.4 (ship vs. heavy asteroid). Engine subtleties can briefly push the ceiling a bit higher (~8.4), but those spikes are rare.
+- When a ship collides with an asteroid or another ship, both objects take damage based on the **momentum change** they experience:
+  ```
+  damage = |Δp| / g_laser_damage_mass_divisor
+  ```
+  where `|Δp|` is the magnitude of momentum change and `g_laser_damage_mass_divisor` defaults to 1000.
+
+- **Both objects take the same damage** in a collision (Newton's 3rd Law: equal and opposite momentum changes)
+
+- The momentum change depends on the collision type:
+  - **Elastic collisions** (ship-ship, ship-large asteroid): `|Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal`
+  - **Inelastic collisions** (ship-small asteroid): `|Δp| = (m₁ × m₂ / (m₁ + m₂)) × v_rel`
+
+- Ships weigh their 40-ton hull plus carried fuel and vinyl (0–60 tons combined), while naturally spawned asteroids range from roughly 3 to 40 tons. With velocity capped at `g_game_max_speed` (30 units/s), typical collisions cause 1-3 shield points of damage per ship.
 
 ### Laser Targets by Object Type
 - **Ships:** Lose shields as described above; destruction occurs when shields drop below zero.
@@ -188,20 +197,21 @@ The engine models collisions with Newtonian physics. All collision handling foll
 - **Result:** Asteroid destroyed (absorbed into ship)
 
 #### Large Asteroids (doesn't fit in cargo hold)
-- **Damage:** Ship takes `(asteroid_mass × relative_speed) / 1000` shield damage
+- **Damage:** Both ship and asteroid take damage based on momentum change (see Collision Damage formula above)
 - **Physics:** Perfectly elastic collision
   - Both objects bounce according to elastic collision formulas
   - Momentum and kinetic energy conserved
   - Each object's velocity changes based on mass ratio
-- **Fragmentation:** Asteroid shatters into 3 equal-mass pieces
+- **Fragmentation:** Asteroid shatters into 3 equal-mass pieces **regardless of damage amount**
+  - This is different from laser hits, which require ≥1 damage threshold to shatter
   - Fragments inherit asteroid's post-collision velocity (center of mass)
   - Plus symmetric spread pattern at 120° intervals
   - If resulting fragments < 3 tons each, asteroid vaporizes (no fragments)
 
 ### Ship-Ship Collisions
-- **Damage:** Each ship takes `(other_ship_mass × relative_speed) / 1000` shield damage
-  - Damage based on OTHER ship's mass (not your own)
-  - Heavier ships deal more damage when they hit
+- **Damage:** Both ships take equal damage based on momentum change (see Collision Damage formula above)
+  - Damage is symmetric: both ships experience equal |Δp| (Newton's 3rd Law)
+  - Heavier ships experience smaller velocity changes but same total damage
 - **Physics:** Perfectly elastic collision
   - Both ships bounce using 2D elastic collision formulas
   - Momentum and kinetic energy conserved

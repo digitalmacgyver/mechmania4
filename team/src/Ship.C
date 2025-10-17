@@ -900,7 +900,21 @@ void CShip::HandleCollision(CThing *pOthThing, CWorld *pWorld) {
   }
 
   if (apply_damage) {
-    double damage = (RelativeMomentum(*pOthThing).rho) / g_laser_damage_mass_divisor;
+    double damage;
+
+    // Use feature flag to determine damage model
+    if (g_pParser && g_pParser->UseNewFeature("physics")) {
+      // NEW PHYSICS: Damage based on momentum change |Δp|
+      // Both ships in a collision experience equal magnitude momentum change
+      // (Newton's 3rd law), so both take the same damage.
+      // Formula: damage = |Δp| / divisor
+      damage = CalculateCollisionMomentumChange(pOthThing) / g_laser_damage_mass_divisor;
+    } else {
+      // LEGACY: Damage based on relative momentum = m_other × v_rel
+      // This causes asymmetric damage: lighter ships take more damage.
+      damage = (RelativeMomentum(*pOthThing).rho) / g_laser_damage_mass_divisor;
+    }
+
     dshield -= damage;
     SetAmount(S_SHIELD, dshield);
 
@@ -1797,5 +1811,95 @@ void CShip::HandleElasticShipCollision(CThing* pOtherShip) {
     printf("[ELASTIC]   After: pos moved (%.1f,%.1f)->(%.1f,%.1f) separation=%.1f@%.1f°\n",
            old_pos.fX, old_pos.fY, Pos.fX, Pos.fY,
            separation_distance, separation_angle * 180.0 / PI);
+  }
+}
+
+double CShip::CalculateCollisionMomentumChange(const CThing* pOtherThing) const {
+  // Calculate the magnitude of momentum change |Δp| that will occur for this ship
+  // when it collides with pOtherThing.
+  //
+  // For elastic collisions, we use the impulse formula. The momentum change depends
+  // on the collision type:
+  //
+  // - Ship-Ship elastic collision: Both momentum and KE conserved
+  // - Ship-Asteroid (large): Elastic collision
+  // - Ship-Asteroid (small/fits): Perfectly inelastic (ship absorbs asteroid)
+  //
+  // For elastic collisions in 1D (head-on):
+  //   Δp = (2 * m1 * m2 / (m1 + m2)) * v_rel
+  //
+  // For 2D elastic collisions, the momentum change magnitude is:
+  //   |Δp| = (2 * m1 * m2 / (m1 + m2)) * |v_rel · n|
+  // where n is the collision normal (unit vector from this ship to other).
+  //
+  // For perfectly inelastic collisions:
+  //   |Δp| = |m2 / (m1 + m2)| * |m1 * v_rel|
+
+  double m1 = GetMass();
+  double m2 = pOtherThing->GetMass();
+
+  ThingKind other_kind = pOtherThing->GetKind();
+
+  // Get relative velocity
+  CTraj v_rel_traj = RelativeVelocity(*pOtherThing);
+  double v_rel_mag = v_rel_traj.rho;
+
+  // Check if collision is inelastic (small asteroid that fits)
+  bool is_inelastic = false;
+  if (other_kind == ASTEROID) {
+    const CAsteroid* pAst = (const CAsteroid*)pOtherThing;
+    // Use const_cast to call non-const AsteroidFits (doesn't modify state)
+    is_inelastic = const_cast<CShip*>(this)->AsteroidFits(const_cast<CAsteroid*>(pAst));
+  }
+
+  if (is_inelastic) {
+    // Perfectly inelastic collision: objects stick together
+    // Momentum change: Δp = (m2 / (m1 + m2)) * m1 * v_rel
+    //                     = (m1 * m2 / (m1 + m2)) * v_rel
+    double reduced_mass = (m1 * m2) / (m1 + m2);
+    return reduced_mass * v_rel_mag;
+  } else {
+    // Elastic collision (ship-ship or ship-large asteroid)
+    // For 2D elastic collision, we need the component along the collision normal
+
+    CCoord pos1 = GetPos();
+    CCoord pos2 = pOtherThing->GetPos();
+
+    // Calculate position difference vector (collision normal direction)
+    CCoord dx;
+    dx.fX = pos1.fX - pos2.fX;
+    dx.fY = pos1.fY - pos2.fY;
+
+    double dx_squared = dx.fX * dx.fX + dx.fY * dx.fY;
+
+    // Handle degenerate case: objects at same position
+    if (dx_squared < g_fp_error_epsilon) {
+      // Use relative velocity as collision direction
+      CCoord v_rel = v_rel_traj.ConvertToCoord();
+      double dv_squared = v_rel.fX * v_rel.fX + v_rel.fY * v_rel.fY;
+      if (dv_squared < g_fp_error_epsilon) {
+        // Both at same position with same velocity - no momentum change
+        return 0.0;
+      }
+      // Head-on collision: use full relative velocity
+      // |Δp| = (2 * m1 * m2 / (m1 + m2)) * |v_rel|
+      double reduced_mass = (2.0 * m1 * m2) / (m1 + m2);
+      return reduced_mass * v_rel_mag;
+    }
+
+    // Normal case: calculate velocity component along collision normal
+    CCoord v_rel = v_rel_traj.ConvertToCoord();
+
+    // Dot product: (v1-v2) · (x1-x2)
+    double dot_v_dx = v_rel.fX * dx.fX + v_rel.fY * dx.fY;
+
+    // Relative velocity along collision normal: v_rel_normal = dot / |dx|
+    double dx_mag = sqrt(dx_squared);
+    double v_rel_normal = fabs(dot_v_dx) / dx_mag;
+
+    // Momentum change magnitude for elastic collision
+    // |Δp| = (2 * m1 * m2 / (m1 + m2)) * v_rel_normal
+    double reduced_mass = (2.0 * m1 * m2) / (m1 + m2);
+    return reduced_mass * v_rel_normal;
   }
 }

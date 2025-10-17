@@ -117,16 +117,26 @@ double MyClass::PublicMethodNew(/* params */) {
    - Legacy: Multiplies asteroid momentum by 2.0, causing excessive recoil (violates conservation of momentum)
    - New: Correct Newtonian conservation of momentum (1.0x multiplier)
 
-   **5b. Ship-Ship Collision Physics (Ship.C HandleCollision() method)**
+   **5b. Ship-Ship Collision Physics and Damage (Ship.C HandleCollision() method)**
    - Location: Inline in `HandleCollision()` method, ship collision handling section
-   - Private method: `HandleElasticShipCollision()` implements new physics
-   - Legacy: Non-physical separation impulse that creates momentum from nothing (both ships gain velocity)
-   - New: Proper 2D elastic collision using standard formulas that conserve momentum and kinetic energy
+   - Private method: `HandleElasticShipCollision()` implements new collision physics
+   - Private method: `CalculateCollisionMomentumChange()` calculates |Δp| for damage
+   - **Collision Physics:**
+     - Legacy: Non-physical separation impulse that creates momentum from nothing (both ships gain velocity)
+     - New: Proper 2D elastic collision using standard formulas that conserve momentum and kinetic energy
+   - **Collision Damage:**
+     - Legacy: `damage = m_other × v_rel / 1000` (asymmetric - lighter ships take more damage)
+     - New: `damage = |Δp| / 1000` (symmetric - both ships take equal damage based on momentum change)
 
-   **5c. Ship-Asteroid Collision Physics (Asteroid.C CreateFragmentsNew() method)**
-   - Location: Lines 233-276 in `CreateFragmentsNew()`, OthKind == SHIP section
-   - Legacy: Uses simple relative velocity (CreateFragmentsOld)
-   - New: Perfectly elastic collision with proper momentum and energy conservation
+   **5c. Ship-Asteroid Collision Physics and Damage (Asteroid.C CreateFragmentsNew(), Ship.C HandleCollision())**
+   - Location: Lines 233-276 in `CreateFragmentsNew()`, OthKind == SHIP section for physics
+   - Location: Ship.C HandleCollision() for damage calculation (same as ship-ship)
+   - **Collision Physics:**
+     - Legacy: Uses simple relative velocity (CreateFragmentsOld)
+     - New: Perfectly elastic collision with proper momentum and energy conservation
+   - **Collision Damage:**
+     - Same formula as ship-ship collisions (see 5b above)
+     - Asteroids always fragment into smaller pieces regardless of damage (unlike lasers which require threshold)
 
    **5d. Laser-Asteroid Collision Physics (Asteroid.C CreateFragmentsNew() method)**
    - Location: Lines 277-294 in `CreateFragmentsNew()`, OthKind == GENTHING section
