@@ -99,6 +99,21 @@ void TestTeam::Init() {
 void TestTeam::Turn() {
   current_turn++;
 
+  // Log ship 0's position and orientation at the start of each turn
+  if (GetShipCount() > 0) {
+    CShip* ship0 = GetShip(0);
+    if (ship0 != nullptr) {
+      CCoord pos = ship0->GetPos();
+      double orient = ship0->GetOrient();
+      double orient_deg = orient * 180.0 / 3.14159265359;
+      bool docked = ship0->IsDocked();
+      CTraj vel = ship0->GetVelocity();
+
+      printf("[SHIP0-STATE] Turn %d: pos=(%.2f, %.2f) orient=%.6f rad (%.2f deg) vel=(%.2f @ %.2f deg) docked=%d\n",
+             current_turn, pos.fX, pos.fY, orient, orient_deg, vel.rho, vel.theta * 180.0 / 3.14159265359, docked ? 1 : 0);
+    }
+  }
+
   // Execute any moves scheduled for this turn
   for (const TestMove& move : moves) {
     if (move.turn == current_turn) {
@@ -130,8 +145,16 @@ void TestTeam::Turn() {
 
       double fuel_cost = ship->SetOrder(move.order, move.magnitude);
 
-      printf("[TestTeam] Turn %d: Ship %d (%s) executing %s %.2f -> fuel_cost=%.4f\n",
-             current_turn, move.shipnum, ship->GetName(), order_name, move.magnitude, fuel_cost);
+      // For turn orders, log detailed information
+      if (move.order == O_TURN) {
+        double actual_order = ship->GetOrder(O_TURN);
+        printf("[TestTeam] Turn %d: Ship %d (%s) executing %s: requested=%.6f -> fuel_cost=%.6f, stored_order=%.6f (%.2f%% of requested)\n",
+               current_turn, move.shipnum, ship->GetName(), order_name,
+               move.magnitude, fuel_cost, actual_order, (actual_order / move.magnitude) * 100.0);
+      } else {
+        printf("[TestTeam] Turn %d: Ship %d (%s) executing %s %.2f -> fuel_cost=%.4f\n",
+               current_turn, move.shipnum, ship->GetName(), order_name, move.magnitude, fuel_cost);
+      }
     }
   }
 }

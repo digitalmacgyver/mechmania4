@@ -336,6 +336,8 @@ def main():
                         help='Pipe test file to testteam stdin instead of using --test-file flag')
     parser.add_argument('--max-turns', type=int,
                         help='Maximum number of turns (default: 300)')
+    parser.add_argument('--legacy-mode', action='store_true',
+                        help='Run with --legacy-mode flag (enables all legacy behaviors)')
     args = parser.parse_args()
 
     print("MechMania IV - Collision Handling Test Harness")
@@ -356,31 +358,45 @@ def main():
             sys.exit(1)
         print(f"Using test file: {args.test_file}")
 
-    # Test 1: Legacy collision handling mode
-    results['legacy'] = run_test_game(
-        "Legacy Collision Handling",
-        ["--legacy-collision-handling"],
-        team1=args.team1,
-        team2=args.team2,
-        test_file=test_file_path,
-        show_team_output=args.show_team_output,
-        use_stdin=args.use_stdin,
-        max_turns=args.max_turns
-    )
+    # If --legacy-mode is specified, only run one test with full legacy mode
+    if args.legacy_mode:
+        print("\nRunning in LEGACY MODE (all legacy features enabled)")
+        results['legacy'] = run_test_game(
+            "Full Legacy Mode",
+            ["--legacy-mode"],
+            team1=args.team1,
+            team2=args.team2,
+            test_file=test_file_path,
+            show_team_output=args.show_team_output,
+            use_stdin=args.use_stdin,
+            max_turns=args.max_turns
+        )
+    else:
+        # Test 1: Legacy collision handling mode
+        results['legacy'] = run_test_game(
+            "Legacy Collision Handling",
+            ["--legacy-collision-handling"],
+            team1=args.team1,
+            team2=args.team2,
+            test_file=test_file_path,
+            show_team_output=args.show_team_output,
+            use_stdin=args.use_stdin,
+            max_turns=args.max_turns
+        )
 
-    time.sleep(1)  # Brief pause between tests
+        time.sleep(1)  # Brief pause between tests
 
-    # Test 2: New collision handling mode (default)
-    results['new'] = run_test_game(
-        "New Collision Handling",
-        [],  # No flags = use new mode
-        team1=args.team1,
-        team2=args.team2,
-        test_file=test_file_path,
-        show_team_output=args.show_team_output,
-        use_stdin=args.use_stdin,
-        max_turns=args.max_turns
-    )
+        # Test 2: New collision handling mode (default)
+        results['new'] = run_test_game(
+            "New Collision Handling",
+            [],  # No flags = use new mode
+            team1=args.team1,
+            team2=args.team2,
+            test_file=test_file_path,
+            show_team_output=args.show_team_output,
+            use_stdin=args.use_stdin,
+            max_turns=args.max_turns
+        )
 
     # Summary
     print(f"\n{'='*60}")

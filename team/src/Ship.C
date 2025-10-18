@@ -13,6 +13,7 @@
 #include "Team.h"
 #include "World.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
+#include <functional>        // For std::function (recursive lambda)
 
 extern CParser* g_pParser;
 
@@ -64,6 +65,35 @@ static inline double GetTriangularOmega(double phase, double omega_max) {
     // Decelerating: ω decreases linearly from ω_max to 0
     return 2.0 * omega_max * (1.0 - phase);
   }
+}
+
+// Integrate triangular angular velocity profile over a time interval.
+// Handles the cusp at turn_phase = 0.5 explicitly so we don't lose magnitude
+// when a timestep straddles the peak angular velocity.
+static double IntegrateTriangularOmega(double time_start,
+                                       double time_end,
+                                       double omega_max,
+                                       double turn_duration) {
+  const double half_duration = turn_duration * 0.5;
+  const double coeff = omega_max / turn_duration;
+
+  // If segment doesn't cross the midpoint, integrate directly
+  if (time_end <= half_duration) {
+    // Entire segment in acceleration phase: ω(t) = (2*ω_max/T) * t
+    // Integral: (ω_max/T) * t²
+    return coeff * (time_end * time_end - time_start * time_start);
+  }
+
+  if (time_start >= half_duration) {
+    // Entire segment in deceleration phase: ω(t) = 2*ω_max * (1 - t/T)
+    // Integral: 2*ω_max*t - (ω_max/T)*t²
+    return 2.0 * omega_max * (time_end - time_start) - coeff * (time_end * time_end - time_start * time_start);
+  }
+
+  // Segment straddles the cusp at half_duration - split into two parts
+  double accel_part = coeff * (half_duration * half_duration - time_start * time_start);
+  double decel_part = 2.0 * omega_max * (time_end - half_duration) - coeff * (time_end * time_end - half_duration * half_duration);
+  return accel_part + decel_part;
 }
 
 ///////////////////////////////////////////
@@ -567,9 +597,11 @@ void CShip::Drift(double dt, double turn_phase) {
   // Now handle turning
   omega = 0.0;
   if (turnamt != 0.0) {
-    // In legacy mode, calculate fuel for full turn (buggy behavior)
-    // In new mode, calculate fuel for dt-sized turn (fixed behavior)
-    if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+    // Guard against dt=0 (happens during jettison pre-processing before turn starts)
+    if (dt <= 0.0) {
+      // Skip turn processing when dt=0
+      turnamt = 0.0;
+    } else if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
       // Legacy mode: calculate fuel for full turn amount
       fuelcons = SetOrder(O_TURN, turnamt);
       // Use original value (allows double-spend bug and premature clamping)
@@ -617,9 +649,17 @@ void CShip::Drift(double dt, double turn_phase) {
         fuelcons = 0.0;
       }
 
-      // Average angular velocity for rotation
-      double avg_omega = (omega_start + omega_end) / 2.0;
-      omega = (turnamt >= 0) ? avg_omega : -avg_omega;
+      // Calculate actual rotation for this tick using analytical integration
+      // This correctly handles the cusp at phase=0.5 (unlike trapezoidal approximation)
+      double time_start = turn_phase * g_game_turn_duration;
+      double time_end = phase_end * g_game_turn_duration;
+      double rotation_this_tick = IntegrateTriangularOmega(time_start, time_end, omega_max, g_game_turn_duration);
+
+      // omega is angular velocity (rad/s), so divide rotation by dt
+      omega = rotation_this_tick / dt;
+      if (turnamt < 0.0) {
+        omega = -omega;  // Apply sign
+      }
 
       // Clamp to available fuel
       double maxfuel = GetAmount(S_FUEL);

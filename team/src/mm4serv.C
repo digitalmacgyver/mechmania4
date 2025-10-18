@@ -24,6 +24,21 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
+  // Log enabled feature flags if verbose mode is on
+  if (PCmdLn.verbose) {
+    printf("\n========================================\n");
+    printf("MM4SERV FEATURE FLAGS\n");
+    printf("========================================\n");
+    printf("verbose: %s\n", PCmdLn.verbose ? "ON" : "OFF");
+
+    const auto& features = PCmdLn.GetModernParser().features;
+    printf("\nFeature flags (true = legacy/buggy behavior):\n");
+    for (const auto& pair : features) {
+      printf("  %s: %s\n", pair.first.c_str(), pair.second ? "ENABLED" : "disabled");
+    }
+    printf("========================================\n\n");
+  }
+
   CServer myServ(PCmdLn.numteams, PCmdLn.port);
 
   myServ.ConnectClients();  // Sends ack & ID to clients
