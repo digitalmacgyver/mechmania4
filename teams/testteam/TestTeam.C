@@ -128,10 +128,10 @@ void TestTeam::Turn() {
       const char* order_name = (it != ORDER_ENUM_TO_STRING.end()) ?
                                it->second.c_str() : "UNKNOWN";
 
-      printf("[TestTeam] Turn %d: Ship %d (%s) executing %s %.2f\n",
-             current_turn, move.shipnum, ship->GetName(), order_name, move.magnitude);
+      double fuel_cost = ship->SetOrder(move.order, move.magnitude);
 
-      ship->SetOrder(move.order, move.magnitude);
+      printf("[TestTeam] Turn %d: Ship %d (%s) executing %s %.2f -> fuel_cost=%.4f\n",
+             current_turn, move.shipnum, ship->GetName(), order_name, move.magnitude, fuel_cost);
     }
   }
 }

@@ -75,9 +75,17 @@ Review the design - Make any adjustments before continuing?
 
 ==
 
-What is wrong with lasers?
+NOTE - THIS WORKING BRANCH NOW HAS CRITICAL BUG FIXES AND USEFUL TESTS
+- WE CAN'T JUST REVERT TO MASTER WE'LL HAVE TO PARTIALLY MERGE OR
+SOMETHING IF WE CAN'T COMPLETE WORK GOING FOWARD.
 
-Run the asteroid collision one.
+FIX THE RUNNING OF PHYSICS_MODEL WITH DT=0 - THAT'S AN ACCIDENT
+WAITING TO HAPPEN! Explicitly call the world population routines when
+they are needed.
+
+THERE IS A BUG IN TURNING, PRESENT IN LEGACY AS WELL - WE LAUNCH THE
+STATION AT -3PI/4 and DON'T END UP ON A HEADING TOWARDS THE OTHER
+STATION?!?!?!?
 
 
 
@@ -345,6 +353,17 @@ Re-enabled with --legacy-laser-exploit:
     jameskirk/ team, and can only be seen when the exploit is enabled
     via the flag.
 
+Re-enabled with --legacy-rangecheck-bug:
+
+  * Weird Test Leads to Failed Laser Hits Depending on Floating Point
+    Errors - We're not 100% sure why this test was originally
+    inserted, but we suspect it was inteded as a range check. However
+    what the comparison actually does is compute the beam length two
+    different ways, and then check of beam_computed_way_1 >
+    beam_computed_way_2. Ideally this would never be true - however
+    due to floating point errors it can be. When it is true othewise
+    valid laser targets are missed.
+
 Re-enabled with --legacy-physics:
 
   * Non-conservation of momentum on jettison - When jettisoning
@@ -403,6 +422,11 @@ Lasers are modeled as colliding masses for damage purposes.
 
 
 ========================== ENGINE TODO ============================================
+
+Fix initial facing - both sides should face with no vertical direction
+towards the center. As it is they both face 0 - which is asymmetric
+relative to the center.
+
 
 ?!?!?! Concurrency / race double eating behaviors ?!?!?!??!
 

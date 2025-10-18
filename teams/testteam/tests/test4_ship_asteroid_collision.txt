@@ -15,8 +15,8 @@
 # Ship initial orient = 0.0 (facing east/right)
 
 # === Cycle 1: Turns 1-100 ===
-# Turn 1: Rotate to face 3π/4 (northeast direction)
-0,1,O_TURN,2.356
+# Turn 1: Rotate to face -3π/4 (northwest/top-left direction)
+0,1,O_TURN,-2.35619
 
 # Turns 2-5: Small thrust to move away from station
 0,2,O_THRUST,5
@@ -24,9 +24,8 @@
 0,4,O_THRUST,5
 0,5,O_THRUST,5
 
-# Turn 50: Rotate to face -π/4 (southeast direction, roughly back)
-# Need to turn from 3π/4 to -π/4: delta = -π/4 - 3π/4 = -π ≈ -3.14
-0,50,O_TURN,-3.14
+# Turn 50: Rotate π radians (180°) to face southeast, roughly back toward station
+0,50,O_TURN,3.14159
 
 # Turns 51-55: Thrust to return
 0,51,O_THRUST,5
@@ -36,8 +35,8 @@
 0,55,O_THRUST,5
 
 # === Cycle 2: Turns 101-200 ===
-# Turn 101: Rotate to face 3π/4 again
-0,101,O_TURN,2.356
+# Turn 101: Rotate π radians (180°) to face northwest again
+0,101,O_TURN,3.14159
 
 # Turns 102-105: Thrust away
 0,102,O_THRUST,5
@@ -45,8 +44,8 @@
 0,104,O_THRUST,5
 0,105,O_THRUST,5
 
-# Turn 150: Rotate back to -π/4
-0,150,O_TURN,-3.14
+# Turn 150: Rotate π radians (180°) to face southeast
+0,150,O_TURN,3.14159
 
 # Turns 151-155: Thrust to return
 0,151,O_THRUST,5
@@ -56,8 +55,8 @@
 0,155,O_THRUST,5
 
 # === Cycle 3: Turns 201-300 ===
-# Turn 201: Rotate to face 3π/4 again
-0,201,O_TURN,2.356
+# Turn 201: Rotate π radians (180°) to face northwest again
+0,201,O_TURN,3.14159
 
 # Turns 202-205: Thrust away
 0,202,O_THRUST,5
@@ -65,8 +64,8 @@
 0,204,O_THRUST,5
 0,205,O_THRUST,5
 
-# Turn 250: Rotate back to -π/4
-0,250,O_TURN,-3.14
+# Turn 250: Rotate π radians (180°) to face southeast
+0,250,O_TURN,3.14159
 
 # Turns 251-255: Thrust to return
 0,251,O_THRUST,5

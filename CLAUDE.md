@@ -1,5 +1,116 @@
 # MechMania IV Engine Development Guidelines
 
+## Debug Logging Best Practices
+
+### How to Add Debug Logging to Engine Code
+
+When debugging the engine or adding verbose logging, follow these patterns to access the global parser and verbose flag:
+
+#### 1. Include the Parser Header
+
+In your `.C` implementation file, add:
+```cpp
+#include "ParserModern.h"  // For CParser class definition
+```
+
+#### 2. Declare the External Parser Instance
+
+At the top of your `.C` file (after includes, before functions), add:
+```cpp
+extern CParser* g_pParser;
+```
+
+**Important**: Do NOT declare this inside functions. It must be at file scope.
+
+#### 3. Use Verbose Logging Guards
+
+Always guard verbose logging with null checks and verbose flag checks:
+```cpp
+if (g_pParser && g_pParser->verbose) {
+    printf("[DEBUG-TAG] Your debug message: value=%.2f\n", someValue);
+}
+```
+
+### Common Mistakes to Avoid
+
+❌ **Wrong - Declaring extern inside a function**:
+```cpp
+void MyFunction() {
+    extern CParser* g_pParser;  // DON'T DO THIS - doesn't work reliably
+    if (g_pParser && g_pParser->verbose) {
+        printf("Debug message\n");
+    }
+}
+```
+
+✅ **Correct - Declaring extern at file scope**:
+```cpp
+#include "ParserModern.h"
+
+extern CParser* g_pParser;  // At file scope, outside any function
+
+void MyFunction() {
+    if (g_pParser && g_pParser->verbose) {
+        printf("Debug message\n");
+    }
+}
+```
+
+❌ **Wrong - Not checking for null pointer**:
+```cpp
+if (g_pParser->verbose) {  // DON'T DO THIS - can crash if g_pParser is NULL
+    printf("Debug message\n");
+}
+```
+
+✅ **Correct - Always check for null first**:
+```cpp
+if (g_pParser && g_pParser->verbose) {  // Safe: short-circuit evaluation
+    printf("Debug message\n");
+}
+```
+
+### Debugging Tip: When Logging Doesn't Show Up
+
+If you add logging but don't see output, check:
+
+1. **Is `extern CParser* g_pParser;` at file scope?** (Not inside a function)
+2. **Did you run with `--verbose` flag?** The verbose flag must be set
+3. **Is the code path actually executing?** Add unconditional `printf()` to verify
+4. **Did you rebuild after changes?** Run `cmake --build build`
+
+### Example: Adding Debug Logging to World.C
+
+```cpp
+/* World.C */
+#include "World.h"
+#include "ParserModern.h"  // For CParser
+
+extern CParser* g_pParser;  // At file scope
+
+void CWorld::LaserModel() {
+    // Debug logging to trace laser processing
+    if (g_pParser && g_pParser->verbose) {
+        printf("[LASER-DEBUG] Processing lasers, ship count=%d\n", GetShipCount());
+    }
+
+    // ... rest of function
+}
+```
+
+### When to Remove Debug Logging
+
+Debug logging added during investigation should be **removed before committing** unless:
+- It provides valuable diagnostic information for future debugging
+- It's guarded by the verbose flag (won't show up in normal operation)
+- It's documented as intentional diagnostic output
+
+Use git to check for debug logging before commits:
+```bash
+git diff | grep -i "printf.*DEBUG"
+git diff | grep -i "printf.*VERBOSE"
+```
+
 ## Simple Method Dispatch for Legacy/New Feature Implementations
 
 ### Overview
@@ -247,6 +358,21 @@ To add a new switchable behavior:
      - Will fix collision ordering issues
      - Will prevent dead object collision processing
    - Note: This refactoring preserves exact legacy behavior while preparing infrastructure for collision system improvements
+
+### 9. **Laser Range Check (World.C LaserModel() method)**
+   - Feature: `rangecheck-bug`
+   - Location: World.C LaserModel() method, lines 304-353
+   - **Legacy**: Buggy floating-point range check (original 1998 code)
+     - Compares `dLasRng` (distance from laser endpoint back to ship) with `dLasPwr` (laser beam length)
+     - Since `LasPos = ship_position + (dLasPwr * direction_vector)`, these values should theoretically be equal
+     - Floating-point errors in trigonometric calculations cause `dLasRng > dLasPwr` to trigger incorrectly
+     - Bug particularly manifests when laser power = 512.0 (exactly half world size)
+     - When triggered, incorrectly nullifies `pTarget`, preventing lasers from hitting valid targets
+   - **New**: Correct range validation
+     - Checks actual distance from ship to target against laser beam length
+     - `if (target_distance > dLasPwr) { pTarget = NULL; }`
+     - Rarely triggers in practice (LaserTarget() already filters by facing direction)
+     - Included for correctness and future maintainability
 
 ## Testing Engine Changes
 

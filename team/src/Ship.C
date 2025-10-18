@@ -720,6 +720,7 @@ CThing *CShip::LaserTarget() {
 
   for (i = pWorld->UFirstIndex; i != (unsigned int)-1; i = pWorld->GetNextIndex(i)) {
     pTCur = pWorld->GetThing(i);
+
     if (IsFacing(*pTCur) == false) {
       continue;  // Nevermind, we're not facing it
     }
@@ -1777,13 +1778,6 @@ void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
   ThrustCost tc = CalcThrustCost(thrustamt*dt, Vel, GetOrient(), GetMass(), fuel_avail, IsDocked(), bLaunchedThisTurn);
 
   SetAmount(S_FUEL, fuel_avail - tc.total_cost);
-
-  // Verbose logging for thrust/fuel during launch turns
-  if (g_pParser && g_pParser->verbose && (bLaunchedThisTurn || IsDocked())) {
-    printf("[THRUST-DRIFT] %s: thrust=%.2f dt=%.2f docked=%d launched_this_turn=%d fuel_before=%.2f fuel_cost=%.4f fuel_after=%.2f\n",
-           GetName(), thrustamt, dt, IsDocked() ? 1 : 0, bLaunchedThisTurn ? 1 : 0,
-           fuel_avail, tc.total_cost, GetAmount(S_FUEL));
-  }
 
   Vel += tc.dv_achieved;
 

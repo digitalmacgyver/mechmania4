@@ -16,31 +16,28 @@
 # Ship 1 initial orient = 0.0 (facing east/right)
 
 # Turn 1: Ship 0 rotates to 3π/4, Ship 1 rotates to same angle to aim at Ship 0
-0,1,O_TURN,2.356
-1,1,O_TURN,2.356
+0,1,O_TURN,-2.356
+1,1,O_TURN,0.785
 
-# Turns 2-5: Ship 0 moves away to become a target
-0,2,O_THRUST,10
-0,3,O_THRUST,10
-0,4,O_THRUST,10
-0,5,O_THRUST,10
+# Turns 2-4: Ship 0 moves away
+0,2,O_THRUST,-6
+0,3,O_THRUST,-6
+0,4,O_THRUST,-6
 
-# Turn 6: Ship 0 stops, Ship 1 adjusts aim slightly and fires
-# Ship 1 needs to aim at where Ship 0 is now
-# Since both started at same position and Ship 0 moved at 3π/4,
-# Ship 1 should face same direction and fire
-0,6,O_THRUST,0
-1,6,O_LASER,200
+# Turn 5: Ship 0 slows, Ship 1 begins to pursue
+0,5,O_THRUST,2
+1,5,O_THRUST,4
+1,6,O_THRUST,4
+1,7,O_THRUST,4
 
-# Turns 7-10: Continue the pattern to ensure hit
-# Ship 0 continues moving slowly
-0,7,O_THRUST,5
-0,8,O_THRUST,5
-0,9,O_THRUST,5
-0,10,O_THRUST,5
-
-# Ship 1 fires again
-1,7,O_LASER,200
+Turns 8 onward: So anyway I started blasting.
+0,8,O_LASER,200
+0,9,O_LASER,200
+0,10,O_LASER,200
+0,11,O_LASER,200
+0,12,O_LASER,200
 1,8,O_LASER,200
 1,9,O_LASER,200
 1,10,O_LASER,200
+1,11,O_LASER,200
+1,12,O_LASER,200

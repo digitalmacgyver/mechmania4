@@ -31,6 +31,9 @@ void ArgumentParser::InitializeFeatures() {
   // Docking features
   features["docking"] = true;              // New: fixed safe launch distance (48 units)
 
+  // Laser range check
+  features["rangecheck-bug"] = false;      // New: fixed floating-point range check (was: dLasRng > dLasPwr)
+
   // Announcer features
   features["announcer-velocity-clamping"] = false;  // Disabled by default
 
@@ -72,6 +75,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-collision-handling", "Use legacy collision processing (allows multi-hit bugs)")(
         "legacy-laser-exploit", "Enable TOCTOU laser exploit (fire before validation)")(
         "legacy-docking", "Use legacy docking (dDockDist+5, can get stuck re-docking)")(
+        "legacy-rangecheck-bug", "Use buggy laser range check (floating-point comparison dLasRng > dLasPwr)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -205,6 +209,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-docking")) {
       features["docking"] = false;  // Disable fix (false = legacy buggy behavior)
     }
+    if (result.count("legacy-rangecheck-bug")) {
+      features["rangecheck-bug"] = true;  // Enable bug (true = buggy behavior)
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -242,6 +249,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-handling"] = false; // Use legacy collision processing (with multi-hit bugs)
     features["laser-exploit"] = true;       // Enable exploit for legacy mode
     features["docking"] = false;            // Enable docking bug for legacy mode
+    features["rangecheck-bug"] = true;      // Enable range check bug for legacy mode
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

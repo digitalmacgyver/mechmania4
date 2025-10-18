@@ -14,6 +14,7 @@
 #include "ArgumentParser.h"
 #include "Asteroid.h"
 #include "GameConstants.h"
+#include "ParserModern.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
@@ -169,7 +170,7 @@ void CWorld::LaserModel() {
   // By default, laser power is validated BEFORE firing. When --legacy-laser-exploit
   // or --legacy-mode flags are set, the original 1998 vulnerability is re-enabled.
 
-  extern ArgumentParser* g_pParser;
+  extern CParser* g_pParser;
 
   unsigned int nteam, nship;
   CTeam* pTeam;
@@ -227,6 +228,7 @@ void CWorld::LaserModel() {
         //   3. Server calls SetOrder() later which caps to fuel available (~500 for 10 fuel)
         //   4. Client gets 20x damage for same fuel cost
         dLasPwr = pShip->GetOrder(O_LASER);
+
         if (dLasPwr <= 0.0) {
           continue;
         }
@@ -235,6 +237,7 @@ void CWorld::LaserModel() {
         // Validate and cap laser power BEFORE using it for damage
         double oldFuel = pShip->GetAmount(S_FUEL);
         double requested_power = pShip->GetOrder(O_LASER);
+
         if (requested_power <= 0.0) {
           continue;
         }
@@ -244,6 +247,11 @@ void CWorld::LaserModel() {
 
         // Use the VALIDATED power (read it back after SetOrder clamped it)
         dLasPwr = pShip->GetOrder(O_LASER);
+
+        // If validated power is 0, skip laser firing
+        if (dLasPwr <= 0.0) {
+          continue;
+        }
 
         // Deduct fuel immediately
         pShip->SetAmount(S_FUEL, oldFuel - fuel_cost);
@@ -262,10 +270,50 @@ void CWorld::LaserModel() {
       LasThing.SetPos(LasPos);
 
       pTarget = pShip->LaserTarget();
-      dLasRng = LasPos.DistTo(pShip->GetPos());
-      if (dLasRng > dLasPwr) {
-        pTarget = NULL;
+
+      // LASER RANGE CHECK
+      // This check determines if the laser can reach its target.
+      // Two implementations exist due to a historical floating-point bug.
+      bool use_legacy_rangecheck = (g_pParser && g_pParser->UseNewFeature("rangecheck-bug"));
+
+      if (use_legacy_rangecheck) {
+        // LEGACY: Buggy floating-point range check (original 1998 code)
+        //
+        // This compares dLasRng (distance from laser endpoint back to ship)
+        // with dLasPwr (laser beam length). Since LasPos is computed as
+        // ship_position + (dLasPwr * direction_vector), these two values
+        // should theoretically always be equal.
+        //
+        // However, accumulated floating-point errors in the trigonometric
+        // calculations can cause dLasRng to be slightly larger than dLasPwr,
+        // incorrectly triggering this check and nullifying valid targets.
+        //
+        // This bug particularly manifests when laser power = 512.0 (exactly
+        // half the world size), causing lasers to fail to hit targets they
+        // should reach.
+        dLasRng = LasPos.DistTo(pShip->GetPos());
+        if (dLasRng > dLasPwr) {
+          pTarget = NULL;
+        }
+      } else {
+        // NEW: Correct range validation
+        //
+        // Check if the actual target is within laser range by measuring
+        // the distance from the ship to the target's position, not the
+        // distance from the ship to the computed laser endpoint.
+        //
+        // Note: Given how LaserTarget() works (it returns the nearest object
+        // the ship is facing, regardless of range), this check should rarely
+        // trigger. However, it's included for correctness and maintainability
+        // in case LaserTarget() behavior changes in the future.
+        if (pTarget != NULL) {
+          double target_distance = pShip->GetPos().DistTo(pTarget->GetPos());
+          if (target_distance > dLasPwr) {
+            pTarget = NULL;  // Target out of laser range
+          }
+        }
       }
+
       if (pTarget != NULL) {
         TmpPos = pTarget->GetPos();
         // Move impact point to one unit in front of the target along the
@@ -447,7 +495,7 @@ void CWorld::RemoveIndex(unsigned int index) {
 }
 
 unsigned int CWorld::CollisionEvaluation() {
-  extern ArgumentParser* g_pParser;
+  extern CParser* g_pParser;
 
   if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
     return CollisionEvaluationOld();
