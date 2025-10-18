@@ -111,6 +111,18 @@ void TestTeam::Turn() {
 
       CShip* ship = GetShip(move.shipnum);
 
+      // Check if ship has been destroyed (null pointer)
+      if (ship == nullptr) {
+        // Get order name from the reverse map for logging
+        auto it = ORDER_ENUM_TO_STRING.find(move.order);
+        const char* order_name = (it != ORDER_ENUM_TO_STRING.end()) ?
+                                 it->second.c_str() : "UNKNOWN";
+
+        printf("TEST_WARNING: Was scheduled to issue order %s %.2f to ship %d but that ship has been destroyed.\n",
+               order_name, move.magnitude, move.shipnum);
+        continue;
+      }
+
       // Get order name from the reverse map for logging
       auto it = ORDER_ENUM_TO_STRING.find(move.order);
       const char* order_name = (it != ORDER_ENUM_TO_STRING.end()) ?
