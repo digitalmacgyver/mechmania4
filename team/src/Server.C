@@ -10,6 +10,7 @@
 #include "Team.h"
 #include "World.h"
 #include "GameConstants.h"
+#include "ParserModern.h"
 
 ///////////////////////////////////////////
 // Construction/Destruction
@@ -416,6 +417,13 @@ double CServer::Simulation() {
     WaitForObserver();
     SendWorld(ObsConn);
     return GetTime();
+  }
+
+  // Verbose logging for turn start
+  extern CParser* g_pParser;
+  if (g_pParser && g_pParser->verbose) {
+    unsigned int next_turn = pmyWorld->GetCurrentTurn() + 1;
+    printf("SERVER: Starting turn %u simulation\n", next_turn);
   }
 
   // Use an integer step counter so the number of physics ticks is immune to
