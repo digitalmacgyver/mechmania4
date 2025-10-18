@@ -12,6 +12,8 @@ cmake-build-*/
 mm4serv
 mm4obs
 mm4team
+mm4team_*
+test_toroidal_coordinates
 
 # Team binaries directory
 team_binaries/
@@ -22,6 +24,8 @@ team_binaries/
 *.swp
 *.swo
 *~
+\#*\#
+.\#*
 
 # Core dumps
 core
@@ -53,3 +57,6 @@ Makefile
 # Debug files
 *.dSYM/
 scripts/venv/
+
+# Test output files
+test_output_*.log
