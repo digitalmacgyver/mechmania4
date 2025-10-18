@@ -27,6 +27,8 @@ python3 scripts/test_collision_modes.py \
 # Extract log file paths from Python output
 LEGACY_LOG=$(grep "Server log:.*Legacy" "$TEMP_LOG" | sed 's/.*Server log: //')
 NEW_LOG=$(grep "Server log:.*New" "$TEMP_LOG" | sed 's/.*Server log: //')
+LEGACY_TESTTEAM_LOG=$(grep "TestTeam log:.*Legacy" "$TEMP_LOG" | sed 's/.*TestTeam log: //')
+NEW_TESTTEAM_LOG=$(grep "TestTeam log:.*New" "$TEMP_LOG" | sed 's/.*TestTeam log: //')
 
 echo "=========================================="
 echo "Test 1: Ship-Station Collision"
@@ -34,9 +36,13 @@ echo "=========================================="
 
 # Print log file paths
 echo ""
-echo "Log Files:"
+echo "Server Log Files:"
 echo "  Legacy: $LEGACY_LOG"
 echo "  New:    $NEW_LOG"
+echo ""
+echo "TestTeam Log Files:"
+echo "  Legacy: $LEGACY_TESTTEAM_LOG"
+echo "  New:    $NEW_TESTTEAM_LOG"
 
 # Check legacy mode
 echo ""

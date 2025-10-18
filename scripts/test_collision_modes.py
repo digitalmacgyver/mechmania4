@@ -90,10 +90,34 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
     if sys.platform != "win32":
         popen_kwargs['preexec_fn'] = os.setsid
 
-    # Create log file for server output
+    # Determine test name from test file path
     import tempfile
-    log_fd, log_path = tempfile.mkstemp(prefix=f"mmtest-{mode_name.replace(' ', '_')}-", suffix=".log", dir="/tmp")
-    os.close(log_fd)  # Close fd, we'll use the path with file handle
+    test_name = "unknown"
+    if test_file:
+        test_basename = os.path.basename(test_file)
+        # Extract test name (e.g., "test1" from "test1_ship_station_collision.txt")
+        if test_basename.startswith("test"):
+            test_name = test_basename.split('_')[0]
+
+    # Create log files with descriptive names
+    mode_suffix = mode_name.replace(' ', '_').replace('Collision_Handling', 'Collision')
+    server_log_fd, server_log_path = tempfile.mkstemp(
+        prefix=f"mm4serv-{test_name}-{mode_suffix}-",
+        suffix=".log",
+        dir="/tmp"
+    )
+    os.close(server_log_fd)
+
+    # Create testteam log file if using testteam
+    testteam_log_path = None
+    testteam_log_file = None
+    if team1 == 'testteam' or team2 == 'testteam':
+        testteam_log_fd, testteam_log_path = tempfile.mkstemp(
+            prefix=f"mm4testteam-{test_name}-{mode_suffix}-",
+            suffix=".log",
+            dir="/tmp"
+        )
+        os.close(testteam_log_fd)
 
     try:
         # 1. Start server with --verbose flag
@@ -102,12 +126,14 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
             server_cmd.extend(["--max-turns", str(max_turns)])
         server_cmd.extend(server_flags)
         print(f"Starting server: {' '.join(server_cmd)}")
-        print(f"Server log: {log_path}")
+        print(f"Server log: {server_log_path}")
+        if testteam_log_path:
+            print(f"TestTeam log: {testteam_log_path}")
 
-        log_file = open(log_path, 'w')
+        server_log_file = open(server_log_path, 'w')
         server_process = subprocess.Popen(
             server_cmd,
-            stdout=log_file,
+            stdout=server_log_file,
             stderr=subprocess.STDOUT,
             text=True,
             preexec_fn=os.setsid if sys.platform != "win32" else None
@@ -120,17 +146,26 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         team1_stdin = None
         team1_kwargs = popen_kwargs.copy()
 
-        if team1 == 'testteam' and test_file:
-            if use_stdin:
-                # Pipe test file to stdin
-                print(f"Starting team 1 ({team1}) with stdin piping...")
-                with open(test_file, 'r') as f:
-                    team1_stdin = f.read()
-                team1_kwargs['stdin'] = subprocess.PIPE
-            else:
-                # Use --test-file flag
-                team1_cmd.extend(['--test-file', test_file])
-                print(f"Starting team 1 ({team1}) with --test-file...")
+        if team1 == 'testteam':
+            # Add --verbose flag for testteam
+            team1_cmd.append('--verbose')
+            if test_file:
+                if use_stdin:
+                    # Pipe test file to stdin
+                    print(f"Starting team 1 ({team1}) with stdin piping...")
+                    with open(test_file, 'r') as f:
+                        team1_stdin = f.read()
+                    team1_kwargs['stdin'] = subprocess.PIPE
+                else:
+                    # Use --test-file flag
+                    team1_cmd.extend(['--test-file', test_file])
+                    print(f"Starting team 1 ({team1}) with --test-file...")
+            # Redirect output to testteam log file
+            if testteam_log_path:
+                testteam_log_file = open(testteam_log_path, 'w')
+                team1_kwargs['stdout'] = testteam_log_file
+                team1_kwargs['stderr'] = subprocess.STDOUT
+                team1_kwargs['text'] = True
         else:
             print(f"Starting team 1 ({team1})...")
 
@@ -150,17 +185,27 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         team2_stdin = None
         team2_kwargs = popen_kwargs.copy()
 
-        if team2 == 'testteam' and test_file:
-            if use_stdin:
-                # Pipe test file to stdin
-                print(f"Starting team 2 ({team2}) with stdin piping...")
-                with open(test_file, 'r') as f:
-                    team2_stdin = f.read()
-                team2_kwargs['stdin'] = subprocess.PIPE
-            else:
-                # Use --test-file flag
-                team2_cmd.extend(['--test-file', test_file])
-                print(f"Starting team 2 ({team2}) with --test-file...")
+        if team2 == 'testteam':
+            # Add --verbose flag for testteam
+            team2_cmd.append('--verbose')
+            if test_file:
+                if use_stdin:
+                    # Pipe test file to stdin
+                    print(f"Starting team 2 ({team2}) with stdin piping...")
+                    with open(test_file, 'r') as f:
+                        team2_stdin = f.read()
+                    team2_kwargs['stdin'] = subprocess.PIPE
+                else:
+                    # Use --test-file flag
+                    team2_cmd.extend(['--test-file', test_file])
+                    print(f"Starting team 2 ({team2}) with --test-file...")
+            # Redirect output to testteam log file (append mode for team 2)
+            if testteam_log_path:
+                if not testteam_log_file:
+                    testteam_log_file = open(testteam_log_path, 'a')
+                team2_kwargs['stdout'] = testteam_log_file
+                team2_kwargs['stderr'] = subprocess.STDOUT
+                team2_kwargs['text'] = True
         else:
             print(f"Starting team 2 ({team2})...")
 
@@ -194,10 +239,12 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         print(f"Game running... (timeout: {GAME_TIMEOUT}s)")
         try:
             server_process.wait(timeout=GAME_TIMEOUT)
-            log_file.close()
+            server_log_file.close()
+            if testteam_log_file:
+                testteam_log_file.close()
 
             # Read server log to check for completion
-            with open(log_path, 'r') as f:
+            with open(server_log_path, 'r') as f:
                 log_contents = f.read()
 
             # Display team output if requested
@@ -231,7 +278,7 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
             else:
                 print(f"\n✗ {mode_name} mode test FAILED")
                 print(f"  Server output did not contain expected results")
-                print(f"  Check log file: {log_path}")
+                print(f"  Check log file: {server_log_path}")
                 return False
 
         except subprocess.TimeoutExpired:
@@ -245,9 +292,14 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         return False
 
     finally:
-        # Close log file if still open
+        # Close log files if still open
         try:
-            log_file.close()
+            server_log_file.close()
+        except:
+            pass
+        try:
+            if testteam_log_file:
+                testteam_log_file.close()
         except:
             pass
 
