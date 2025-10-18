@@ -1,6 +1,86 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+
+Create CollisionTypes.h with core data structures (CollisionState, CollisionCommand, SpawnRequest, CollisionOutcome, CollisionContext)
+
+Implement CollisionTypes.C with helper functions and constructors
+
+Add MakeCollisionState() method to CThing base class (Thing.h/C)
+
+Add ApplyCollisionCommand() and command application infrastructure to CThing (Thing.h/C)
+
+Update CThing::CollisionNew() and HandleCollisionNew() to use snapshot API
+
+Implement CShip::HandleCollisionNew() with command emission for all collision types
+
+Implement CAsteroid::HandleCollisionNew() with command emission
+
+Implement CStation::HandleCollisionNew() with command emission
+
+Add deterministic-collision-engine feature flag to ArgumentParser
+
+Replace CWorld::CollisionEvaluationNew() with snapshot/command pipeline implementation
+
+Update CWorld::LaserModel() to use snapshot/command pipeline
+
+Write unit tests for deterministic collision engine
+
+Run regression tests and verify backward compatibility
+
+Update documentation (CLAUDE.md, LEGACY_COLLISION_ENGINE.md)
+Progress Summary
+I've made substantial progress on the deterministic collision engine implementation. Here's what has been completed:
+✅ Completed (Phase 1 & 2)
+1. Core Data Structures (CollisionTypes.h, CollisionTypes.C)
+CollisionState - Immutable snapshot of object state
+CollisionCommand - Atomic state change directive with explicit target
+SpawnRequest - Parameters for creating new objects (separate from commands)
+CollisionOutcome - Container for commands (32 max) and spawns (8 max)
+CollisionContext - Shared context for collision processing
+Helper functions for command priority and conflict detection
+2. Snapshot Creation
+CThing::MakeCollisionState() - Base implementation (Thing.C:250)
+CShip::MakeCollisionState() - Captures ship state (shield, cargo, fuel, docked) (Ship.C:143)
+CAsteroid::MakeCollisionState() - Captures asteroid material (Asteroid.C:80)
+CStation::MakeCollisionState() - Captures station cargo (Station.C:46)
+3. Command Application Infrastructure
+CThing::ApplyCollisionCommand() - Applies commands in deterministic order (Thing.C:285)
+CThing::ApplyCollisionCommandDerived() - Virtual hook for derived-class-specific commands (Thing.C:329)
+Handles: kKillSelf, kSetVelocity, kSetPosition, plus delegation to derived classes
+Key Design Improvements Over Original Spec
+Fixed Union Problem: Replaced union with separate fields to avoid non-trivial type issues
+Explicit Target Identity: Each command specifies which object it modifies
+Increased Limits: 32 commands (vs 16), 8 spawns to handle complex scenarios
+Separate Spawns: SpawnRequest array separate from commands for cleaner design
+🔧 Remaining Work
+Phase 3: Implement derived-class-specific command handlers
+CShip::ApplyCollisionCommandDerived() - Handle shield/cargo/fuel/docked
+CAsteroid::ApplyCollisionCommandDerived() - Handle eatenBy pointer
+CStation::ApplyCollisionCommandDerived() - Handle cargo adjustments
+Phase 4: Update collision handlers to emit commands instead of mutating state
+Rewrite CShip::HandleCollisionNew() for all collision types (station, laser, asteroid, ship)
+Rewrite CAsteroid::HandleCollisionNew() for fragmentation
+Rewrite CStation::HandleCollisionNew() for laser hits
+Phase 5: World pipeline integration
+Add deterministic-collision-engine feature flag
+Replace CWorld::CollisionEvaluationNew() with snapshot/command pipeline
+Update CWorld::LaserModel() to use new system
+Phase 6: Testing & Documentation
+Build Status
+✅ All code compiles successfully with no errors (only pre-existing warnings) Would you like me to:
+Continue with Phase 3-6 - Complete the full implementation?
+Stop here and test - Verify the snapshot system works before proceeding?
+Review the design - Make any adjustments before continuing?
+
+==
+
+What is wrong with lasers?
+
+Run the asteroid collision one.
+
+
+
 ===
 
 Ship, Asteroid, and Station Damage Overview:
