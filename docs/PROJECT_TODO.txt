@@ -83,12 +83,6 @@ FIX THE RUNNING OF PHYSICS_MODEL WITH DT=0 - THAT'S AN ACCIDENT
 WAITING TO HAPPEN! Explicitly call the world population routines when
 they are needed.
 
-THERE IS A BUG IN TURNING, PRESENT IN LEGACY AS WELL - WE LAUNCH THE
-STATION AT -3PI/4 and DON'T END UP ON A HEADING TOWARDS THE OTHER
-STATION?!?!?!?
-
-
-
 ===
 
 Ship, Asteroid, and Station Damage Overview:
