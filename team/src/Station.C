@@ -9,6 +9,7 @@
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
+#include "CollisionTypes.h"  // For deterministic collision engine
 
 extern ArgumentParser* g_pParser;
 
@@ -40,6 +41,17 @@ CStation::~CStation() {}
 // Data access
 
 double CStation::GetVinylStore() const { return dCargo; }
+
+// Deterministic collision engine - create snapshot with station-specific fields
+CollisionState CStation::MakeCollisionState() const {
+  // Start with base class snapshot
+  CollisionState state = CThing::MakeCollisionState();
+
+  // Populate station-specific fields
+  state.station_cargo = dCargo;
+
+  return state;
+}
 
 /////////////////////////////////////////////
 // Explicit functions

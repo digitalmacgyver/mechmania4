@@ -269,6 +269,12 @@ This runs a full game in both legacy and new collision handling modes with groog
 python3 scripts/test_collision_modes.py --team1 noop --team2 noop
 python3 scripts/test_collision_modes.py --team1 testteam --team2 noop
 
+# Test with specific collision scenario
+python3 scripts/test_collision_modes.py \
+  --team1 noop \
+  --team2 testteam \
+  --test-file teams/testteam/tests/test1_ship_station_collision.txt
+
 # View all options
 python3 scripts/test_collision_modes.py --help
 ```
@@ -277,11 +283,39 @@ python3 scripts/test_collision_modes.py --help
 
 - **groogroo**: Full AI team for realistic testing
 - **noop**: Does nothing, useful for isolation testing
-- **testteam**: Reads scripted moves from `test_moves.txt` for controlled scenarios
+- **testteam**: Reads scripted moves from a file for controlled scenarios
 
-### Creating Test Scenarios with testteam
+### Testing Collision Scenarios
 
-Create a `test_moves.txt` file in the project root with format:
+Pre-built collision test scenarios are in `teams/testteam/tests/`:
+
+```bash
+# Test ship-station collision
+python3 scripts/test_collision_modes.py --team1 noop --team2 testteam \
+  --test-file teams/testteam/tests/test1_ship_station_collision.txt
+
+# Test laser-station collision
+python3 scripts/test_collision_modes.py --team1 noop --team2 testteam \
+  --test-file teams/testteam/tests/test2_station_laser_collision.txt
+
+# Test ship-ship collision
+python3 scripts/test_collision_modes.py --team1 noop --team2 testteam \
+  --test-file teams/testteam/tests/test3_ship_ship_collision.txt
+
+# Test ship-asteroid collision
+python3 scripts/test_collision_modes.py --team1 noop --team2 testteam \
+  --test-file teams/testteam/tests/test4_ship_asteroid_collision.txt
+
+# Test laser-ship collision
+python3 scripts/test_collision_modes.py --team1 noop --team2 testteam \
+  --test-file teams/testteam/tests/test5_ship_laser_collision.txt
+```
+
+See `teams/testteam/tests/README.md` for detailed descriptions of each test scenario.
+
+### Creating Custom Test Scenarios
+
+Create a test file with format:
 ```
 # shipnum,turn,ORDER_KIND,magnitude
 0,1,THRUST,100.0
@@ -290,7 +324,7 @@ Create a `test_moves.txt` file in the project root with format:
 3,4,LASER,50.0
 ```
 
-See `test_moves_example.txt` for examples and `scripts/QUICK_TESTING.md` for detailed documentation.
+See `teams/testteam/tests/` for examples and `teams/testteam/tests/USAGE.md` for detailed documentation.
 
 ### First-Time Setup
 

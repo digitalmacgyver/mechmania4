@@ -29,7 +29,9 @@ int main(int argc, char* argv[]) {
   myServ.ConnectClients();  // Sends ack & ID to clients
   myServ.MeetTeams();       // Clients send back team info
 
-  while (myServ.GetTime() < 300.0) {
+  // Game loop - run until max turns reached
+  CWorld* pWorld = myServ.GetWorld();
+  while (pWorld && pWorld->GetCurrentTurn() < g_game_max_turns) {
     myServ.Simulation();
 
     myServ.BroadcastWorld();
@@ -40,7 +42,6 @@ int main(int argc, char* argv[]) {
   printf("\n========================================\n");
   printf("           FINAL SCORES\n");
   printf("========================================\n");
-  CWorld* pWorld = myServ.GetWorld();
   if (pWorld) {
     for (unsigned int i = 0; i < pWorld->GetNumTeams(); ++i) {
       CTeam* pTeam = pWorld->GetTeam(i);

@@ -1,0 +1,42 @@
+# Test 3: Ship-Ship Collision
+# Purpose: Test two ships colliding with each other
+#
+# Setup:
+# - Team 1: noop (does nothing)
+# - Team 2: testteam executing these orders
+#
+# Expected Behavior:
+# - Ship 0: Moves away from Team 2 station, then returns (like Test 1)
+# - Ship 1: Rotates opposite direction and thrusts to intercept Ship 0
+# - Ships should collide sometime on or after turn 6
+#
+# Format: shipnum,turn,ORDER_KIND,magnitude
+
+# Ship 0 initial orient = 0.0 (facing east/right)
+# Ship 1 initial orient = 0.0 (facing east/right)
+
+# Turn 1: Ship 0 rotates toward station, Ship 1 rotates opposite way
+# Ship 0: turn 3π/4 to face station direction
+0,1,O_TURN,2.356
+# Ship 1: turn -π/4 to face away from station in different direction
+1,1,O_TURN,-0.785
+
+# Turns 2-5: Ship 0 walks out, Ship 1 does nothing (stays docked)
+0,2,O_THRUST,-5
+0,3,O_THRUST,-5
+0,4,O_THRUST,-5
+0,5,O_THRUST,-5
+
+# Turn 6: Ship 0 returns toward station, Ship 1 launches and accelerates
+0,6,O_THRUST,30
+1,6,O_THRUST,30
+
+# Turns 7-10: Both ships continue moving toward collision
+0,7,O_THRUST,30
+1,7,O_THRUST,30
+0,8,O_THRUST,30
+1,8,O_THRUST,30
+0,9,O_THRUST,30
+1,9,O_THRUST,30
+0,10,O_THRUST,30
+1,10,O_THRUST,30

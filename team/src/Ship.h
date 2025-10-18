@@ -34,6 +34,7 @@ class CShip : public CThing {
 
   unsigned int GetShipNumber() const;
   bool IsDocked() const;
+  bool WasDocked() const;  // Returns previous turn's docking state
 
   double GetAmount(ShipStat st) const;          // Returns current amount
   double GetCapacity(ShipStat st) const;        // Returns max capacity
@@ -46,6 +47,9 @@ class CShip : public CThing {
   CBrain* SetBrain(CBrain* pBr);  // Returns old CBrain object
 
   virtual double GetMass() const;
+
+  // Deterministic collision engine - override to populate ship-specific fields
+  virtual CollisionState MakeCollisionState() const;
 
   virtual void Drift(double dt = 1.0, double turn_phase = 0.0);
   bool AsteroidFits(const CAsteroid* pAst);
@@ -75,6 +79,7 @@ class CShip : public CThing {
  protected:
   unsigned int myNum;
   bool bDockFlag;
+  bool bWasDocked;  // Previous turn's docking state (for collision logging)
   bool bLaunchedThisTurn;  // True if ship undocked this turn (makes thrust free for entire turn)
   double dDockDist, dLaserDist;
   CBrain* pBrain;

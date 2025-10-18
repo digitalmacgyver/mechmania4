@@ -36,6 +36,7 @@ CWorld::CWorld(unsigned int nTm) {
   }
 
   gametime = 0.0;  // Start the clock
+  currentTurn = 0;  // Start at turn 0
   bGameOver = false;
   memset(AnnouncerText, 0, maxAnnouncerTextLen);  // Initialize announcer buffer
 
@@ -101,6 +102,10 @@ CTeam* CWorld::GetTeam(unsigned int nt) const {
 unsigned int CWorld::GetNumTeams() const { return numTeams; }
 
 double CWorld::GetGameTime() const { return gametime; }
+
+unsigned int CWorld::GetCurrentTurn() const { return currentTurn; }
+
+void CWorld::IncrementTurn() { currentTurn++; }
 
 void CWorld::AddAnnouncerMessage(const char* message) {
   if (message == NULL) return;
@@ -295,28 +300,28 @@ void CWorld::LaserModel() {
           LasThing.SetVel(TarVel);
         }
 
-        // Log laser hit
-        const char* targetType = "unknown";
-        const char* targetName = pTarget->GetName();
-        if (pTarget->GetKind() == SHIP) {
-          targetType = "Ship";
-        } else if (pTarget->GetKind() == STATION) {
-          targetType = "Station";
-        } else if (pTarget->GetKind() == ASTEROID) {
-          targetType = "Asteroid";
-        }
+        // Log laser hit with verbose logging
+        if (g_pParser && g_pParser->verbose) {
+          const char* targetType = (pTarget->GetKind() == SHIP) ? "SHIP" :
+                                   (pTarget->GetKind() == STATION) ? "STATION" :
+                                   (pTarget->GetKind() == ASTEROID) ? "ASTEROID" : "UNKNOWN";
+          const char* targetName = pTarget->GetName();
+          const char* shooterTeam = pShip->GetTeam() ? pShip->GetTeam()->GetName() : "NoTeam";
+          const char* targetTeam = pTarget->GetTeam() ? pTarget->GetTeam()->GetName() : "NoTeam";
 
-        printf("[LASER HIT] %s %s (%s) shot %s %s", pShip->GetTeam()->GetName(),
-               pShip->GetName(), pShip->GetTeam()->GetName(), targetType,
-               targetName ? targetName : "");
+          CCoord laser_pos = LasThing.GetPos();
+          CCoord target_pos = pTarget->GetPos();
+          CTraj laser_vel = LasThing.GetVelocity();
 
-        // Add team info for ships/stations
-        if (pTarget->GetKind() == SHIP && pTarget->GetTeam()) {
-          printf(" (%s)", pTarget->GetTeam()->GetName());
-        } else if (pTarget->GetKind() == STATION && pTarget->GetTeam()) {
-          printf(" (%s)", pTarget->GetTeam()->GetName());
+          printf("LASER_COLLISION: %s[%s] fires from pos=(%.1f,%.1f) power=%.1f range=%.1f -> %s[%s][%s] at pos=(%.1f,%.1f) laser_vel=(%.2f@%.1f°) mass=%.3f\n",
+                 pShip->GetName(), shooterTeam,
+                 pShip->GetPos().fX, pShip->GetPos().fY,
+                 dLasPwr, dLasRng,
+                 targetName ? targetName : "unnamed", targetType, targetTeam,
+                 target_pos.fX, target_pos.fY,
+                 laser_vel.rho, laser_vel.theta * 180.0 / PI,
+                 LasThing.GetMass());
         }
-        printf("\n");
 
         // Deliver the synthesized laser impact to the target
         pTarget->Collide(&LasThing, this);

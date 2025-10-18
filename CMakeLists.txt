@@ -30,6 +30,7 @@ set(COMMON_SOURCES
     ${SRC_DIR}/ArgumentParser.C
     ${SRC_DIR}/ParserModern.C
     ${SRC_DIR}/GameConstants.C
+    ${SRC_DIR}/CollisionTypes.C
 )
 
 # Network sources

@@ -1,0 +1,76 @@
+# Test 4: Ship-Asteroid Collision
+# Purpose: Test ship traversing the field to hit asteroids
+#
+# Setup:
+# - Team 1: noop (does nothing)
+# - Team 2: testteam executing these orders
+#
+# Expected Behavior:
+# - Ship slowly traverses back and forth between stations
+# - Should eventually hit an asteroid or dock at opposite station
+# - Cycle repeats to increase probability of asteroid encounter
+#
+# Format: shipnum,turn,ORDER_KIND,magnitude
+
+# Ship initial orient = 0.0 (facing east/right)
+
+# === Cycle 1: Turns 1-100 ===
+# Turn 1: Rotate to face 3π/4 (northeast direction)
+0,1,O_TURN,2.356
+
+# Turns 2-5: Small thrust to move away from station
+0,2,O_THRUST,5
+0,3,O_THRUST,5
+0,4,O_THRUST,5
+0,5,O_THRUST,5
+
+# Turn 50: Rotate to face -π/4 (southeast direction, roughly back)
+# Need to turn from 3π/4 to -π/4: delta = -π/4 - 3π/4 = -π ≈ -3.14
+0,50,O_TURN,-3.14
+
+# Turns 51-55: Thrust to return
+0,51,O_THRUST,5
+0,52,O_THRUST,5
+0,53,O_THRUST,5
+0,54,O_THRUST,5
+0,55,O_THRUST,5
+
+# === Cycle 2: Turns 101-200 ===
+# Turn 101: Rotate to face 3π/4 again
+0,101,O_TURN,2.356
+
+# Turns 102-105: Thrust away
+0,102,O_THRUST,5
+0,103,O_THRUST,5
+0,104,O_THRUST,5
+0,105,O_THRUST,5
+
+# Turn 150: Rotate back to -π/4
+0,150,O_TURN,-3.14
+
+# Turns 151-155: Thrust to return
+0,151,O_THRUST,5
+0,152,O_THRUST,5
+0,153,O_THRUST,5
+0,154,O_THRUST,5
+0,155,O_THRUST,5
+
+# === Cycle 3: Turns 201-300 ===
+# Turn 201: Rotate to face 3π/4 again
+0,201,O_TURN,2.356
+
+# Turns 202-205: Thrust away
+0,202,O_THRUST,5
+0,203,O_THRUST,5
+0,204,O_THRUST,5
+0,205,O_THRUST,5
+
+# Turn 250: Rotate back to -π/4
+0,250,O_TURN,-3.14
+
+# Turns 251-255: Thrust to return
+0,251,O_THRUST,5
+0,252,O_THRUST,5
+0,253,O_THRUST,5
+0,254,O_THRUST,5
+0,255,O_THRUST,5

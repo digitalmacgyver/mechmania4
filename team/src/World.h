@@ -36,6 +36,8 @@ class CWorld : public CSendable {
   CTeam* GetTeam(unsigned int nt) const;  // Returns ptr to team, NULL on error
   unsigned int GetNumTeams() const;       // Tells how many teams
   double GetGameTime() const;     // Tells elapsed game time
+  unsigned int GetCurrentTurn() const;    // Returns current turn number
+  void IncrementTurn();                   // Increment turn counter
 
   // Announcer system
   void AddAnnouncerMessage(const char* message);
@@ -90,6 +92,7 @@ class CWorld : public CSendable {
   double gametime;
   unsigned int numTeams;
   CTeam** apTeams;
+  unsigned int currentTurn;  // Track current turn number for logging
 };
 
 #endif  // ! _WORLD_H_DSDFJSFLJKSEGFKLESF

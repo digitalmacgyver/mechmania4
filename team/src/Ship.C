@@ -12,6 +12,7 @@
 #include "Station.h"
 #include "Team.h"
 #include "World.h"
+#include "CollisionTypes.h"  // For deterministic collision engine
 
 extern CParser* g_pParser;
 
@@ -81,6 +82,7 @@ CShip::CShip(CCoord StPos, CTeam *pteam, unsigned int ShNum)
   pBrain = NULL;
 
   bDockFlag = true;
+  bWasDocked = true;  // Start docked
   bLaunchedThisTurn = false;
   dDockDist = g_ship_default_docking_distance;
   dLaserDist = 0.0;
@@ -111,6 +113,8 @@ unsigned int CShip::GetShipNumber() const { return myNum; }
 
 bool CShip::IsDocked() const { return bDockFlag; }
 
+bool CShip::WasDocked() const { return bWasDocked; }
+
 double CShip::GetAmount(ShipStat st) const {
   if (st >= S_ALL_STATS) {
     return 0.0;
@@ -137,6 +141,20 @@ double CShip::GetMass() const {
   sum += GetAmount(S_CARGO);
   sum += GetAmount(S_FUEL);
   return sum;
+}
+
+// Deterministic collision engine - create snapshot with ship-specific fields
+CollisionState CShip::MakeCollisionState() const {
+  // Start with base class snapshot
+  CollisionState state = CThing::MakeCollisionState();
+
+  // Populate ship-specific fields
+  state.is_docked = bDockFlag;
+  state.ship_shield = GetAmount(S_SHIELD);
+  state.ship_cargo = GetAmount(S_CARGO);
+  state.ship_fuel = GetAmount(S_FUEL);
+
+  return state;
 }
 
 double CShip::GetLaserBeamDistance() { return dLaserDist; }
@@ -209,6 +227,7 @@ CBrain *CShip::SetBrain(CBrain *pBr) {
 
 void CShip::ResetOrders() {
   dLaserDist = 0.0;
+  bWasDocked = bDockFlag;  // Save previous docking state for collision logging
   bLaunchedThisTurn = false;  // Reset launch flag for new turn
   for (unsigned int ord = (unsigned int)O_SHIELD; ord < (unsigned int)O_ALL_ORDERS; ++ord) {
     adOrders[ord] = 0.0;

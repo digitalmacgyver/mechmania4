@@ -25,11 +25,10 @@ public:
 
   void Init();
   void Turn();
-  void SelectShipNames();
-  void SelectTeamName();
 
 private:
   void LoadTestMoves(const char* filename);
+  void LoadTestMovesFromStream(std::istream& stream, const char* source_name);
   OrderKind ParseOrderKind(const std::string& order_str);
 
   std::vector<TestMove> moves;   // All scripted moves

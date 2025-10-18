@@ -31,6 +31,10 @@ extern double g_game_max_speed;
 // Defaults to 60.0. Must be > 0.
 extern double g_game_max_thrust_order_mag;
 
+// Maximum number of turns. Game ends when this turn count is reached.
+// Defaults to 300 turns. Must be > 0.
+extern unsigned int g_game_max_turns;
+
 // Global epsilon when comparing floating-point magnitudes against zero.
 // Values in this simulation range up to ~1.5e4, so 1e-7 comfortably masks
 // accumulated rounding noise while keeping real signals intact.

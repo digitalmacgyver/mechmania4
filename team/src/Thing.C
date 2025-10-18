@@ -13,6 +13,7 @@
 #include "Thing.h"
 #include "Traj.h"
 #include "World.h"
+#include "CollisionTypes.h"  // For deterministic collision engine
 
 /////////////////////////////////////////////
 // Construction/destruction
@@ -161,20 +162,49 @@ bool CThing::CollideOld(CThing* pOthThing, CWorld* pWorld) {
 
   // Verbose logging for collision detection
   if (g_pParser && g_pParser->verbose) {
-    CCoord pos1 = GetPos();
-    CCoord pos2 = pOthThing->GetPos();
-    double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
-                       (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
-    double combined_size = GetSize() + pOthThing->GetSize();
-    double overlap = combined_size - dist;
+    // Check if we should skip logging to reduce noise from docked ships
+    bool skip_logging = false;
 
-    CTraj vel1 = GetVelocity();
-    CTraj vel2 = pOthThing->GetVelocity();
+    // Skip ship-station collisions if ship was previously docked
+    if ((GetKind() == SHIP && pOthThing->GetKind() == STATION) ||
+        (GetKind() == STATION && pOthThing->GetKind() == SHIP)) {
+      CShip* ship = (GetKind() == SHIP) ? dynamic_cast<CShip*>(this) : dynamic_cast<CShip*>(pOthThing);
+      if (ship && ship->WasDocked()) {
+        skip_logging = true;
+      }
+    }
 
-    printf("[COLLISION] %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f) <-> %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f): dist=%.3f overlap=%.3f\n",
-           GetName(), pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, GetSize(),
-           pOthThing->GetName(), pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, pOthThing->GetSize(),
-           dist, overlap);
+    // Skip ship-ship collisions if either ship is currently docked
+    if (GetKind() == SHIP && pOthThing->GetKind() == SHIP) {
+      CShip* ship1 = dynamic_cast<CShip*>(this);
+      CShip* ship2 = dynamic_cast<CShip*>(pOthThing);
+      if ((ship1 && ship1->IsDocked()) || (ship2 && ship2->IsDocked())) {
+        skip_logging = true;
+      }
+    }
+
+    if (!skip_logging) {
+      CCoord pos1 = GetPos();
+      CCoord pos2 = pOthThing->GetPos();
+      double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
+                         (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
+      double combined_size = GetSize() + pOthThing->GetSize();
+      double overlap = combined_size - dist;
+
+      CTraj vel1 = GetVelocity();
+      CTraj vel2 = pOthThing->GetVelocity();
+
+      const char* kind1 = (GetKind() == SHIP) ? "SHIP" : (GetKind() == STATION) ? "STATION" : (GetKind() == ASTEROID) ? "ASTEROID" : "GENTHING";
+      const char* kind2 = (pOthThing->GetKind() == SHIP) ? "SHIP" : (pOthThing->GetKind() == STATION) ? "STATION" : (pOthThing->GetKind() == ASTEROID) ? "ASTEROID" : "GENTHING";
+
+      unsigned int turn = (pWorld != NULL) ? pWorld->GetCurrentTurn() : 0;
+
+      printf("COLLISION_DETECTED: Turn %u: %s[%s] pos=(%.1f,%.1f) vel=(%.2f@%.1f°) rad=%.1f <-> %s[%s] pos=(%.1f,%.1f) vel=(%.2f@%.1f°) rad=%.1f | dist=%.3f overlap=%.3f\n",
+             turn,
+             GetName(), kind1, pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, GetSize(),
+             pOthThing->GetName(), kind2, pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, pOthThing->GetSize(),
+             dist, overlap);
+    }
   }
 
   HandleCollision(pOthThing, pWorld);
@@ -207,20 +237,49 @@ bool CThing::CollideNew(CThing* pOthThing, CWorld* pWorld) {
 
   // Verbose logging for collision detection
   if (g_pParser && g_pParser->verbose) {
-    CCoord pos1 = GetPos();
-    CCoord pos2 = pOthThing->GetPos();
-    double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
-                       (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
-    double combined_size = GetSize() + pOthThing->GetSize();
-    double overlap = combined_size - dist;
+    // Check if we should skip logging to reduce noise from docked ships
+    bool skip_logging = false;
 
-    CTraj vel1 = GetVelocity();
-    CTraj vel2 = pOthThing->GetVelocity();
+    // Skip ship-station collisions if ship was previously docked
+    if ((GetKind() == SHIP && pOthThing->GetKind() == STATION) ||
+        (GetKind() == STATION && pOthThing->GetKind() == SHIP)) {
+      CShip* ship = (GetKind() == SHIP) ? dynamic_cast<CShip*>(this) : dynamic_cast<CShip*>(pOthThing);
+      if (ship && ship->WasDocked()) {
+        skip_logging = true;
+      }
+    }
 
-    printf("[COLLISION] %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f) <-> %s (%.1f,%.1f v=(%.2f,%.1f°) r=%.1f): dist=%.3f overlap=%.3f\n",
-           GetName(), pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, GetSize(),
-           pOthThing->GetName(), pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, pOthThing->GetSize(),
-           dist, overlap);
+    // Skip ship-ship collisions if either ship is currently docked
+    if (GetKind() == SHIP && pOthThing->GetKind() == SHIP) {
+      CShip* ship1 = dynamic_cast<CShip*>(this);
+      CShip* ship2 = dynamic_cast<CShip*>(pOthThing);
+      if ((ship1 && ship1->IsDocked()) || (ship2 && ship2->IsDocked())) {
+        skip_logging = true;
+      }
+    }
+
+    if (!skip_logging) {
+      CCoord pos1 = GetPos();
+      CCoord pos2 = pOthThing->GetPos();
+      double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
+                         (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
+      double combined_size = GetSize() + pOthThing->GetSize();
+      double overlap = combined_size - dist;
+
+      CTraj vel1 = GetVelocity();
+      CTraj vel2 = pOthThing->GetVelocity();
+
+      const char* kind1 = (GetKind() == SHIP) ? "SHIP" : (GetKind() == STATION) ? "STATION" : (GetKind() == ASTEROID) ? "ASTEROID" : "GENTHING";
+      const char* kind2 = (pOthThing->GetKind() == SHIP) ? "SHIP" : (pOthThing->GetKind() == STATION) ? "STATION" : (pOthThing->GetKind() == ASTEROID) ? "ASTEROID" : "GENTHING";
+
+      unsigned int turn = (pWorld != NULL) ? pWorld->GetCurrentTurn() : 0;
+
+      printf("COLLISION_DETECTED: Turn %u: %s[%s] pos=(%.1f,%.1f) vel=(%.2f@%.1f°) rad=%.1f <-> %s[%s] pos=(%.1f,%.1f) vel=(%.2f@%.1f°) rad=%.1f | dist=%.3f overlap=%.3f\n",
+             turn,
+             GetName(), kind1, pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, GetSize(),
+             pOthThing->GetName(), kind2, pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, pOthThing->GetSize(),
+             dist, overlap);
+    }
   }
 
   HandleCollision(pOthThing, pWorld);
@@ -240,6 +299,96 @@ bool CThing::Overlaps(const CThing& OthThing) const {
     return true;
   }
   return false;
+}
+
+// Deterministic Collision Engine - Create Immutable Snapshot
+// This method captures the complete state of this object at the moment
+// it's called. The returned snapshot is used by the deterministic collision
+// engine to ensure both collision participants see the same state.
+CollisionState CThing::MakeCollisionState() const {
+  CollisionState state;
+
+  // Identity
+  state.thing = const_cast<CThing*>(this);  // Pointer for identity only
+  state.kind = TKind;
+  state.world_index = uWldIndex;
+
+  // Physics state
+  state.position = Pos;
+  state.velocity = Vel;
+  state.mass = mass;
+  state.size = size;
+  state.orient = orient;
+  state.omega = omega;
+
+  // Ownership and status
+  state.team = pmyTeam;
+  state.is_alive = !DeadFlag;
+
+  // Default values for derived-class-specific state
+  // (Derived classes should override this method if they have additional state)
+  state.is_docked = false;
+  state.ship_shield = 0.0;
+  state.ship_cargo = 0.0;
+  state.ship_fuel = 0.0;
+  state.asteroid_material = GENAST;
+  state.station_cargo = 0.0;
+
+  return state;
+}
+
+// Deterministic Collision Engine - Apply Command
+// This method applies a collision command to this object. Commands are generated
+// during collision processing and applied in deterministic order by the world.
+void CThing::ApplyCollisionCommand(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  // Validate that this command targets this object
+  if (cmd.target != this) {
+    return;  // Command doesn't target us, ignore
+  }
+
+  // Apply command based on type
+  switch (cmd.type) {
+    case CollisionCommandType::kNoOp:
+      // Do nothing
+      break;
+
+    case CollisionCommandType::kKillSelf:
+      // Mark this object as dead
+      DeadFlag = true;
+      break;
+
+    case CollisionCommandType::kSetVelocity:
+      // Set velocity (used for momentum transfer)
+      Vel = cmd.velocity;
+      break;
+
+    case CollisionCommandType::kSetPosition:
+      // Set position (used for separation or docking)
+      Pos = cmd.position;
+      break;
+
+    case CollisionCommandType::kAdjustShield:
+    case CollisionCommandType::kAdjustCargo:
+    case CollisionCommandType::kAdjustFuel:
+    case CollisionCommandType::kSetDocked:
+    case CollisionCommandType::kRecordEatenBy:
+      // These are derived-class-specific, delegate to virtual method
+      ApplyCollisionCommandDerived(cmd, ctx);
+      break;
+
+    case CollisionCommandType::kAnnounceMessage:
+      // Announcer messages are handled by the world, not by individual objects
+      break;
+  }
+}
+
+// Base class implementation does nothing for derived-specific commands
+// Derived classes override this to handle their specific command types
+void CThing::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  // Base CThing has no derived-specific state to modify
+  // Ships, Asteroids, and Stations will override this
+  (void)cmd;  // Suppress unused parameter warning
+  (void)ctx;  // Suppress unused parameter warning
 }
 
 ////////////////////////////////////////////////

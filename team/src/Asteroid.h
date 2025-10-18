@@ -21,6 +21,9 @@ class CAsteroid : public CThing {
   AsteroidKind GetMaterial() const;
   CThing* EatenBy() const;  // Probably not needed in the API
 
+  // Deterministic collision engine - override to populate asteroid-specific fields
+  virtual CollisionState MakeCollisionState() const;
+
   // Serialization routines
   unsigned GetSerialSize() const;
   unsigned SerialPack(char* buf, unsigned buflen) const;

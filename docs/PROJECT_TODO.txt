@@ -3,10 +3,6 @@
 
 ===
 
-
-
-===
-
 Ship, Asteroid, and Station Damage Overview:
 
 * Ships take damage to shields from collisions with Asteroids, other

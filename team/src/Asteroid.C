@@ -10,6 +10,7 @@
 #include "GameConstants.h"
 #include "Ship.h"
 #include "World.h"
+#include "CollisionTypes.h"  // For deterministic collision engine
 
 extern ArgumentParser* g_pParser;
 
@@ -75,6 +76,17 @@ CAsteroid::~CAsteroid() {}
 AsteroidKind CAsteroid::GetMaterial() const { return material; }
 
 CThing* CAsteroid::EatenBy() const { return pThEat; }
+
+// Deterministic collision engine - create snapshot with asteroid-specific fields
+CollisionState CAsteroid::MakeCollisionState() const {
+  // Start with base class snapshot
+  CollisionState state = CThing::MakeCollisionState();
+
+  // Populate asteroid-specific fields
+  state.asteroid_material = material;
+
+  return state;
+}
 
 ///////////////////////////////////////////////////
 // Virtual methods

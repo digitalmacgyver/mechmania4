@@ -15,8 +15,6 @@ public:
 
   void Init();
   void Turn();
-  void SelectShipNames();
-  void SelectTeamName();
 
 private:
   // No state needed - this team does nothing

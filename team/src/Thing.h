@@ -25,6 +25,11 @@ class CTeam;
 
 enum ThingKind { GENTHING, ASTEROID, STATION, SHIP };
 
+// Forward declarations for deterministic collision engine
+struct CollisionState;
+struct CollisionCommand;
+struct CollisionContext;
+
 class CThing : public CSendable {
  public:
   CThing(double fx0 = 0.0, double fy0 = 0.0);
@@ -67,6 +72,13 @@ class CThing : public CSendable {
   virtual void Drift(double dt = 1.0, double turn_phase = 0.0);
   bool Collide(CThing* pOthThing, CWorld* pWorld = NULL);
   bool Overlaps(const CThing& OthThing) const;
+
+  // Deterministic collision engine - create immutable snapshot of current state
+  CollisionState MakeCollisionState() const;
+
+  // Deterministic collision engine - apply a collision command to this object
+  void ApplyCollisionCommand(const CollisionCommand& cmd, const CollisionContext& ctx);
+  virtual void ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx);
 
   double DetectCollisionCourse(const CThing& OthThing) const;
   CCoord PredictPosition(double dt = 1.0) const;

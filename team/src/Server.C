@@ -455,6 +455,9 @@ double CServer::Simulation() {
     pmyWorld->AnnouncerText[0] = 0;
   }
 
+  // Increment turn counter after physics completes
+  pmyWorld->IncrementTurn();
+
   return GetTime();
 
   /*

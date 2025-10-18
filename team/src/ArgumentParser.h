@@ -33,6 +33,7 @@ class ArgumentParser {
   bool enableTeamLogging = false;
   std::string teamLogFile;      // Empty = use team default
   std::string teamParamsFile;   // Empty = use team default
+  std::string testMovesFile;    // Test moves file for scripted teams (e.g., testteam)
 
   // Observer options
   bool verbose = false;          // Verbose output for observer
@@ -46,6 +47,7 @@ class ArgumentParser {
   // Game timing parameters
   double GetGameTurnDuration() const { return game_turn_duration_; }
   double GetPhysicsSimulationDt() const { return physics_simulation_dt_; }
+  unsigned int GetMaxTurns() const { return max_turns_; }
 
   // Game physics parameters
   double GetMaxSpeed() const { return max_speed_; }
@@ -67,6 +69,7 @@ class ArgumentParser {
   // Game timing parameters (following Google C++ style with trailing underscore)
   double game_turn_duration_ = 1.0;   // In-game seconds per turn
   double physics_simulation_dt_ = 0.2; // Physics timestep in seconds
+  unsigned int max_turns_ = 300;      // Maximum number of turns
 
   // Game physics parameters
   double max_speed_ = 30.0;            // Maximum velocity magnitude

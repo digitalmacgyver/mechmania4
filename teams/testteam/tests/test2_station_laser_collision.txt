@@ -1,0 +1,30 @@
+# Test 2: Station-Laser Collision
+# Purpose: Test laser hitting station
+#
+# Setup:
+# - Team 1: noop (does nothing)
+# - Team 2: testteam executing these orders
+#
+# Expected Behavior:
+# - Turns 1-5: Same as Test 1 - ship moves away from station
+# - Turn 6: Ship fires laser at maximum range toward station
+#   * Should hit station on turn 6
+#
+# Format: shipnum,turn,ORDER_KIND,magnitude
+
+# Ship initial orient = 0.0 (facing east/right)
+# Turn to face station (west/left) offset by -π/4
+# Net turn: π - π/4 = 3π/4 ≈ 2.356
+
+# Turn 1: Rotate to face station
+0,1,O_TURN,2.356
+
+# Turns 2-5: Walk out of station with reverse thrust
+0,2,O_THRUST,-5
+0,3,O_THRUST,-5
+0,4,O_THRUST,-5
+0,5,O_THRUST,-5
+
+# Turn 6: Fire laser at maximum power (512 units range)
+# Laser strength is the order magnitude
+0,6,O_LASER,512

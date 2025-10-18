@@ -3,11 +3,35 @@
  * Reads commands from test_moves.txt and executes them on schedule
  */
 
+// Include order matters - need OrderKind enum from Ship.h
 #include "TestTeam.h"
 #include "Ship.h"
+#include "ParserModern.h"
 #include <fstream>
 #include <sstream>
 #include <cstdio>
+#include <iostream>
+#include <unistd.h>  // for isatty() and STDIN_FILENO
+#include <map>
+#include <string>
+
+// Global map from order string names to OrderKind enum values
+static const std::map<std::string, OrderKind> ORDER_STRING_TO_ENUM = {
+    {"O_SHIELD", O_SHIELD},
+    {"O_LASER", O_LASER},
+    {"O_THRUST", O_THRUST},
+    {"O_TURN", O_TURN},
+    {"O_JETTISON", O_JETTISON}
+};
+
+// Reverse map from OrderKind enum to string name (for logging)
+static const std::map<OrderKind, std::string> ORDER_ENUM_TO_STRING = {
+    {O_SHIELD, "O_SHIELD"},
+    {O_LASER, "O_LASER"},
+    {O_THRUST, "O_THRUST"},
+    {O_TURN, "O_TURN"},
+    {O_JETTISON, "O_JETTISON"}
+};
 
 // Factory function - tells the game to use our team class
 CTeam* CTeam::CreateTeam() {
@@ -23,6 +47,14 @@ TestTeam::~TestTeam() {
 }
 
 void TestTeam::Init() {
+  // Set team and ship names
+  SetName("TestTeam");
+  GetStation()->SetName("Test Station");
+  GetShip(0)->SetName("Test-1");
+  GetShip(1)->SetName("Test-2");
+  GetShip(2)->SetName("Test-3");
+  GetShip(3)->SetName("Test-4");
+
   // Initialize ships with default configuration
   // All ships get equal fuel/cargo split
   for (unsigned int i = 0; i < GetShipCount(); ++i) {
@@ -30,22 +62,38 @@ void TestTeam::Init() {
     GetShip(i)->SetCapacity(S_CARGO, 30.0);  // 30 tons cargo
   }
 
-  // Load test moves from file
-  LoadTestMoves("test_moves.txt");
+  // Check for test file from command line
+  extern CParser* g_pParser;
+  const char* test_file = nullptr;
+
+  if (g_pParser) {
+    const std::string& test_moves_file = g_pParser->GetModernParser().testMovesFile;
+    if (!test_moves_file.empty()) {
+      test_file = test_moves_file.c_str();
+    }
+  }
+
+  // Load test moves from specified file, stdin, or default
+  if (test_file && std::string(test_file) == "-") {
+    // Read from stdin (explicit flag)
+    printf("[TestTeam] Reading from stdin (explicit --test-file -)\n");
+    LoadTestMovesFromStream(std::cin, "stdin");
+  } else if (test_file) {
+    // Read from specified file
+    printf("[TestTeam] Reading from file: %s\n", test_file);
+    LoadTestMoves(test_file);
+  } else if (!isatty(STDIN_FILENO)) {
+    // No test file specified, but stdin is piped (not a terminal)
+    // Automatically read from stdin
+    printf("[TestTeam] Auto-detected piped input on stdin\n");
+    LoadTestMovesFromStream(std::cin, "stdin (auto-detected)");
+  } else {
+    // Try default file
+    printf("[TestTeam] Trying default file: test_moves.txt\n");
+    LoadTestMoves("test_moves.txt");
+  }
 
   printf("[TestTeam] Initialized with %zu scripted moves\n", moves.size());
-}
-
-void TestTeam::SelectTeamName() {
-  SetName("TestTeam");
-  GetStation()->SetName("Test Station");
-}
-
-void TestTeam::SelectShipNames() {
-  GetShip(0)->SetName("Test-1");
-  GetShip(1)->SetName("Test-2");
-  GetShip(2)->SetName("Test-3");
-  GetShip(3)->SetName("Test-4");
 }
 
 void TestTeam::Turn() {
@@ -63,10 +111,10 @@ void TestTeam::Turn() {
 
       CShip* ship = GetShip(move.shipnum);
 
-      // Execute the order
-      const char* order_names[] = {"THRUST", "TURN", "JETTISON", "LASER"};
-      const char* order_name = (move.order >= 0 && move.order <= 3) ?
-                               order_names[move.order] : "UNKNOWN";
+      // Get order name from the reverse map for logging
+      auto it = ORDER_ENUM_TO_STRING.find(move.order);
+      const char* order_name = (it != ORDER_ENUM_TO_STRING.end()) ?
+                               it->second.c_str() : "UNKNOWN";
 
       printf("[TestTeam] Turn %d: Ship %d (%s) executing %s %.2f\n",
              current_turn, move.shipnum, ship->GetName(), order_name, move.magnitude);
@@ -85,10 +133,15 @@ void TestTeam::LoadTestMoves(const char* filename) {
     return;
   }
 
+  LoadTestMovesFromStream(file, filename);
+  file.close();
+}
+
+void TestTeam::LoadTestMovesFromStream(std::istream& stream, const char* source_name) {
   std::string line;
   int line_num = 0;
 
-  while (std::getline(file, line)) {
+  while (std::getline(stream, line)) {
     line_num++;
 
     // Skip empty lines and comments
@@ -133,19 +186,14 @@ void TestTeam::LoadTestMoves(const char* filename) {
     }
   }
 
-  file.close();
-  printf("[TestTeam] Loaded %zu test moves from %s\n", moves.size(), filename);
+  printf("[TestTeam] Loaded %zu test moves from %s\n", moves.size(), source_name);
 }
 
 OrderKind TestTeam::ParseOrderKind(const std::string& order_str) {
-  if (order_str == "THRUST" || order_str == "O_THRUST") {
-    return O_THRUST;
-  } else if (order_str == "TURN" || order_str == "O_TURN") {
-    return O_TURN;
-  } else if (order_str == "JETTISON" || order_str == "O_JETTISON") {
-    return O_JETTISON;
-  } else if (order_str == "LASER" || order_str == "O_LASER") {
-    return O_LASER;
+  // Use the global map to convert string to enum
+  auto it = ORDER_STRING_TO_ENUM.find(order_str);
+  if (it != ORDER_STRING_TO_ENUM.end()) {
+    return it->second;
   } else {
     printf("[TestTeam] Warning: Unknown order type '%s', defaulting to O_THRUST\n",
            order_str.c_str());

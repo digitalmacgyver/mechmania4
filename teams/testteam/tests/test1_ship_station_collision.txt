@@ -1,0 +1,33 @@
+# Test 1: Ship-Station Collision
+# Purpose: Test ship colliding back with its own station after launching
+#
+# Setup:
+# - Team 1: noop (does nothing)
+# - Team 2: testteam executing these orders
+#
+# Expected Behavior:
+# - Turn 1: Ship rotates to face station (turn 3π/4 from initial 0)
+# - Turns 2-5: Ship "walks out" of station with small reverse thrust (-5)
+#   * In legacy mode, may see repeated docking events as dDockDist increments
+# - Turn 6: Ship thrusts forward (30) toward station
+#   * Should collide with station after turn 6
+#
+# Format: shipnum,turn,ORDER_KIND,magnitude
+
+# Ship initial orient = 0.0 (facing east/right)
+# Station is at origin, so turn π radians to face it (west/left)
+# Then offset by -π/4 to prepare for the approach angle
+# Net turn: π - π/4 = 3π/4 ≈ 2.356
+
+# Turn 1: Rotate to face station
+0,1,O_TURN,2.356
+
+# Turns 2-5: Walk out of station with reverse thrust
+# (negative thrust moves backward relative to current orientation)
+0,2,O_THRUST,-5
+0,3,O_THRUST,-5
+0,4,O_THRUST,-5
+0,5,O_THRUST,-5
+
+# Turn 6: Thrust forward toward station
+0,6,O_THRUST,30

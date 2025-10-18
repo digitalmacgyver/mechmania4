@@ -20,6 +20,9 @@ class CStation : public CThing {
   double GetVinylStore() const;
   double AddVinyl(double dvtons);
 
+  // Deterministic collision engine - override to populate station-specific fields
+  virtual CollisionState MakeCollisionState() const;
+
   // Serialization methods
   unsigned GetSerialSize() const;
   unsigned SerialPack(char* buf, unsigned buflen) const;

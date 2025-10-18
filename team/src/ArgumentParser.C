@@ -57,7 +57,10 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "log-file", "Path to team log file",
          cxxopts::value<std::string>())(
         "params", "Path to team parameter file",
-         cxxopts::value<std::string>())("verbose", "Enable verbose output")(
+         cxxopts::value<std::string>())(
+        "test-file", "Path to test moves file (for testteam), use '-' for stdin",
+         cxxopts::value<std::string>())(
+        "verbose", "Enable verbose output")(
         "help", "Show help");
 
     // Feature flags
@@ -83,7 +86,10 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         cxxopts::value<double>()->default_value("1.0"))(
         "physics-dt",
         "Physics simulation timestep in seconds (default: 0.2)",
-        cxxopts::value<double>()->default_value("0.2"));
+        cxxopts::value<double>()->default_value("0.2"))(
+        "max-turns",
+        "Maximum number of turns (default: 300)",
+        cxxopts::value<unsigned int>()->default_value("300"));
 
     // Game physics options
     options.add_options("Physics")(
@@ -114,6 +120,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("params")) {
       teamParamsFile = result["params"].as<std::string>();
     }
+    if (result.count("test-file")) {
+      testMovesFile = result["test-file"].as<std::string>();
+    }
 
     verbose = result.count("verbose") > 0;
 
@@ -133,6 +142,13 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
       }
       if (physics_simulation_dt_ > game_turn_duration_) {
         std::cerr << "Error: physics-dt must be <= game-turn-duration" << std::endl;
+        return false;
+      }
+    }
+    if (result.count("max-turns")) {
+      max_turns_ = result["max-turns"].as<unsigned int>();
+      if (max_turns_ == 0) {
+        std::cerr << "Error: max-turns must be > 0" << std::endl;
         return false;
       }
     }

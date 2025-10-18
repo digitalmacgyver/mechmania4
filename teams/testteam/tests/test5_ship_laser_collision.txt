@@ -1,0 +1,46 @@
+# Test 5: Ship-Laser Collision (Extra Credit)
+# Purpose: Test laser hitting a ship
+#
+# Setup:
+# - Team 1: noop (does nothing)
+# - Team 2: testteam executing these orders
+#
+# Expected Behavior:
+# - Ship 0: Positions itself away from station
+# - Ship 1: Aims and fires laser at Ship 0
+# - Laser should hit Ship 0, causing damage
+#
+# Format: shipnum,turn,ORDER_KIND,magnitude
+
+# Ship 0 initial orient = 0.0 (facing east/right)
+# Ship 1 initial orient = 0.0 (facing east/right)
+
+# Turn 1: Ship 0 rotates to 3π/4, Ship 1 rotates to same angle to aim at Ship 0
+0,1,O_TURN,2.356
+1,1,O_TURN,2.356
+
+# Turns 2-5: Ship 0 moves away to become a target
+0,2,O_THRUST,10
+0,3,O_THRUST,10
+0,4,O_THRUST,10
+0,5,O_THRUST,10
+
+# Turn 6: Ship 0 stops, Ship 1 adjusts aim slightly and fires
+# Ship 1 needs to aim at where Ship 0 is now
+# Since both started at same position and Ship 0 moved at 3π/4,
+# Ship 1 should face same direction and fire
+0,6,O_THRUST,0
+1,6,O_LASER,200
+
+# Turns 7-10: Continue the pattern to ensure hit
+# Ship 0 continues moving slowly
+0,7,O_THRUST,5
+0,8,O_THRUST,5
+0,9,O_THRUST,5
+0,10,O_THRUST,5
+
+# Ship 1 fires again
+1,7,O_LASER,200
+1,8,O_LASER,200
+1,9,O_LASER,200
+1,10,O_LASER,200
