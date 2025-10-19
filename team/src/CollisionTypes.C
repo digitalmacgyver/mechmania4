@@ -198,7 +198,7 @@ CollisionContext::CollisionContext()
       other_state(NULL),
       time_step(0.0),
       use_new_physics(false),
-      use_asteroid_eat_damage(false),
+      disable_eat_damage(false),
       use_docking_fix(false),
       random_separation_angle(0.0) {
 }
@@ -211,7 +211,7 @@ CollisionContext::CollisionContext(CWorld* w, const CollisionState* self,
       other_state(other),
       time_step(dt),
       use_new_physics(physics),
-      use_asteroid_eat_damage(eat_dmg),
+      disable_eat_damage(eat_dmg),
       use_docking_fix(dock),
       random_separation_angle(random_angle) {
 }

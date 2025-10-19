@@ -399,7 +399,7 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       // SMALL ASTEROID: Ship eats it
 
       // Apply damage only if in legacy mode
-      if (!ctx.use_asteroid_eat_damage) {
+      if (!ctx.disable_eat_damage) {
         // Legacy: damage even when eating
         double damage = (other_state->mass * (self_state->velocity - other_state->velocity).rho) / g_laser_damage_mass_divisor;
         outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
@@ -450,6 +450,14 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       }
 
       outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
+
+      // Announcement if ship destroyed
+      if ((self_state->ship_shield - damage) <= 0.0 && ctx.world) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "%s destroyed by %s",
+                 self_state->thing->GetName(), other_state->thing->GetName());
+        outcome.AddCommand(CollisionCommand::Announce(msg));
+      }
 
       // Physics: Update ship velocity based on collision
       if (ctx.use_new_physics) {
@@ -505,11 +513,19 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
 
     outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
 
-    // Announcement
+    // Announcement for damage
     if (ctx.world && damage > 0.1) {
       char msg[256];
       snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
                self_state->thing->GetName(), other_state->thing->GetName(), damage);
+      outcome.AddCommand(CollisionCommand::Announce(msg));
+    }
+
+    // Announcement if ship destroyed
+    if ((self_state->ship_shield - damage) <= 0.0 && ctx.world) {
+      char msg[256];
+      snprintf(msg, sizeof(msg), "%s destroyed by %s",
+               self_state->thing->GetName(), other_state->thing->GetName());
       outcome.AddCommand(CollisionCommand::Announce(msg));
     }
 

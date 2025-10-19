@@ -196,11 +196,7 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
     outcome.AddCommand(CollisionCommand::Kill(self_state->thing));
 
     // Fragment into 3 smaller pieces (if large enough)
-    // CRITICAL FIX: Include absorbed laser mass in fragments to conserve momentum
-    // The laser's momentum is absorbed by the asteroid, so the total mass to fragment
-    // is asteroid_mass + laser_mass, not just asteroid_mass.
-    double total_mass_to_fragment = self_state->mass + laser_mass;
-    double fragment_mass = total_mass_to_fragment / 3.0;
+    double fragment_mass = self_state->mass / 3.0;
 
     if (fragment_mass >= g_thing_minmass) {
       // Create 3 fragments with velocities in different directions

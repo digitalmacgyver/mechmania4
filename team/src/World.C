@@ -541,17 +541,17 @@ void CWorld::LaserModelNew() {
 
         // Build collision context with feature flags
         bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
-        bool use_asteroid_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
+        bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
         bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
 
         CollisionContext ctx(this, &target_state, &laser_state, 1.0,
-                             use_new_physics, use_asteroid_eat_damage, use_docking_fix);
+                             use_new_physics, disable_eat_damage, use_docking_fix);
 
         // Generate commands from target's perspective (target being hit by laser)
         CollisionOutcome outcome = pTarget->GenerateCollisionCommands(ctx);
 
         // Apply commands immediately
-        CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, use_asteroid_eat_damage, use_docking_fix);
+        CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage, use_docking_fix);
 
         for (int i = 0; i < outcome.command_count; ++i) {
           const CollisionCommand& cmd = outcome.commands[i];
@@ -844,10 +844,11 @@ unsigned int CWorld::CollisionEvaluationNew() {
       if (world_object == team_object) continue;
 
       // Deduplicate: Skip if we've already processed this pair
-      // Canonicalize pair: always (lower_ptr, higher_ptr) order for consistent lookup
+      // Canonicalize pair: always (lower_index, higher_index) order for consistent lookup
+      // Use world index instead of pointer comparison for determinism across platforms
       CThing* obj1 = world_object;
       CThing* obj2 = team_object;
-      if (obj1 > obj2) {
+      if (obj1->GetWorldIndex() > obj2->GetWorldIndex()) {
         CThing* temp = obj1;
         obj1 = obj2;
         obj2 = temp;
@@ -871,6 +872,33 @@ unsigned int CWorld::CollisionEvaluationNew() {
         continue;
       }
 
+      // ============================================================================
+      // DOCKING STATE MACHINE - Part 1: Collision Detection Filter
+      // ============================================================================
+      // This is the FIRST checkpoint in a two-phase docking system. Ships can be in
+      // three distinct docking states during collision processing:
+      //
+      // STATE 1: ALREADY_DOCKED (from previous turn)
+      //   - Condition: IsDocked() && WasDocked()
+      //   - Where detected: HERE (collision detection phase)
+      //   - Behavior: Skip collision detection entirely for non-station objects
+      //   - Rationale: Ships docked at start of turn are intangible to everything except their station
+      //
+      // STATE 2: JUST_DOCKED (docking this turn)
+      //   - Condition: IsDocked() && !WasDocked()
+      //   - Where detected: Later in command generation (line 1063)
+      //   - Behavior: Allow initial ship-station collision to process docking, then become intangible
+      //   - Rationale: Ship must collide with station ONCE to trigger docking, then ignore other collisions
+      //
+      // STATE 3: PENDING_DOCK (docking queued but not applied)
+      //   - Condition: pending_docks.count(ship) > 0
+      //   - Where detected: Later in command generation (line 1063)
+      //   - Behavior: Skip remaining collisions this turn
+      //   - Rationale: Once ship has kSetDocked command queued, it shouldn't collide with anything else
+      //
+      // This checkpoint (Part 1) only filters STATE 1 (already docked from previous turn).
+      // States 2 and 3 are filtered later in command generation (see lines 1049-1081).
+      //
       // Rule 2: Skip collisions involving ships that were ALREADY docked
       // Exception: Docked ships CAN collide with their own station (undocking mechanics)
       // Ships that dock THIS TURN need their ship-station collision processed first.
@@ -1020,7 +1048,7 @@ unsigned int CWorld::CollisionEvaluationNew() {
 
   // Build collision context with feature flags
   bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
-  bool use_asteroid_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
+  bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
   bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
 
   // Random number generator for ship-ship same-position collisions
@@ -1046,12 +1074,32 @@ unsigned int CWorld::CollisionEvaluationNew() {
       continue;
     }
 
-    // Skip if either object is a ship that is docked or has pending docking
+    // ============================================================================
+    // DOCKING STATE MACHINE - Part 2: Command Generation Filter
+    // ============================================================================
+    // This is the SECOND checkpoint in the docking system. At this point, collision pairs
+    // have already been detected and we're generating collision commands.
+    //
+    // We need to filter out ships in STATES 2 and 3 (ships docking this turn):
+    //
+    // STATE 2: JUST_DOCKED (ship-station collision processed earlier this loop)
+    //   - Ship has IsDocked() = true (set by earlier collision command)
+    //   - This state wasn't filtered in Part 1 because WasDocked() = false
+    //   - Must filter here to prevent ship from colliding with other objects after docking
+    //
+    // STATE 3: PENDING_DOCK (ship has kSetDocked command queued)
+    //   - Ship has pending_docks.count(ship) > 0
+    //   - Command not yet applied, but ship should be treated as intangible
+    //   - Prevents ship from generating multiple collision outcomes this turn
+    //
+    // Combined check: Ship is "docked" if IsDocked() OR in pending_docks set
+    //
     // Exception: Ship-station collisions are ALWAYS processed (undocking mechanics)
     // Docked ships are intangible to non-stations (game rule).
     // This applies to:
-    // 1. Ships already docked from previous turn/tick (IsDocked() == true)
-    // 2. Ships with pending docking command from earlier collision this turn
+    // 1. Ships already docked from previous turn/tick (IsDocked() == true, filtered in Part 1)
+    // 2. Ships that just docked this turn (IsDocked() == true, filtered HERE)
+    // 3. Ships with pending docking command from earlier collision this turn (filtered HERE)
 
     // Check if this is a ship-station collision (special case)
     bool is_ship_station_collision = (obj1->GetKind() == SHIP && obj2->GetKind() == STATION) ||
@@ -1086,9 +1134,9 @@ unsigned int CWorld::CollisionEvaluationNew() {
 
     // Build contexts for both directions (both get same random angle)
     CollisionContext ctx1(this, &snapshots[obj1], &snapshots[obj2], 1.0,
-                          use_new_physics, use_asteroid_eat_damage, use_docking_fix, random_angle);
+                          use_new_physics, disable_eat_damage, use_docking_fix, random_angle);
     CollisionContext ctx2(this, &snapshots[obj2], &snapshots[obj1], 1.0,
-                          use_new_physics, use_asteroid_eat_damage, use_docking_fix, random_angle);
+                          use_new_physics, disable_eat_damage, use_docking_fix, random_angle);
 
     // Generate commands from both perspectives
     CollisionOutcome out1 = obj1->GenerateCollisionCommands(ctx1);
@@ -1132,7 +1180,7 @@ unsigned int CWorld::CollisionEvaluationNew() {
             });
 
   // Stage 5: Apply commands in deterministic order
-  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, use_asteroid_eat_damage, use_docking_fix);
+  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage, use_docking_fix);
 
   for (size_t i = 0; i < all_commands.size(); ++i) {
     const CollisionCommand& cmd = all_commands[i];
@@ -1171,8 +1219,8 @@ unsigned int CWorld::CollisionEvaluationNew() {
       CThing* obj1 = collisions[i].object1;
       CThing* obj2 = collisions[i].object2;
 
-      // Canonicalize pair
-      if (obj1 > obj2) std::swap(obj1, obj2);
+      // Canonicalize pair: Use world index for deterministic ordering
+      if (obj1->GetWorldIndex() > obj2->GetWorldIndex()) std::swap(obj1, obj2);
       std::pair<CThing*, CThing*> pair_key(obj1, obj2);
 
       if (logged_pairs.count(pair_key) > 0) {

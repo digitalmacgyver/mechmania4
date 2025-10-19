@@ -46,6 +46,32 @@ The engine’s deterministic iteration order introduces persistent mechanical bi
 
 Because none of these passes are randomized or physics-driven, the same spatial arrangement can yield different results solely from bookkeeping order, leading to predictable edge cases that favor specific teams or object lifetimes.
 
+## Multi-Hit Bugs Summary
+
+The legacy collision system suffers from several **multi-hit bugs** where the same collision is processed multiple times in a single frame:
+
+**Asteroid Multi-Fragmentation:**
+- When multiple ships or lasers hit the same large asteroid in one frame, each collision triggers a full fragmentation sequence
+- Result: Instead of spawning 3 fragments, the asteroid spawns 6, 9, or more child asteroids depending on how many hits occurred
+- Root cause: Asteroids set their dead flag but continue executing collision logic for the entire pass
+
+**Ship-Ship Double Damage:**
+- A single ship-ship collision can process multiple times within the same frame
+- Result: Ships take damage 2x, 4x, or more times from a single collision event
+- Root cause: The symmetric collision callback structure (A→B, B→A) combined with no deduplication
+
+**Asteroid Multi-Eating:**
+- When two ships overlap the same small asteroid, both ships can "eat" it and gain its mass
+- Result: Mass is duplicated - both ships gain the asteroid's full mass
+- Root cause: Each ship's collision handler marks the asteroid eaten and transfers mass, with no global coordination
+
+**Dead Object Collisions:**
+- Objects marked dead during a collision pass continue processing additional collisions
+- Result: Destroyed asteroids can still fragment, destroyed ships can still take damage
+- Root cause: No filtering of dead entities between collision pair evaluations
+
+These bugs are documented in detail in the sections above and are fixed in the new collision system (see `NEW_COLLISION_ENGINE.md`).
+
 ## General Race Surface
 
 The engine assumes each `HandleCollision` implementation will manage repeated calls against dead or already-processed entities. Without explicit guards, any object that dies mid-pass can keep interacting with every remaining partner, causing duplicate effects such as stacked explosions, duplicated cargo transfers, or inconsistent announcer messages. Modernizing the loop will likely require either filtering dead entries out before the symmetric call or having each handler detect and ignore repeat work.

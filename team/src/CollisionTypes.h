@@ -180,7 +180,7 @@ struct CollisionContext {
 
   // Feature flags (derived from parser at collision time)
   bool use_new_physics;               // physics flag
-  bool use_asteroid_eat_damage;       // asteroid-eat-damage flag
+  bool disable_eat_damage;            // asteroid-eat-damage flag: when true, eating small asteroids is damage-free
   bool use_docking_fix;               // docking flag
 
   // Random separation angle for ship-ship collisions (third preference fallback)
