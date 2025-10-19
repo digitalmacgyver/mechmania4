@@ -600,6 +600,23 @@ void CWorld::AddThingToWorld(CThing* pNewThing) {
   numNewThings++;
 }
 
+void CWorld::ResolvePendingOperations(bool resetTransientState) {
+  AddNewThings();
+  KillDeadThings();
+
+  if (!resetTransientState) {
+    return;
+  }
+
+  for (unsigned int idx = UFirstIndex; idx != (unsigned int)-1; idx = GetNextIndex(idx)) {
+    CThing* thing = GetThing(idx);
+    if (thing == NULL) {
+      continue;
+    }
+    thing->ResetTransientState();
+  }
+}
+
 void CWorld::CreateAsteroids(AsteroidKind mat, unsigned int numast, double mass) {
   CAsteroid* pAst;
   unsigned int i;

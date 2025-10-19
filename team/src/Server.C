@@ -43,7 +43,7 @@ CServer::CServer(int numTms, int port) {
                             g_initial_asteroid_mass);
   pmyWorld->CreateAsteroids(URANIUM, g_initial_uranium_asteroid_count,
                             g_initial_asteroid_mass);
-  pmyWorld->PhysicsModel(0.0);  // Add new stuff
+  pmyWorld->ResolvePendingOperations();
 
   wldbuflen = MAX_THINGS * 256;
   wldbuf = new char[wldbuflen];
@@ -202,8 +202,8 @@ void CServer::ResumeSync() {
   for (unsigned int tm = 0; tm < GetNumTeams(); ++tm) {
     pmyWorld->atstamp[tm] = now;
   }
-  // Clear per-step flags without advancing time
-  pmyWorld->PhysicsModel(0.0);
+  // Clear pending additions/removals without advancing time
+  pmyWorld->ResolvePendingOperations();
   // Push a fresh world snapshot to all teams even if paused was engaged
   for (unsigned int conn = 1; conn <= GetNumTeams() + 1; ++conn) {
     if (conn == ObsConn) {
@@ -407,7 +407,7 @@ void CServer::ReceiveTeamOrders() {
     pmyNet->CatchPkt();
   }
 
-  pmyWorld->PhysicsModel(0.0);
+  pmyWorld->ResolvePendingOperations();
   delete[] abGotFlag;
 }
 

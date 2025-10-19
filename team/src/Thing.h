@@ -84,6 +84,9 @@ class CThing : public CSendable {
   // Deterministic collision engine - generate collision commands from snapshots
   virtual CollisionOutcome GenerateCollisionCommands(const CollisionContext& ctx);
 
+  // Reset per-tick transient state (e.g., collision damage angles)
+  virtual void ResetTransientState();
+
   double DetectCollisionCourse(const CThing& OthThing) const;
   CCoord PredictPosition(double dt = 1.0) const;
   CTraj RelativeVelocity(const CThing& OthThing) const;

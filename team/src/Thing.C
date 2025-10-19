@@ -399,6 +399,11 @@ CollisionOutcome CThing::GenerateCollisionCommands(const CollisionContext& ctx) 
   return CollisionOutcome();  // Empty outcome - base things don't participate in collisions
 }
 
+void CThing::ResetTransientState() {
+  bIsColliding = g_no_damage_sentinel;
+  bIsGettingShot = g_no_damage_sentinel;
+}
+
 ////////////////////////////////////////////////
 // Helper functions
 

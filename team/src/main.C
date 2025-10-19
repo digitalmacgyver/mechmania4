@@ -31,8 +31,8 @@ main() {
     aTestTms[unTm]->Create(2, unTm);
     TestWorld.SetTeam(unTm, aTestTms[unTm]);
   }
-  myWorld.PhysicsModel(0.0);  // Add new stuff
-  TestWorld.PhysicsModel(0.0);
+  myWorld.ResolvePendingOperations();
+  TestWorld.ResolvePendingOperations();
 
   // Now let's create asteroids
   myWorld.CreateAsteroids(VINYL, 5, 40.0);

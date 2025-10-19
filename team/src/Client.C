@@ -22,7 +22,7 @@ CClient::CClient(int port, char *hostname, bool bObserv) {
   // immediately overwritten with the world from the server, so we skip that
   now. pmyWorld = new CWorld(0); pmyWorld->CreateAsteroids(VINYL,5,40.0);
   pmyWorld->CreateAsteroids(URANIUM,5,40.0);
-  pmyWorld->PhysicsModel(0.0);  // Add new asteroids to world
+  pmyWorld->ResolvePendingOperations();  // Add new asteroids to world
   */
 
   pmyNet = new CClientNet(hostname, port);
@@ -120,7 +120,7 @@ void CClient::MeetWorld() {
     pmyWorld->SetTeam(i, aTms[i]);
   }
 
-  pmyWorld->PhysicsModel(0.0);  // All stuff added now
+  pmyWorld->ResolvePendingOperations();
 
   if (bObflag == true) {
     // We're the observer, send an ack

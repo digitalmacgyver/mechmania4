@@ -47,6 +47,7 @@ class CWorld : public CSendable {
   void LaserModelOld();                // Legacy laser processing (direct Collide() calls)
   void LaserModelNew();                // Deterministic laser processing (snapshot/command pipeline)
   void AddThingToWorld(CThing* pNewThing);
+  void ResolvePendingOperations(bool resetTransientState = true);
 
   void CreateAsteroids(AsteroidKind mat, unsigned int numast, double mass);
   CTeam* SetTeam(unsigned int n,
