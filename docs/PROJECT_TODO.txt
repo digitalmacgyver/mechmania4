@@ -3,16 +3,6 @@
 
 ===
 
-NOTE - THIS WORKING BRANCH NOW HAS CRITICAL BUG FIXES AND USEFUL TESTS
-- WE CAN'T JUST REVERT TO MASTER WE'LL HAVE TO PARTIALLY MERGE OR
-SOMETHING IF WE CAN'T COMPLETE WORK GOING FOWARD.
-
-FIX THE RUNNING OF PHYSICS_MODEL WITH DT=0 - THAT'S AN ACCIDENT
-WAITING TO HAPPEN! Explicitly call the world population routines when
-they are needed.
-
-===
-
 Ship, Asteroid, and Station Damage Overview:
 
 * Ships take damage to shields from collisions with Asteroids, other
@@ -124,6 +114,21 @@ These are similar to ship to ship calculations where:
   stores of the Station by X, to a minimum of 0.
 
 ==
+
+Groogroo stuff:
+
+If we're done with everything else, and there's still uranium, harvest
+it.
+
+Need better shooting logic - we shoot ourselves a lot or get bumped off:
+* Revisit the assumption that we shoot early in the turn
+* Check where we'll be in a turn
+* Check if any dam thing is colliding with us first and abort
+
+We are also pretty bad at shooting ships - look at how Chromefunk does
+htis - it's actually much btter - we might be trying to get too close,
+or maybe we need to get onto an intercept pursuit angle and not come
+at them obliquely or something.
 
 3. Double check our base launch logic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles

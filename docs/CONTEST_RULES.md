@@ -129,11 +129,15 @@ Consider these examples:
 - **Stations** only take laser damage. Each point of effective laser damage removes one ton of stored vinyl, floored at zero.
 
 ### Turn Resolution Order
-After both teams submit orders, the server resolves each turn in four phases:
-1. Apply shield-charge orders.
-2. Run one physics sub-step (`g_physics_simulation_dt`, default 0.2 s) that applies thrust/turn/drift and handles collisions.
-3. Resolve every laser shot, applying damage immediately.
-4. Run the remaining four physics sub-steps to complete the turn’s movement.
+After both teams submit orders, the server resolves each turn by running five physics sub-steps (`g_physics_simulation_dt`, default 0.2 s each) for a total of 1.0 second. Each sub-step processes:
+1. **Jettison** - Ships eject fuel/cargo as asteroids (queued for addition after collision detection)
+2. **Shield charging** - Shield orders consume fuel and restore shields
+3. **Turning and Thrust** - Ships rotate and accelerate based on orders
+4. **Drift** - All objects update position/velocity by dt
+5. **Collision detection and resolution** - Objects collide and take damage
+6. **Add/Kill** - Queued objects (jettisoned asteroids, fragments) are added; dead objects removed
+
+After all five physics sub-steps complete (1.0 second total), **laser shots are resolved** in a single batch, applying damage immediately to all targets hit this turn.
 
 ### Laser Mechanics
 - **Range:** Up to `min(fWXMax, fWYMax)` units (512 with default map).

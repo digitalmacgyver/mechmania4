@@ -441,11 +441,15 @@ if (shields < g_ship_default_shield_amount) {
 - **Stations** only take damage from lasers. Laser damage removes vinyl from their storage until it reaches zero.
 
 #### Order Sequencing
-Once both teams have submitted orders, the server processes them in four stages every turn:
-1. Apply shield orders.
-2. Execute one physics sub-step (thrust/turn/drift plus collisions) covering `1/5` of a turn.
-3. Resolve all laser fire, including damage.
-4. Execute the remaining four physics sub-steps to finish the turn.
+Once both teams have submitted orders, the server executes five physics sub-steps (`g_physics_simulation_dt`, default 0.2 s each) for a total of 1.0 second. Each sub-step processes:
+1. **Jettison** - Ships eject fuel/cargo as asteroids (queued until after collision detection)
+2. **Shield charging** - Shield orders consume fuel and restore shields
+3. **Turning and Thrust** - Ships rotate and accelerate based on orders
+4. **Drift** - All objects update position/velocity by dt
+5. **Collision detection and resolution** - Objects collide and take damage
+6. **Add/Kill** - Queued objects (jettisoned asteroids, fragments) are added; dead objects removed
+
+After all five physics sub-steps complete (1.0 second total), **laser shots are resolved** in a single batch, applying damage to all targets hit this turn.
 
 #### Collision Damage (Ships)
 - A ship that collides with an asteroid or another ship takes shield damage equal to  
