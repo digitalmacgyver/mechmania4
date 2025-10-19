@@ -48,8 +48,8 @@ echo "  New:    $NEW_TESTTEAM_LOG"
 echo ""
 echo "Legacy Mode:"
 if [ -f "$LEGACY_LOG" ]; then
-    # Look for Test-1 and Test-2 colliding
-    COLLISION_COUNT=$(grep "COLLISION_DETECTED.*Test-1.*Test-2" "$LEGACY_LOG" | wc -l)
+    # Look for Test-1 and Test-2 colliding (symmetric - either order)
+    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$LEGACY_LOG" | grep -E "Test-1.*Test-2|Test-2.*Test-1" | wc -l)
     if [ "$COLLISION_COUNT" -gt 0 ]; then
         echo "  ✓ Ship-ship collision detected: $COLLISION_COUNT collisions"
         LEGACY_PASS=1
@@ -66,7 +66,8 @@ fi
 echo ""
 echo "New Mode:"
 if [ -f "$NEW_LOG" ]; then
-    COLLISION_COUNT=$(grep "COLLISION_DETECTED.*Test-1.*Test-2" "$NEW_LOG" | wc -l)
+    # Look for Test-1 and Test-2 colliding (symmetric - either order)
+    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$NEW_LOG" | grep -E "Test-1.*Test-2|Test-2.*Test-1" | wc -l)
     if [ "$COLLISION_COUNT" -gt 0 ]; then
         echo "  ✓ Ship-ship collision detected: $COLLISION_COUNT collisions"
         NEW_PASS=1

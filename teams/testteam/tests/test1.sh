@@ -48,8 +48,8 @@ echo "  New:    $NEW_TESTTEAM_LOG"
 echo ""
 echo "Legacy Mode:"
 if [ -f "$LEGACY_LOG" ]; then
-    # Look for Test-1 colliding with Test Station (any turn)
-    COLLISION_COUNT=$(grep "COLLISION_DETECTED.*Test-1.*Test Station" "$LEGACY_LOG" | wc -l)
+    # Look for Test-1 colliding with Test Station (symmetric - either order)
+    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$LEGACY_LOG" | grep -E "Test-1.*Test Station|Test Station.*Test-1" | wc -l)
     if [ "$COLLISION_COUNT" -gt 0 ]; then
         echo "  ✓ Ship-station collision detected: $COLLISION_COUNT collisions"
         LEGACY_PASS=1
@@ -66,7 +66,9 @@ fi
 echo ""
 echo "New Mode:"
 if [ -f "$NEW_LOG" ]; then
-    COLLISION_COUNT=$(grep "COLLISION_DETECTED.*Test-1.*Test Station" "$NEW_LOG" | wc -l)
+    # Look for Test-1 colliding with Test Station (symmetric - either order)
+    # Exclude [SHIP-ALREADY-DOCKED] noise - we only want meaningful collisions
+    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$NEW_LOG" | grep -E "Test-1.*Test Station|Test Station.*Test-1" | grep -v "SHIP-ALREADY-DOCKED" | wc -l)
     if [ "$COLLISION_COUNT" -gt 0 ]; then
         echo "  ✓ Ship-station collision detected: $COLLISION_COUNT collisions"
         NEW_PASS=1

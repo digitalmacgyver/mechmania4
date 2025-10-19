@@ -41,15 +41,15 @@ CollisionCommand::CollisionCommand()
       position(CCoord(0, 0)),
       scalar(0.0),
       bool_flag(false),
-      thing_ptr(NULL),
-      message(NULL) {
+      thing_ptr(NULL) {
+  // Initialize message buffer to empty string
+  message_buffer[0] = '\0';
 }
 
 CollisionCommand CollisionCommand::NoOp() {
   CollisionCommand cmd;
   cmd.type = CollisionCommandType::kNoOp;
   cmd.target = NULL;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -57,7 +57,6 @@ CollisionCommand CollisionCommand::Kill(CThing* target) {
   CollisionCommand cmd;
   cmd.type = CollisionCommandType::kKillSelf;
   cmd.target = target;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -66,7 +65,6 @@ CollisionCommand CollisionCommand::SetVelocity(CThing* target, const CTraj& vel)
   cmd.type = CollisionCommandType::kSetVelocity;
   cmd.target = target;
   cmd.velocity = vel;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -75,7 +73,6 @@ CollisionCommand CollisionCommand::SetPosition(CThing* target, const CCoord& pos
   cmd.type = CollisionCommandType::kSetPosition;
   cmd.target = target;
   cmd.position = pos;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -84,7 +81,6 @@ CollisionCommand CollisionCommand::AdjustShield(CThing* target, double delta) {
   cmd.type = CollisionCommandType::kAdjustShield;
   cmd.target = target;
   cmd.scalar = delta;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -93,7 +89,6 @@ CollisionCommand CollisionCommand::AdjustCargo(CThing* target, double delta) {
   cmd.type = CollisionCommandType::kAdjustCargo;
   cmd.target = target;
   cmd.scalar = delta;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -102,7 +97,6 @@ CollisionCommand CollisionCommand::AdjustFuel(CThing* target, double delta) {
   cmd.type = CollisionCommandType::kAdjustFuel;
   cmd.target = target;
   cmd.scalar = delta;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -111,7 +105,6 @@ CollisionCommand CollisionCommand::SetDocked(CThing* target, bool docked) {
   cmd.type = CollisionCommandType::kSetDocked;
   cmd.target = target;
   cmd.bool_flag = docked;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -120,7 +113,6 @@ CollisionCommand CollisionCommand::RecordEatenBy(CThing* asteroid, CThing* ship)
   cmd.type = CollisionCommandType::kRecordEatenBy;
   cmd.target = asteroid;
   cmd.thing_ptr = ship;
-  cmd.message = NULL;
   return cmd;
 }
 
@@ -128,7 +120,16 @@ CollisionCommand CollisionCommand::Announce(const char* msg) {
   CollisionCommand cmd;
   cmd.type = CollisionCommandType::kAnnounceMessage;
   cmd.target = NULL;
-  cmd.message = msg;
+
+  // CRITICAL FIX: Copy message into owned buffer instead of storing pointer
+  // This prevents dangling pointer bug when msg is stack-allocated in caller
+  if (msg) {
+    strncpy(cmd.message_buffer, msg, sizeof(cmd.message_buffer) - 1);
+    cmd.message_buffer[sizeof(cmd.message_buffer) - 1] = '\0';  // Ensure null termination
+  } else {
+    cmd.message_buffer[0] = '\0';
+  }
+
   return cmd;
 }
 

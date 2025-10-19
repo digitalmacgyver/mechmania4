@@ -88,8 +88,7 @@ class CWorld : public CSendable {
   unsigned int KillDeadThings();
   unsigned int CollisionEvaluation();
   unsigned int CollisionEvaluationOld();  // Legacy collision processing
-  unsigned int CollisionEvaluationNew();  // Improved collision processing
-  unsigned int CollisionEvaluationDeterministic();  // Deterministic snapshot/command pipeline
+  unsigned int CollisionEvaluationNew();  // Snapshot/command collision pipeline
   void ReLinkList();
 
   double gametime;

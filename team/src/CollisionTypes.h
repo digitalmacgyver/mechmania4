@@ -96,7 +96,10 @@ struct CollisionCommand {
   bool bool_flag;             // For kSetDocked
   CThing* thing_ptr;          // For kRecordEatenBy (eater pointer)
 
-  const char* message;        // For kAnnounceMessage (can be NULL for other types)
+  // CRITICAL FIX: Store message inline instead of pointer to avoid dangling pointer bug
+  // Previously: const char* message (dangling pointer to stack memory)
+  // Now: char message_buffer[256] (owned storage)
+  char message_buffer[256];   // For kAnnounceMessage - inline storage prevents use-after-free
 
   // Constructors for convenience
   CollisionCommand();
