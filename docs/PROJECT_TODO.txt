@@ -232,7 +232,11 @@ Re-enabled with --legacy-collision-detection:
     involved in collisions). You can read about some of the details in
     docs/LEGACY_COLLISION_ENGINE.md. We have a new collision handling
     system which:
-     a. Fixes various bugs / unintended behaviors
+    
+     a. Fixes various bugs / unintended behaviors - including many
+     instances of "double hits" where a collision would be reigsterd
+     twice or more, effectively making them more damaging than
+     documented.
 
      b. Resolves collisions in ascending order of overlap which
      attempts to monitor which collisions would have happened first,
@@ -354,114 +358,11 @@ Fix initial facing - both sides should face with no vertical direction
 towards the center. As it is they both face 0 - which is asymmetric
 relative to the center.
 
-
-?!?!?! Concurrency / race double eating behaviors ?!?!?!??!
-
-NOTE - THe current fix on our branch isn't really good / working - I
-don't think it preserves the dual harvesting bug exactly for instance,
-it just tries to add the claim mass to the ship, but in the old world
-I bet even crazier things could happen like ship 1 breaks asteroid in
-3 and ship 2 claims it - here if a ship claims 2 asteroids in one tick
-it just gets tightly backed which probably isn't what happened in the
-old engine.
-
-BETTER IDEA: BUILD A LIST OF ALL COLLISIONS, THEN IN LEGACY MODE JUST
-PROCESS THAT LIST IN THE SAME ORDER.
-
-IN NEW MODE PROCESS THE LIST IN A SPECIAL (RANDOM?) ORDER AND/OR
-FILTER FOR PROBLEMATIC STATES BEFORE RESOLVING!
-
-
-Maybe my side-by-side idea here is a stupid one. Maybe instead I
-should take a branched approach of:
-
-team/src <- working code
-team/legacy <- old code
-
-And then build 2 binaries? but then teams can't run against either
-probably if I change anything about an interface... and it loses the
-per-feature switch.
-
-For the collisions and similar things I might have to just make a
-distinction in some cases about whehter the juice is worth the squeeze
-or just fix bugs and say - hey - check out branch "total legacy 001"
-if you want to play with _all_ legacy behaviors, and only preserve the
-ones that make sense.
-
-What makes sense to preserve:
- * NO Old collision detection? Nope - who wants broken collision detection (other than Chromefunk)
- * NO This buggy double claim unfair collision system? Nope.
-
-* Velcoity clamping - maybe / yes - I could see people with old teams who want to compete but don't want different thrust semantics.
-
-============= RACE CONDITION COLLISIONS / double yum=====================
-
-A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it possible thinking this through there are other such races, like what if a ship gets hit by 2 asteroids in one turn, does the engine correctly handle managing total cargo area in the ship under multiple collisions?
-
-Or what if a ship collides with a base and a laser the same turn - nothing can hurt you while docked, how does the system determine which event happened first?
-
-It almost seems like iteration with a stable order is causing a lot of problems, and we might want to move to an approach of detecting all collisions, building a list of them, randomizing the list (for fairness with regard to nonsystemic biases) and then processing the collisions one by one in order.
-
-BUT ASTEROIDS ARE DEFINITELY BORKED ALLOWING DOUBLE CAPTURE.
-
-Here's the exact sequence when Ship A and Ship B collide with the same asteroid:
-
-Line 451: pTItr->Collide(pTTm, this) where pTItr = Asteroid, pTTm = Ship A
-
-Asteroid's Collide() checks if they overlap (Thing.C:136)
-
-If yes, calls HandleCollision() (Thing.C:147)
-
-Asteroid's HandleCollision() sets:
-  DeadFlag = true (Asteroid.C:151)
-  pThEat = Ship A (Asteroid.C:157)
-
-Line 452: pTTm->Collide(pTItr, this) where pTTm = Ship A, pTItr = Asteroid
-
-Ship A's Collide() checks overlap, calls HandleCollision()
-
-Ship A's HandleCollision() checks pThEat:
-  pEat = asteroid->EatenBy() returns Ship A (Ship.C:697)
-  if (pEat != NULL && !(*pEat == *this)) - pEat IS this ship, so guard passes!
-  Ship A takes the cargo (Ship.C:716)
-
-Next iteration of inner loop - Line 451: pTItr->Collide(pTTm, this) where pTTm = Ship B
-
-Asteroid's Collide() checks overlap, calls HandleCollision()
-
-BUG HERE: Asteroid's HandleCollision() OVERWRITES pThEat = Ship B (Asteroid.C:157)
-  Even though asteroid is already dead!
-
-Line 452: pTTm->Collide(pTItr, this) where pTTm = Ship B
-
-Ship B's HandleCollision() checks pThEat:
-  pEat = asteroid->EatenBy() now returns Ship B!
-  Guard passes because pEat == Ship B
-  Ship B ALSO takes the cargo!
-
-The Root Cause:
-
-The bug is in Asteroid.C:152-157:
-
-if (OthKind == SHIP) {
-    pThEat = pOthThing;  // ALWAYS overwrites, even if already eaten!
-    if (((CShip*)pOthThing)->AsteroidFits(this)) {
-        return;
-    }
-}
-
-The asteroid ALWAYS updates pThEat to the current ship, even after it's been marked dead and already eaten by another ship!
-
-Why The Guard Fails:
-
-The pThEat guard in Ship.C is checking correctly, but by the time Ship B checks it, the asteroid has already overwritten pThEat to point to Ship B instead of Ship A!
-================== double yum ===========================
-
-Engine enhancements:
-  * Our ship collision logic deals damage to us based on our relative
-    velocity with the thing we collide, and that things mass, our mass
-    doesn't matter. Is this a "momentum swap" or normal physical /
-    collision type? If not maybe adjust it.
+A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it
+possible thinking this through there are other such races, like what
+if a ship gets hit by 2 asteroids in one turn, does the engine
+correctly handle managing total cargo area in the ship under multiple
+collisions?
 
 ???????????? LASER TARGETING BUG ?????????????????????????
   Q. Is there a bug in LaserTarget?
@@ -555,10 +456,6 @@ Q. Is there a race condition / issue where an asteroid that can't fit
 can be blown up multiple times by ships that collide with it on the
 same turn?
 
-Q. How are ties broken / resolved in CShip::HandleCollision for
-asteroids around like 571 with eating checks? For instance does team1
-always get the asteroid if both team1 and team2 are present?
-
 Q. Question 6: What does the default mode of the switch statement on
 (ord) in SetOrder do? It looks like maybe it allows you to pass in
 O_ALL_ORDERS and get the combined fuel for the: shield, laser, and
@@ -593,64 +490,6 @@ WEIRDLY CONTROLLED WITH A numNewThings COUNTER?!?
 Q. What is CWorld::SetTeam for? It seems like it's stripping out ships
 and stations of the other team? And then adding in the ones for the
 new team? Why bother with all this?
-
-Q. What is CWorld::CollisionEvaluation doing - these variable names
-suck - why are there two Collide calls on 311/312 with pTItr&pTTM and
-the inverse. Fix the dangling unbracketed conditional URes++ on line
-313 controlled by prior if.
-
-* The static apTTmTh is way to cute - either make a better data
-  structure or just accept the N^2 iteration, this is madness as is.
-
-==1==
-
-In Ship.c, line 592 what is going on with the pointer checks against NULL and the explicit NULL assignment of a data member. The
-▌ comment claims it prevents an infinite recursive call.
-▌
-▌ How does this prevent an infinite recursive call, and is there a better/more standard/less confusing way of managin this situation?
-
-• I’m exploring how temporarily nullifying a ship’s team pointer
-  inside HandleCollision in Ship.C prevents infinite recursion when
-  two ships collide by blocking symmetrical calls. This clever hack
-  tricks the other ship’s collision check into skipping mutual
-  collision handling. Still, I’m thinking it might be cleaner to avoid
-  mutating team pointers and instead use flags or specialized one-time
-  collision handlers to prevent recursive calls and ensure safer, more
-  maintainable collision logic.
-
-> - For ship-vs-ship hits, CWorld::CollisionEvaluation already calls
-    both orders: shipA->Collide(shipB) and shipB->Collide(shipA).
-
-When shipA reaches CShip::HandleCollision, the block at Ship.C:590 runs only if the other ship reports GetTeam()!=NULL.
-
-- Without the temporary pmyTeam=NULL, shipA would call
-  shipB->Collide(shipA), and inside shipB the same block would run
-  (because shipA->GetTeam() is still non-null). That would in turn
-  call shipA->Collide(shipB) again, producing an infinite ping‑pong.
-
-- Clearing pmyTeam before the call means that, when shipB inspects
-  shipA->GetTeam(), it now sees NULL and skips its reciprocal call;
-  the guard is purely there to break the recursion. The pointer is
-  restored afterward so other logic still sees the real team.
-
-  More conventional ways to handle this would avoid mutating game
-  state just to create a guard:
-
-- Add a per-ship reentrancy flag (e.g., bool processingCollision) that
-  short‑circuits if already set.
-
-- Let CWorld::CollisionEvaluation call a dedicated symmetric helper
-  once per pair (e.g., HandleShipShipCollision(shipA, shipB)) instead
-  of bouncing through Collide twice.
-
-- Pass an explicit parameter or use an overload so the second
-  invocation knows it’s the mirrored call.
-
-Any of those would be clearer than toggling the team pointer, which is
-  easy to misread (and risky if future logic ever observes the NULL
-  mid-call).
-
-==end1==
 
 ####################### END ENGINE TODO ##########################################
 
