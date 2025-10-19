@@ -51,6 +51,12 @@ class CShip : public CThing {
   // Deterministic collision engine - override to populate ship-specific fields
   virtual CollisionState MakeCollisionState() const;
 
+  // Deterministic collision engine - override to handle ship-specific commands
+  virtual void ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx);
+
+  // Deterministic collision engine - generate collision commands from snapshots
+  CollisionOutcome GenerateCollisionCommands(const CollisionContext& ctx);
+
   virtual void Drift(double dt = 1.0, double turn_phase = 0.0);
   bool AsteroidFits(const CAsteroid* pAst);
 
@@ -90,6 +96,16 @@ class CShip : public CThing {
 
   virtual void HandleCollision(CThing* pOthThing, CWorld* pWorld = NULL);
   virtual void HandleJettison();
+
+ public:
+  // Helper for 2D elastic collision calculations (public so Asteroid can use it)
+  struct ElasticCollisionResult {
+    CTraj v1_final;  // Final velocity of object 1
+    CTraj v2_final;  // Final velocity of object 2
+  };
+  ElasticCollisionResult CalculateElastic2DCollision(
+      double m1, const CTraj& v1, const CCoord& p1,
+      double m2, const CTraj& v2, const CCoord& p2) const;
 
  private:
   // Velocity processing implementations

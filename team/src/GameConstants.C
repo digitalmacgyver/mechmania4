@@ -9,6 +9,7 @@
 double g_game_turn_duration = 1.0;
 double g_physics_simulation_dt = 0.2;
 double g_game_max_speed = 30.0;
+double g_ship_collision_bump = 3.0;
 double g_game_max_thrust_order_mag = 60.0;
 unsigned int g_game_max_turns = 300;
 const double g_fp_error_epsilon = 1e-7;

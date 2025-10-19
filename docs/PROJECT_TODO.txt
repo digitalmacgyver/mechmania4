@@ -1,6 +1,53 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+===
+
+Let's double check some of the logic in our new collision handling
+where we iterate over the data structure in order from low to high
+distance. There are some game properties we can apply to avoid
+spurious collisions:
+
+NOTE - in each case I mean game subturn/tick/phase when I say "turn"
+or "this turn."!
+
+1. In general, collisions are symmetric, so once we've processed an
+A-B collision, if later we see a B-A collision we should skip it -
+it's already been processed.
+
+2. If a ship and a station collide, we know the ship should be docked
+(verify IsDocked after COllide and print an error if not). We also
+know via game rules it can't undock until next turn at the
+earliest. So we may safely remove any remaining collisions in our list
+involving that ship - in fact we should remove them.
+
+3. If an asteroid is "eaten" by a ship, any subsequent collisions
+can't and shouldn't happen. We should remove/ignore any further
+collisions with that asteroid this turn.
+
+4. If an asteroid is "shattered into pieces" by a ship or laser, any
+subseqnet collisions can't and shouldn't happen. We should
+remove/ignore any further collisions with that asteroid this turn.
+
+5. If an asteroid is "destroyed - spacedust" by a ship or laser, any
+subsequent collisiosns can't and shouldn't happen. We should
+remove/ignore any further collisiosns with that asteroid this turn.
+
+6. Item #5 above is a special case of a general rule: if an item is
+killed/destroyed by a collision, and subsequent collisions can't and
+shouldn't happen. We should remove/ignore any further collisions with
+the killed object this turn.
+
+7. If a laser has collided with anything this turn, and subsequent
+collisions can't and shouldn't happen - a laser can only hit one thing
+a turn. We should rmove/ignore any further collisions with that
+genthing this turn.
+
+When effecting these removals from the collision list, or otherwise
+preventing them from occuring, add a comment desribing the reason why.
+ 
+
+===
 
 Create CollisionTypes.h with core data structures (CollisionState, CollisionCommand, SpawnRequest, CollisionOutcome, CollisionContext)
 

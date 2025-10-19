@@ -29,6 +29,7 @@ enum ThingKind { GENTHING, ASTEROID, STATION, SHIP };
 struct CollisionState;
 struct CollisionCommand;
 struct CollisionContext;
+struct CollisionOutcome;
 
 class CThing : public CSendable {
  public:
@@ -74,11 +75,14 @@ class CThing : public CSendable {
   bool Overlaps(const CThing& OthThing) const;
 
   // Deterministic collision engine - create immutable snapshot of current state
-  CollisionState MakeCollisionState() const;
+  virtual CollisionState MakeCollisionState() const;
 
   // Deterministic collision engine - apply a collision command to this object
   void ApplyCollisionCommand(const CollisionCommand& cmd, const CollisionContext& ctx);
   virtual void ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx);
+
+  // Deterministic collision engine - generate collision commands from snapshots
+  virtual CollisionOutcome GenerateCollisionCommands(const CollisionContext& ctx);
 
   double DetectCollisionCourse(const CThing& OthThing) const;
   CCoord PredictPosition(double dt = 1.0) const;

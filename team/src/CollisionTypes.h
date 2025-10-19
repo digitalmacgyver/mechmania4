@@ -180,10 +180,15 @@ struct CollisionContext {
   bool use_asteroid_eat_damage;       // asteroid-eat-damage flag
   bool use_docking_fix;               // docking flag
 
+  // Random separation angle for ship-ship collisions (third preference fallback)
+  // Used only when ships have same velocity AND same position
+  // Both ships in a collision pair receive the same random angle
+  double random_separation_angle;     // Uniform random in [-π, π)
+
   // Constructor
   CollisionContext();
   CollisionContext(CWorld* w, const CollisionState* self, const CollisionState* other,
-                   double dt, bool physics, bool eat_dmg, bool dock);
+                   double dt, bool physics, bool eat_dmg, bool dock, double random_angle = 0.0);
 };
 
 // ============================================================================

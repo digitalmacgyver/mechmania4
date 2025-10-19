@@ -391,6 +391,14 @@ void CThing::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const Col
   (void)ctx;  // Suppress unused parameter warning
 }
 
+// Deterministic collision engine - generate collision commands from snapshots
+// Base implementation returns empty outcome (no commands)
+// Derived classes override this to emit collision-specific commands
+CollisionOutcome CThing::GenerateCollisionCommands(const CollisionContext& ctx) {
+  (void)ctx;  // Suppress unused parameter warning
+  return CollisionOutcome();  // Empty outcome - base things don't participate in collisions
+}
+
 ////////////////////////////////////////////////
 // Helper functions
 

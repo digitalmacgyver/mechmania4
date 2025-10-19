@@ -272,9 +272,28 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
 
             # Check if game completed successfully
             if "Final Scores" in log_contents or "vinyl" in log_contents.lower():
-                print(f"\n✓ {mode_name} mode test PASSED")
-                print(f"  Game completed successfully")
-                return True
+                # For groogroo vs groogroo test, validate that AI is actually playing
+                # (not just sitting docked) by checking if any vinyl was collected
+                if team1 == 'groogroo' and team2 == 'groogroo':
+                    import re
+                    # Look for final scores like "TeamName: 123.45 vinyl"
+                    vinyl_scores = re.findall(r':\s*([\d.]+)\s*vinyl', log_contents, re.IGNORECASE)
+                    total_vinyl = sum(float(score) for score in vinyl_scores)
+
+                    if total_vinyl > 0:
+                        print(f"\n✓ {mode_name} mode test PASSED")
+                        print(f"  Game completed successfully")
+                        print(f"  Total vinyl collected: {total_vinyl:.2f}")
+                        return True
+                    else:
+                        print(f"\n✗ {mode_name} mode test FAILED")
+                        print(f"  No vinyl collected - AI may not be playing properly")
+                        print(f"  Check log file: {server_log_path}")
+                        return False
+                else:
+                    print(f"\n✓ {mode_name} mode test PASSED")
+                    print(f"  Game completed successfully")
+                    return True
             else:
                 print(f"\n✗ {mode_name} mode test FAILED")
                 print(f"  Server output did not contain expected results")
@@ -372,6 +391,11 @@ def main():
             max_turns=args.max_turns
         )
     else:
+        # For groogroo vs groogroo test, use shorter game (100 turns) unless specified
+        max_turns = args.max_turns
+        if max_turns is None and args.team1 == 'groogroo' and args.team2 == 'groogroo':
+            max_turns = 100
+
         # Test 1: Legacy collision handling mode
         results['legacy'] = run_test_game(
             "Legacy Collision Handling",
@@ -381,7 +405,7 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=args.max_turns
+            max_turns=max_turns
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -395,7 +419,7 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=args.max_turns
+            max_turns=max_turns
         )
 
     # Summary

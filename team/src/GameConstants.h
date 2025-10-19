@@ -26,6 +26,11 @@ extern double g_physics_simulation_dt;
 // Defaults to 30.0. Must be > 0.
 extern double g_game_max_speed;
 
+// Extra separation distance added during ship-ship collisions to prevent clustering.
+// Each ship is pushed away by (other_ship_radius + g_ship_collision_bump).
+// Defaults to 3.0 (matching legacy behavior).
+extern double g_ship_collision_bump;
+
 // Maximum thrust order magnitude for ships in units per second.
 // Thrust orders exceeding this value will be clamped to this maximum.
 // Defaults to 60.0. Must be > 0.

@@ -88,6 +88,268 @@ CollisionState CAsteroid::MakeCollisionState() const {
   return state;
 }
 
+// Deterministic collision engine - apply asteroid-specific commands
+void CAsteroid::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  // This method handles asteroid-specific command types
+  // Base class already handled kKillSelf, kSetVelocity, kSetPosition
+
+  switch (cmd.type) {
+    case CollisionCommandType::kRecordEatenBy: {
+      // Record which ship ate this asteroid
+      pThEat = cmd.thing_ptr;
+      break;
+    }
+
+    default:
+      // Other command types not handled by asteroids
+      break;
+  }
+}
+
+// Deterministic collision engine - generate collision commands from snapshots
+CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ctx) {
+  // This method reads from immutable snapshots and emits commands
+  // It does NOT mutate any object state
+
+  CollisionOutcome outcome;
+
+  // Get snapshots from context
+  const CollisionState* self_state = ctx.self_state;
+  const CollisionState* other_state = ctx.other_state;
+
+  // Sanity checks
+  if (self_state == NULL || other_state == NULL) {
+    return outcome;  // Empty outcome
+  }
+
+  if (self_state->kind != ASTEROID) {
+    return outcome;  // Wrong kind, shouldn't happen
+  }
+
+  ThingKind other_kind = other_state->kind;
+
+  // Asteroid-asteroid collisions don't happen (not processed by World)
+  if (other_kind == ASTEROID) {
+    return outcome;
+  }
+
+  // === STATION COLLISION: Bounce ===
+  if (other_kind == STATION) {
+    // Perfectly elastic collision with infinite mass (station)
+    // Asteroid bounces off, velocity magnitude unchanged, direction reflected
+
+    // Calculate surface normal (station center to asteroid)
+    double bounce_angle = other_state->position.AngleTo(self_state->position);
+
+    // Specular reflection: theta_reflected = 2*normal - theta_incident - PI
+    double reflected_angle = 2.0 * bounce_angle - self_state->velocity.theta - PI;
+
+    // Create new velocity with same magnitude, reflected direction
+    CTraj new_vel(self_state->velocity.rho, reflected_angle);
+    new_vel.Normalize();
+
+    outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+
+    // Position asteroid outside station to prevent overlap
+    double separation = self_state->size + other_state->size + 1.0;
+    CTraj move_vec(separation, bounce_angle);
+    CCoord new_pos = other_state->position;
+    new_pos += move_vec.ConvertToCoord();
+
+    outcome.AddCommand(CollisionCommand::SetPosition(self_state->thing, new_pos));
+
+    return outcome;
+  }
+
+  // === LASER COLLISION: Check threshold, then fragment or ignore ===
+  if (other_kind == GENTHING) {
+    double laser_mass = other_state->mass;
+
+    // Check if laser has enough power to shatter asteroid
+    if (laser_mass < g_asteroid_laser_shatter_threshold) {
+      // Laser too weak to shatter, but still imparts photon momentum (new physics)
+      if (ctx.use_new_physics) {
+        // Calculate momentum transfer (perfectly inelastic collision)
+        double m_ast = self_state->mass;
+        double m_laser = laser_mass;
+        double total_mass = m_ast + m_laser;
+
+        CCoord vel_ast = self_state->velocity.ConvertToCoord();
+        CCoord vel_laser = other_state->velocity.ConvertToCoord();
+        CCoord v_final;
+        v_final.fX = (m_ast * vel_ast.fX + m_laser * vel_laser.fX) / total_mass;
+        v_final.fY = (m_ast * vel_ast.fY + m_laser * vel_laser.fY) / total_mass;
+
+        CTraj new_vel(v_final);
+
+        // Enforce maximum speed
+        if (new_vel.rho > g_game_max_speed) {
+          new_vel.rho = g_game_max_speed;
+        }
+
+        outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+      }
+      return outcome;  // No fragmentation
+    }
+
+    // Kill this asteroid
+    outcome.AddCommand(CollisionCommand::Kill(self_state->thing));
+
+    // Fragment into 3 smaller pieces (if large enough)
+    // CRITICAL FIX: Include absorbed laser mass in fragments to conserve momentum
+    // The laser's momentum is absorbed by the asteroid, so the total mass to fragment
+    // is asteroid_mass + laser_mass, not just asteroid_mass.
+    double total_mass_to_fragment = self_state->mass + laser_mass;
+    double fragment_mass = total_mass_to_fragment / 3.0;
+
+    if (fragment_mass >= g_thing_minmass) {
+      // Create 3 fragments with velocities in different directions
+
+      if (ctx.use_new_physics) {
+        // NEW PHYSICS: Perfectly inelastic collision with spread pattern
+        //
+        // Step 1: Calculate center-of-mass velocity (laser momentum absorbed)
+        double m_ast = self_state->mass;
+        double m_laser = laser_mass;
+        double total_mass = m_ast + m_laser;
+
+        CCoord vel_ast = self_state->velocity.ConvertToCoord();
+        CCoord vel_laser = other_state->velocity.ConvertToCoord();
+        CCoord v_cm;
+        v_cm.fX = (m_ast * vel_ast.fX + m_laser * vel_laser.fX) / total_mass;
+        v_cm.fY = (m_ast * vel_ast.fY + m_laser * vel_laser.fY) / total_mass;
+
+        CTraj cm_vel(v_cm);
+
+        // Step 2: Determine intercept direction (uses post-collision velocity to avoid sampling artifacts)
+        double intercept_direction;
+        if (cm_vel.rho > 0.01) {
+          intercept_direction = cm_vel.theta;  // Direction of center-of-mass
+        } else {
+          intercept_direction = self_state->velocity.theta;  // Fallback to original asteroid direction
+        }
+
+        // Step 3: Calculate spread pattern magnitude (relative velocity, for gameplay)
+        CTraj v_rel = other_state->velocity - self_state->velocity;
+        double spread_speed = v_rel.rho;
+
+        // Step 4: Create fragments with spread + base velocity for momentum conservation
+        // IMPORTANT: Fragment speeds are set to |v_rel| for gameplay reasons (not physics).
+        // This means kinetic energy is NOT conserved - faster lasers create faster debris.
+        // However, momentum IS conserved because we add cm_vel to all fragments.
+        for (int i = 0; i < 3; i++) {
+          double spread_angle = intercept_direction + (i - 1) * (PI / 3.0);  // -60°, 0°, +60° spread
+          CTraj v_spread(spread_speed, spread_angle);
+          CTraj v_final = v_spread + cm_vel;  // Add base velocity for momentum conservation
+
+          SpawnRequest spawn(ASTEROID, self_state->position, v_final,
+                             fragment_mass, 0.0, 0.0, self_state->asteroid_material);
+          outcome.AddSpawn(spawn);
+        }
+      } else {
+        // LEGACY PHYSICS: Use relative velocity for fragments
+        CTraj rel_vel = other_state->velocity - self_state->velocity;
+
+        for (int i = 0; i < 3; i++) {
+          double spread_angle = rel_vel.theta + (i - 1) * (PI / 3.0);
+          CTraj frag_vel(rel_vel.rho, spread_angle);
+          frag_vel.Normalize();
+
+          SpawnRequest spawn(ASTEROID, self_state->position, frag_vel,
+                             fragment_mass, 0.0, 0.0, self_state->asteroid_material);
+          outcome.AddSpawn(spawn);
+        }
+      }
+    }
+
+    return outcome;
+  }
+
+  // === SHIP COLLISION ===
+  if (other_kind == SHIP) {
+    // Check if ship can eat this asteroid
+    CShip* ship = (CShip*)other_state->thing;
+    bool fits = ship->AsteroidFits((CAsteroid*)self_state->thing);
+
+    if (fits) {
+      // Asteroid gets eaten - kill it and record who ate it
+      outcome.AddCommand(CollisionCommand::Kill(self_state->thing));
+      outcome.AddCommand(CollisionCommand::RecordEatenBy(self_state->thing, other_state->thing));
+
+      // Ship handles the rest (adding cargo, momentum transfer)
+      return outcome;
+    }
+
+    // Asteroid doesn't fit - fragment it
+    outcome.AddCommand(CollisionCommand::Kill(self_state->thing));
+
+    double fragment_mass = self_state->mass / 3.0;
+
+    if (fragment_mass >= g_thing_minmass) {
+      // Create 3 fragments
+
+      if (ctx.use_new_physics) {
+        // NEW PHYSICS: Perfectly elastic collision with spread pattern
+        //
+        // Step 1: Calculate what the asteroid's velocity would be after elastic collision
+        // (Ship calculates its own velocity change separately)
+        CShip* pShip = (CShip*)other_state->thing;
+        CShip::ElasticCollisionResult elastic = pShip->CalculateElastic2DCollision(
+            other_state->mass, other_state->velocity, other_state->position,  // Ship (object 1)
+            self_state->mass, self_state->velocity, self_state->position);    // Asteroid (object 2)
+
+        CTraj vr2 = elastic.v2_final;  // Asteroid's post-collision velocity
+
+        // Step 2: Determine intercept direction (uses post-collision velocity to avoid sampling artifacts)
+        double intercept_direction;
+        if (vr2.rho > 0.01) {
+          intercept_direction = vr2.theta;  // Direction asteroid would be moving
+        } else {
+          intercept_direction = self_state->velocity.theta;  // Fallback to original direction
+        }
+
+        // Step 3: Calculate spread pattern magnitude (relative velocity, for gameplay)
+        CTraj v_rel = self_state->velocity - other_state->velocity;
+        double spread_speed = v_rel.rho;
+
+        // Step 4: Create fragments with spread + base velocity for momentum conservation
+        // IMPORTANT: Fragment speeds are set to |v_rel| for gameplay reasons (not physics).
+        // This means kinetic energy is NOT conserved - faster collisions create faster debris.
+        // However, momentum IS conserved because we add vr2 to all fragments.
+        for (int i = 0; i < 3; i++) {
+          double spread_angle = intercept_direction + (i - 1) * (PI / 3.0);  // -60°, 0°, +60°
+          CTraj v_spread(spread_speed, spread_angle);
+          CTraj v_final = v_spread + vr2;  // Add base velocity for momentum conservation
+
+          SpawnRequest spawn(ASTEROID, self_state->position, v_final,
+                             fragment_mass, 0.0, 0.0, self_state->asteroid_material);
+          outcome.AddSpawn(spawn);
+        }
+      } else {
+        // LEGACY PHYSICS: Inelastic collision
+        CTraj mom_total = self_state->velocity * self_state->mass + other_state->velocity * other_state->mass;
+        double mass_total = self_state->mass + other_state->mass;
+        CTraj combined_vel = mom_total / mass_total;
+
+        for (int i = 0; i < 3; i++) {
+          double spread_angle = combined_vel.theta + (i - 1) * (PI / 3.0);
+          CTraj frag_vel(combined_vel.rho, spread_angle);
+          frag_vel.Normalize();
+
+          SpawnRequest spawn(ASTEROID, self_state->position, frag_vel,
+                             fragment_mass, 0.0, 0.0, self_state->asteroid_material);
+          outcome.AddSpawn(spawn);
+        }
+      }
+    }
+
+    return outcome;
+  }
+
+  // Other collision types not handled
+  return outcome;
+}
+
 ///////////////////////////////////////////////////
 // Virtual methods
 

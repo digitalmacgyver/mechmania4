@@ -178,6 +178,10 @@ CollisionState CShip::MakeCollisionState() const {
   // Start with base class snapshot
   CollisionState state = CThing::MakeCollisionState();
 
+  // CRITICAL FIX: Override mass with total mass (hull + cargo + fuel)
+  // Base class copies hull-only mass, but ship physics needs total mass
+  state.mass = GetMass();  // GetMass() returns hull + cargo + fuel
+
   // Populate ship-specific fields
   state.is_docked = bDockFlag;
   state.ship_shield = GetAmount(S_SHIELD);
@@ -185,6 +189,590 @@ CollisionState CShip::MakeCollisionState() const {
   state.ship_fuel = GetAmount(S_FUEL);
 
   return state;
+}
+
+// Deterministic collision engine - apply ship-specific commands
+void CShip::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  // This method handles ship-specific command types
+  // Base class already handled kKillSelf, kSetVelocity, kSetPosition
+
+  switch (cmd.type) {
+    case CollisionCommandType::kAdjustShield: {
+      // Adjust shield by delta (can be negative for damage)
+      double current = adStatCur[(unsigned int)S_SHIELD];
+      double new_amount = current + cmd.scalar;
+
+      // Clamp to valid range [0, max_capacity]
+      if (new_amount < 0.0) {
+        new_amount = 0.0;
+      }
+      double max_shield = adStatMax[(unsigned int)S_SHIELD];
+      if (new_amount > max_shield) {
+        new_amount = max_shield;
+      }
+
+      adStatCur[(unsigned int)S_SHIELD] = new_amount;
+
+      // If shield drops to zero, ship is destroyed
+      if (adStatCur[(unsigned int)S_SHIELD] <= 0.0) {
+        DeadFlag = true;
+      }
+      break;
+    }
+
+    case CollisionCommandType::kAdjustCargo: {
+      // Adjust cargo by delta (can be negative for delivery)
+      double current = adStatCur[(unsigned int)S_CARGO];
+      double new_amount = current + cmd.scalar;
+
+      // Clamp to valid range [0, max_capacity]
+      if (new_amount < 0.0) {
+        new_amount = 0.0;
+      }
+      double max_cargo = adStatMax[(unsigned int)S_CARGO];
+      if (new_amount > max_cargo) {
+        new_amount = max_cargo;
+      }
+
+      adStatCur[(unsigned int)S_CARGO] = new_amount;
+      break;
+    }
+
+    case CollisionCommandType::kAdjustFuel: {
+      // Adjust fuel by delta (can be negative for consumption)
+      double current = adStatCur[(unsigned int)S_FUEL];
+      double new_amount = current + cmd.scalar;
+
+      // Clamp to valid range [0, max_capacity]
+      if (new_amount < 0.0) {
+        new_amount = 0.0;
+      }
+      double max_fuel = adStatMax[(unsigned int)S_FUEL];
+      if (new_amount > max_fuel) {
+        new_amount = max_fuel;
+      }
+
+      adStatCur[(unsigned int)S_FUEL] = new_amount;
+      break;
+    }
+
+    case CollisionCommandType::kSetDocked: {
+      // Set docking state
+      bDockFlag = cmd.bool_flag;
+      break;
+    }
+
+    default:
+      // Other command types not handled by ships
+      break;
+  }
+}
+
+// Deterministic collision engine - generate collision commands from snapshots
+CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
+  // This method reads from immutable snapshots and emits commands
+  // It does NOT mutate any object state
+
+  CollisionOutcome outcome;
+
+  // Get snapshots from context
+  const CollisionState* self_state = ctx.self_state;
+  const CollisionState* other_state = ctx.other_state;
+
+  // Sanity checks
+  if (self_state == NULL || other_state == NULL) {
+    return outcome;  // Empty outcome
+  }
+
+  if (self_state->kind != SHIP) {
+    return outcome;  // Wrong kind, shouldn't happen
+  }
+
+  // Can't collide with yourself
+  if (self_state->thing == other_state->thing) {
+    return outcome;
+  }
+
+  // Nothing can hurt you at a station
+  if (self_state->is_docked) {
+    return outcome;
+  }
+
+  ThingKind other_kind = other_state->kind;
+
+  // === STATION COLLISION: Docking ===
+  if (other_kind == STATION) {
+    // Move ship to station position
+    outcome.AddCommand(CollisionCommand::SetPosition(self_state->thing, other_state->position));
+
+    // Stop ship movement
+    outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, CTraj(0.0, 0.0)));
+
+    // Set docking flag
+    outcome.AddCommand(CollisionCommand::SetDocked(self_state->thing, true));
+
+    // Transfer vinyl cargo to station (if any)
+    if (self_state->ship_cargo > 0.01) {
+      if (self_state->team == other_state->team) {
+        // Delivery to home base - add cargo to station
+        outcome.AddCommand(CollisionCommand::AdjustCargo(other_state->thing, self_state->ship_cargo));
+
+        // Remove cargo from ship
+        outcome.AddCommand(CollisionCommand::AdjustCargo(self_state->thing, -self_state->ship_cargo));
+
+        // Announcement
+        if (ctx.world) {
+          char msg[256];
+          snprintf(msg, sizeof(msg), "%s delivered %.1f vinyl to %s",
+                   self_state->thing->GetName(), self_state->ship_cargo, other_state->thing->GetName());
+          outcome.AddCommand(CollisionCommand::Announce(msg));
+        }
+      } else {
+        // Enemy delivery (legacy behavior restored)
+        outcome.AddCommand(CollisionCommand::AdjustCargo(other_state->thing, self_state->ship_cargo));
+
+        // Remove cargo from ship
+        outcome.AddCommand(CollisionCommand::AdjustCargo(self_state->thing, -self_state->ship_cargo));
+
+        // Announcement
+        if (ctx.world) {
+          char msg[256];
+          snprintf(msg, sizeof(msg), "[ENEMY DELIVERY] %s delivered %.1f vinyl to enemy %s",
+                   self_state->thing->GetName(), self_state->ship_cargo, other_state->thing->GetName());
+          outcome.AddCommand(CollisionCommand::Announce(msg));
+        }
+      }
+    }
+
+    return outcome;
+  }
+
+  // === LASER COLLISION: Damage and momentum transfer ===
+  if (other_kind == GENTHING) {
+    double laser_mass = other_state->mass;
+    double damage = laser_mass / g_laser_damage_mass_divisor;
+
+    // Apply shield damage
+    outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
+
+    // Announcement if ship destroyed
+    if ((self_state->ship_shield - damage) <= 0.0 && ctx.world) {
+      char msg[256];
+      snprintf(msg, sizeof(msg), "%s destroyed by laser", self_state->thing->GetName());
+      outcome.AddCommand(CollisionCommand::Announce(msg));
+    }
+
+    // Apply momentum transfer (new physics mode)
+    if (ctx.use_new_physics) {
+      // Perfectly inelastic collision: photon absorbed by ship
+      double m_ship = self_state->mass;
+      double m_laser = laser_mass;
+      double total_mass = m_ship + m_laser;
+
+      CCoord vel_ship = self_state->velocity.ConvertToCoord();
+      CCoord vel_laser = other_state->velocity.ConvertToCoord();
+
+      // Momentum-weighted average velocity
+      CCoord v_final;
+      v_final.fX = (m_ship * vel_ship.fX + m_laser * vel_laser.fX) / total_mass;
+      v_final.fY = (m_ship * vel_ship.fY + m_laser * vel_laser.fY) / total_mass;
+
+      CTraj new_vel(v_final);
+
+      // Enforce maximum speed
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+
+      outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+    }
+
+    return outcome;
+  }
+
+  // === ASTEROID COLLISION ===
+  if (other_kind == ASTEROID) {
+    // Check if asteroid fits in cargo
+    bool asteroidFits = AsteroidFits((CAsteroid*)other_state->thing);
+
+    if (asteroidFits) {
+      // SMALL ASTEROID: Ship eats it
+
+      // Apply damage only if in legacy mode
+      if (!ctx.use_asteroid_eat_damage) {
+        // Legacy: damage even when eating
+        double damage = (other_state->mass * (self_state->velocity - other_state->velocity).rho) / g_laser_damage_mass_divisor;
+        outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
+      }
+
+      // Perfectly inelastic collision physics (ship absorbs asteroid)
+      CTraj mom_total = self_state->velocity * self_state->mass + other_state->velocity * other_state->mass;
+      double mass_total = self_state->mass + other_state->mass;
+      CTraj new_vel = mom_total / mass_total;
+
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+
+      outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+
+      // Add asteroid mass to ship's cargo/fuel
+      AsteroidKind material = other_state->asteroid_material;
+      if (material == VINYL) {
+        outcome.AddCommand(CollisionCommand::AdjustCargo(self_state->thing, other_state->mass));
+      } else if (material == URANIUM) {
+        outcome.AddCommand(CollisionCommand::AdjustFuel(self_state->thing, other_state->mass));
+      }
+
+      // Record that ship ate this asteroid
+      outcome.AddCommand(CollisionCommand::RecordEatenBy(other_state->thing, self_state->thing));
+
+      // Kill the eaten asteroid (it's now part of ship's cargo/fuel)
+      outcome.AddCommand(CollisionCommand::Kill(other_state->thing));
+
+    } else {
+      // LARGE ASTEROID: Collision damage
+
+      // Calculate damage
+      double damage;
+      if (ctx.use_new_physics) {
+        // New physics: Symmetric damage based on momentum change
+        // For elastic collision: |Δp| = 2 * reduced_mass * |v_rel|
+        double m1 = self_state->mass;
+        double m2 = other_state->mass;
+        CTraj v_rel = other_state->velocity - self_state->velocity;
+        double reduced_mass = (m1 * m2) / (m1 + m2);
+        damage = (2.0 * reduced_mass * v_rel.rho) / g_laser_damage_mass_divisor;
+      } else {
+        // Legacy: Asymmetric damage based on other's mass
+        CTraj rel_momentum = (other_state->velocity - self_state->velocity) * other_state->mass;
+        damage = rel_momentum.rho / g_laser_damage_mass_divisor;
+      }
+
+      outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
+
+      // Physics: Update ship velocity based on collision
+      if (ctx.use_new_physics) {
+        // Perfectly elastic collision - conserves momentum and energy
+        ElasticCollisionResult elastic = CalculateElastic2DCollision(
+            self_state->mass, self_state->velocity, self_state->position,
+            other_state->mass, other_state->velocity, other_state->position);
+
+        CTraj new_vel = elastic.v1_final;
+        if (new_vel.rho > g_game_max_speed) {
+          new_vel.rho = g_game_max_speed;
+        }
+
+        outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+
+        // Note: Asteroid fragments will be created by the Asteroid's collision handler
+        // using elastic.v2_final as their base velocity. The fragments get a spread
+        // pattern based on relative velocity magnitude for gameplay, then have the
+        // elastic collision velocity added to conserve momentum.
+      } else {
+        // Legacy: Inelastic collision (physically incorrect)
+        CTraj mom_total = self_state->velocity * self_state->mass + other_state->velocity * other_state->mass;
+        double mass_total = self_state->mass + other_state->mass;
+        CTraj new_vel = mom_total / mass_total;
+
+        if (new_vel.rho > g_game_max_speed) {
+          new_vel.rho = g_game_max_speed;
+        }
+
+        outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+      }
+    }
+
+    return outcome;
+  }
+
+  // === SHIP COLLISION ===
+  if (other_kind == SHIP && other_state->team != NULL) {
+    // Calculate damage
+    double damage;
+    if (ctx.use_new_physics) {
+      // New physics: Symmetric damage based on momentum change
+      double m1 = self_state->mass;
+      double m2 = other_state->mass;
+      CTraj v_rel = other_state->velocity - self_state->velocity;
+      double reduced_mass = (m1 * m2) / (m1 + m2);
+      damage = (2.0 * reduced_mass * v_rel.rho) / g_laser_damage_mass_divisor;
+    } else {
+      // Legacy: Asymmetric damage
+      CTraj rel_momentum = (other_state->velocity - self_state->velocity) * other_state->mass;
+      damage = rel_momentum.rho / g_laser_damage_mass_divisor;
+    }
+
+    outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
+
+    // Announcement
+    if (ctx.world && damage > 0.1) {
+      char msg[256];
+      snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
+               self_state->thing->GetName(), other_state->thing->GetName(), damage);
+      outcome.AddCommand(CollisionCommand::Announce(msg));
+    }
+
+    // Physics: Velocity and position update
+    if (ctx.use_new_physics) {
+      // Log BEFORE collision resolution
+      extern CParser* g_pParser;
+      if (g_pParser && g_pParser->verbose) {
+        printf("[SHIP-COLLISION-BEFORE] Turn %u: %s vs %s\n",
+               ctx.world ? ctx.world->GetCurrentTurn() : 0,
+               self_state->thing->GetName(),
+               other_state->thing->GetName());
+        printf("  pos_self=(%.2f, %.2f)  pos_other=(%.2f, %.2f)  dist=%.3f\n",
+               self_state->position.fX, self_state->position.fY,
+               other_state->position.fX, other_state->position.fY,
+               self_state->position.DistTo(other_state->position));
+        printf("  vel_self=(%.2f @ %.1f°)  vel_other=(%.2f @ %.1f°)\n",
+               self_state->velocity.rho, self_state->velocity.theta * 180.0 / PI,
+               other_state->velocity.rho, other_state->velocity.theta * 180.0 / PI);
+        printf("  shield_self=%.2f  shield_other=%.2f\n",
+               self_state->ship_shield, other_state->ship_shield);
+      }
+
+      // New physics: Perfectly elastic collision - conserves momentum and energy
+      ElasticCollisionResult elastic = CalculateElastic2DCollision(
+          self_state->mass, self_state->velocity, self_state->position,
+          other_state->mass, other_state->velocity, other_state->position);
+
+      CTraj new_vel = elastic.v1_final;
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+
+      outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+
+      // Position: Apply separation bump to prevent ships from clustering
+      // We need to determine the separation direction using a priority system:
+      // 1st preference: Use relative velocity direction (intercept-based)
+      // 2nd preference: Use geometric center-to-center direction
+      // 3rd preference: Use random direction (when ships at same pos with same vel)
+
+      // Each ship moves its own radius + safety margin in opposite directions
+      // Total separation = (r1 + margin) + (r2 + margin) = r1 + r2 + 2*margin
+      // For ships: (12 + 3) + (12 + 3) = 30 units (safely > 24 unit threshold)
+      double separation_dist = self_state->size + g_ship_collision_bump;
+      double separation_angle;
+      const char* separation_mode = nullptr;
+
+      // Check relative velocity magnitude
+      // Calculate other ship's velocity relative to self (direction other appears to approach in self's frame)
+      CTraj v_other_relative_to_self = other_state->velocity - self_state->velocity;
+
+      if (v_other_relative_to_self.rho > g_fp_error_epsilon) {
+        // CASE 1 (First preference): Ships have different velocities
+        // Use intercept direction: other ship's approach direction in self's reference frame
+        // When other hits me from direction θ, I get pushed (and back up) in direction θ
+        separation_angle = v_other_relative_to_self.theta;
+        separation_mode = "INTERCEPT";
+      } else {
+        // Ships have same (or nearly same) velocity - check position
+        double pos_diff_x = self_state->position.fX - other_state->position.fX;
+        double pos_diff_y = self_state->position.fY - other_state->position.fY;
+        double pos_distance_sq = pos_diff_x * pos_diff_x + pos_diff_y * pos_diff_y;
+
+        if (pos_distance_sq > g_fp_error_epsilon) {
+          // CASE 2 (Second preference): Ships at different positions
+          // Use geometric center-to-center separation
+          separation_angle = other_state->position.AngleTo(self_state->position);
+          separation_mode = "GEOMETRIC";
+        } else {
+          // CASE 3 (Third preference): Ships at same position with same velocity
+          // Use random separation angle to break symmetry
+          // The random angle is provided by the collision context (same for both ships in pair)
+          // We need to ensure opposite directions: one ship gets θ, the other gets θ + π
+
+          double base_angle = ctx.random_separation_angle;
+
+          // Canonicalize the pair to determine which ship gets which angle
+          CThing* obj1 = self_state->thing;
+          CThing* obj2 = other_state->thing;
+          if (obj1 > obj2) {
+            CThing* temp = obj1;
+            obj1 = obj2;
+            obj2 = temp;
+          }
+
+          // If this ship is obj1, use base_angle; if obj2, use opposite angle
+          if (self_state->thing == obj1) {
+            separation_angle = base_angle;
+          } else {
+            separation_angle = base_angle + PI;  // Opposite direction
+            // Normalize to [-π, π)
+            if (separation_angle > PI) {
+              separation_angle -= 2.0 * PI;
+            }
+          }
+          separation_mode = "RANDOM";
+        }
+      }
+
+      CTraj separation_vec(separation_dist, separation_angle);
+
+      CCoord bump_pos = self_state->position;
+      bump_pos += separation_vec.ConvertToCoord();
+      outcome.AddCommand(CollisionCommand::SetPosition(self_state->thing, bump_pos));
+
+      // Log AFTER collision resolution
+      if (g_pParser && g_pParser->verbose) {
+        CCoord new_pos = bump_pos;
+        double dist_from_other = new_pos.DistTo(other_state->position);
+        double dist_moved = new_pos.DistTo(self_state->position);
+
+        printf("[SHIP-COLLISION-AFTER] %s separation complete\n", self_state->thing->GetName());
+        printf("  mode=%s  angle=%.1f°  separation_dist=%.1f\n",
+               separation_mode,
+               separation_angle * 180.0 / PI,
+               separation_dist);
+        printf("  old_pos=(%.2f, %.2f)  new_pos=(%.2f, %.2f)\n",
+               self_state->position.fX, self_state->position.fY,
+               new_pos.fX, new_pos.fY);
+        printf("  dist_moved=%.3f  dist_from_other=%.3f (expected=%.1f)\n",
+               dist_moved, dist_from_other, separation_dist);
+        printf("  new_vel=(%.2f @ %.1f°)  damage=%.2f\n",
+               new_vel.rho, new_vel.theta * 180.0 / PI,
+               damage);
+      }
+
+      // Note: Both ships emit velocity and position commands. The other ship will
+      // calculate the same elastic collision and separation, emitting its own commands.
+      // This is symmetric and physically correct.
+    } else {
+      // Legacy: Non-physical separation impulse (creates momentum from nothing)
+      // Both position and velocity are updated based on the separation vector
+      double angle = other_state->position.AngleTo(self_state->position);
+      double separation = other_state->size + 3.0;
+      CTraj move_vec(separation, angle);
+
+      CCoord new_pos = self_state->position;
+      new_pos += move_vec.ConvertToCoord();
+      outcome.AddCommand(CollisionCommand::SetPosition(self_state->thing, new_pos));
+
+      double mass_ratio = other_state->mass / self_state->mass;
+      CTraj vel_change = move_vec * mass_ratio;
+      CTraj new_vel = self_state->velocity + vel_change;
+
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+
+      outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+    }
+
+    return outcome;
+  }
+
+  // Other collision types not handled
+  return outcome;
+}
+
+// Helper function: Calculate 2D elastic collision velocities
+// Uses proper 2D elastic collision physics with normal/tangential decomposition
+CShip::ElasticCollisionResult CShip::CalculateElastic2DCollision(
+    double m1, const CTraj& v1, const CCoord& p1,
+    double m2, const CTraj& v2, const CCoord& p2) const {
+
+  ElasticCollisionResult result;
+
+  // Handle edge case: one or both masses are zero
+  if (m1 < 0.001 || m2 < 0.001) {
+    result.v1_final = v1;
+    result.v2_final = v2;
+    return result;
+  }
+
+  // Convert velocities to Cartesian coordinates
+  CCoord v1_cart = v1.ConvertToCoord();
+  CCoord v2_cart = v2.ConvertToCoord();
+
+  // === CORRECT 2D ELASTIC COLLISION PHYSICS ===
+  //
+  // Standard formulas for elastic collision between two circles:
+  // 1. Calculate collision normal (geometric center-to-center line)
+  // 2. Decompose velocities into normal and tangential components
+  // 3. Exchange ONLY the normal components (tangential components unchanged)
+  // 4. Reconstruct final velocities
+  //
+  // This is the physically correct approach for 2D elastic collisions.
+
+  // Step 1: Calculate collision normal vector (from object 1 to object 2)
+  CCoord normal;
+  normal.fX = p2.fX - p1.fX;
+  normal.fY = p2.fY - p1.fY;
+
+  double normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
+
+  // Handle edge case: objects at same position
+  // Use relative velocity direction as collision normal (intercept-based fallback)
+  if (normal_mag_sq < g_fp_error_epsilon) {
+    CCoord v_rel;
+    v_rel.fX = v1_cart.fX - v2_cart.fX;
+    v_rel.fY = v1_cart.fY - v2_cart.fY;
+
+    double v_rel_mag_sq = v_rel.fX * v_rel.fX + v_rel.fY * v_rel.fY;
+
+    // If both position AND velocity are same, collision normal is undefined
+    // Physically, no momentum transfer occurs (velocities unchanged)
+    // Separation still needed but handled separately by caller
+    if (v_rel_mag_sq < g_fp_error_epsilon) {
+      result.v1_final = v1;
+      result.v2_final = v2;
+      return result;
+    }
+
+    normal = v_rel;
+    normal_mag_sq = v_rel_mag_sq;
+  }
+
+  double normal_mag = sqrt(normal_mag_sq);
+
+  // Normalize the collision normal to unit vector
+  CCoord n;  // Unit normal vector
+  n.fX = normal.fX / normal_mag;
+  n.fY = normal.fY / normal_mag;
+
+  // Tangent vector (perpendicular to normal, rotated 90° counterclockwise)
+  CCoord t;  // Unit tangent vector
+  t.fX = -n.fY;
+  t.fY = n.fX;
+
+  // Step 2: Decompose velocities into normal and tangential components
+  // v = (v·n)n + (v·t)t
+
+  // Object 1 components
+  double v1_n = v1_cart.fX * n.fX + v1_cart.fY * n.fY;  // normal component (scalar)
+  double v1_t = v1_cart.fX * t.fX + v1_cart.fY * t.fY;  // tangent component (scalar)
+
+  // Object 2 components
+  double v2_n = v2_cart.fX * n.fX + v2_cart.fY * n.fY;  // normal component
+  double v2_t = v2_cart.fX * t.fX + v2_cart.fY * t.fY;  // tangent component
+
+  // Step 3: Exchange normal components using 1D elastic collision formula
+  // Tangential components remain unchanged (no force in tangent direction)
+  double total_mass = m1 + m2;
+  double v1_n_final = ((m1 - m2) * v1_n + 2.0 * m2 * v2_n) / total_mass;
+  double v2_n_final = ((m2 - m1) * v2_n + 2.0 * m1 * v1_n) / total_mass;
+
+  // Tangent components unchanged
+  double v1_t_final = v1_t;
+  double v2_t_final = v2_t;
+
+  // Step 4: Reconstruct velocity vectors from components
+  // v = v_n * n + v_t * t
+  CCoord v1_final_cart, v2_final_cart;
+  v1_final_cart.fX = v1_n_final * n.fX + v1_t_final * t.fX;
+  v1_final_cart.fY = v1_n_final * n.fY + v1_t_final * t.fY;
+  v2_final_cart.fX = v2_n_final * n.fX + v2_t_final * t.fX;
+  v2_final_cart.fY = v2_n_final * n.fY + v2_t_final * t.fY;
+
+  // Convert back to polar coordinates
+  result.v1_final = CTraj(v1_final_cart);
+  result.v2_final = CTraj(v2_final_cart);
+
+  return result;
 }
 
 double CShip::GetLaserBeamDistance() { return dLaserDist; }
@@ -1889,13 +2477,6 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   double oldFuel = GetAmount(S_FUEL);
   double newFuel = oldFuel - fuelcons;
   SetAmount(S_FUEL, newFuel);
-
-  // Verbose logging for thrust/fuel in legacy mode (should show fuel costs after undocking)
-  if (g_pParser && g_pParser->verbose && (IsDocked() || oldFuel != newFuel)) {
-    printf("[THRUST-DRIFT-LEGACY] %s: thrust=%.2f dt=%.2f docked=%d fuel_before=%.2f fuel_cost=%.4f fuel_after=%.2f\n",
-           GetName(), thrustamt, dt, IsDocked() ? 1 : 0,
-           oldFuel, fuelcons, newFuel);
-  }
 
   // Check if out of fuel
   if (oldFuel > 0.01 && newFuel <= 0.01) {

@@ -24,6 +24,12 @@ class CAsteroid : public CThing {
   // Deterministic collision engine - override to populate asteroid-specific fields
   virtual CollisionState MakeCollisionState() const;
 
+  // Deterministic collision engine - override to handle asteroid-specific commands
+  virtual void ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx);
+
+  // Deterministic collision engine - generate collision commands from snapshots
+  CollisionOutcome GenerateCollisionCommands(const CollisionContext& ctx);
+
   // Serialization routines
   unsigned GetSerialSize() const;
   unsigned SerialPack(char* buf, unsigned buflen) const;

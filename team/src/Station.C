@@ -53,6 +53,82 @@ CollisionState CStation::MakeCollisionState() const {
   return state;
 }
 
+// Deterministic collision engine - apply station-specific commands
+void CStation::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  // This method handles station-specific command types
+  // Base class already handled kKillSelf, kSetVelocity, kSetPosition
+
+  switch (cmd.type) {
+    case CollisionCommandType::kAdjustCargo: {
+      // Adjust vinyl cargo by delta (can be negative for laser damage)
+      dCargo += cmd.scalar;
+
+      // Clamp to minimum of 0 (stations have no maximum cargo capacity)
+      if (dCargo < 0.0) {
+        dCargo = 0.0;
+      }
+      break;
+    }
+
+    default:
+      // Other command types not handled by stations
+      break;
+  }
+}
+
+// Deterministic collision engine - generate collision commands from snapshots
+CollisionOutcome CStation::GenerateCollisionCommands(const CollisionContext& ctx) {
+  // This method reads from immutable snapshots and emits commands
+  // It does NOT mutate any object state
+
+  CollisionOutcome outcome;
+
+  // Get snapshots from context
+  const CollisionState* self_state = ctx.self_state;
+  const CollisionState* other_state = ctx.other_state;
+
+  // Sanity checks
+  if (self_state == NULL || other_state == NULL) {
+    return outcome;  // Empty outcome
+  }
+
+  if (self_state->kind != STATION) {
+    return outcome;  // Wrong kind, shouldn't happen
+  }
+
+  // Station collision logic
+  ThingKind other_kind = other_state->kind;
+
+  // Ship-station collision: Ships dock (handled by Ship's collision handler)
+  if (other_kind == SHIP) {
+    // Station does nothing, ship handles docking
+    return outcome;
+  }
+
+  // Laser-station collision: Laser depletes vinyl cargo
+  if (other_kind == GENTHING) {
+    // Calculate damage from laser mass
+    double laser_mass = other_state->mass;
+    double damage = laser_mass / g_laser_damage_mass_divisor;
+
+    // Emit command to reduce station cargo
+    outcome.AddCommand(CollisionCommand::AdjustCargo(self_state->thing, -damage));
+
+    // Emit announcement if significant damage
+    if (damage > 0.01 && ctx.world) {
+      char msg[256];
+      snprintf(msg, sizeof(msg), "%s hit by laser, %.1f vinyl lost",
+               self_state->thing->GetName(), damage);
+      outcome.AddCommand(CollisionCommand::Announce(msg));
+    }
+
+    return outcome;
+  }
+
+  // Other collision types don't affect stations
+  return outcome;
+}
+
 /////////////////////////////////////////////
 // Explicit functions
 

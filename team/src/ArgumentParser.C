@@ -23,7 +23,7 @@ void ArgumentParser::InitializeFeatures() {
   features["velocity-limits"] = true;      // New velocity/acceleration limits is default
   features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
   features["physics"] = true;              // New: correct collision physics and momentum conservation
-  features["collision-handling"] = true;   // New: improved collision processing (fixes multi-hit bugs)
+  features["collision-handling"] = true;   // New: deterministic snapshot/command collision pipeline (fixes multi-hit bugs)
 
   // Security features
   features["laser-exploit"] = false;       // New: TOCTOU vulnerability patched (validate before firing)

@@ -23,6 +23,12 @@ class CStation : public CThing {
   // Deterministic collision engine - override to populate station-specific fields
   virtual CollisionState MakeCollisionState() const;
 
+  // Deterministic collision engine - override to handle station-specific commands
+  virtual void ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx);
+
+  // Deterministic collision engine - generate collision commands from snapshots
+  CollisionOutcome GenerateCollisionCommands(const CollisionContext& ctx);
+
   // Serialization methods
   unsigned GetSerialSize() const;
   unsigned SerialPack(char* buf, unsigned buflen) const;

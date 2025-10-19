@@ -8,11 +8,16 @@
 #include <sys/time.h>
 
 #include <algorithm>
+#include <cmath>
 #include <ctime>
+#include <map>
+#include <random>
+#include <set>
 #include <vector>
 
 #include "ArgumentParser.h"
 #include "Asteroid.h"
+#include "CollisionTypes.h"
 #include "GameConstants.h"
 #include "ParserModern.h"
 #include "Ship.h"
@@ -165,6 +170,18 @@ unsigned int CWorld::PhysicsModel(double dt, double turn_phase) {
 }
 
 void CWorld::LaserModel() {
+  // LASER PROCESSING - Dispatch to legacy or deterministic implementation
+  extern CParser* g_pParser;
+
+  if (g_pParser && !g_pParser->UseNewFeature("collision-handling")) {
+    LaserModelOld();
+  } else {
+    LaserModelNew();
+  }
+}
+
+void CWorld::LaserModelOld() {
+  // LEGACY LASER PROCESSING - Bypass deterministic collision engine
   // LASER PROCESSING - OPTIONAL TOCTOU VULNERABILITY
   //
   // By default, laser power is validated BEFORE firing. When --legacy-laser-exploit
@@ -400,6 +417,175 @@ void CWorld::LaserModel() {
   KillDeadThings();
 }
 
+void CWorld::LaserModelNew() {
+  // NEW DETERMINISTIC LASER PROCESSING
+  // Uses snapshot/command pipeline instead of direct Collide() calls
+  // This ensures laser collisions integrate properly with the deterministic collision engine
+
+  extern CParser* g_pParser;
+
+  unsigned int nteam, nship;
+  CTeam* pTeam;
+  CShip* pShip;
+  CThing *pTarget, LasThing;
+  CCoord LasPos, TmpPos;
+  CTraj LasTraj, TarVel, TmpTraj;
+  double dfuel, dLasPwr, dLasRng;
+
+  for (nteam = 0; nteam < GetNumTeams(); ++nteam) {
+    pTeam = GetTeam(nteam);
+    if (pTeam == NULL) {
+      continue;
+    }
+    for (nship = 0; nship < pTeam->GetShipCount(); ++nship) {
+      pShip = pTeam->GetShip(nship);
+      if (pShip == NULL) {
+        continue;
+      }
+
+      // Laser power validation (always done BEFORE firing in new mode)
+      double oldFuel = pShip->GetAmount(S_FUEL);
+      double requested_power = pShip->GetOrder(O_LASER);
+
+      if (requested_power <= 0.0) {
+        continue;
+      }
+
+      // Call SetOrder to validate/cap the power based on available fuel
+      double fuel_cost = pShip->SetOrder(O_LASER, requested_power);
+
+      // Use the VALIDATED power (read it back after SetOrder clamped it)
+      dLasPwr = pShip->GetOrder(O_LASER);
+
+      // If validated power is 0, skip laser firing
+      if (dLasPwr <= 0.0) {
+        continue;
+      }
+
+      // Deduct fuel immediately
+      pShip->SetAmount(S_FUEL, oldFuel - fuel_cost);
+
+      // Check if out of fuel
+      if (oldFuel > 0.01 && (oldFuel - fuel_cost) <= 0.01) {
+        printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
+               pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+      }
+
+      // Compute the nominal end-of-beam position from shooter
+      LasPos = pShip->GetPos();
+      LasTraj = CTraj(dLasPwr, pShip->GetOrient());
+      LasPos += LasTraj.ConvertToCoord();
+      LasThing.SetPos(LasPos);
+
+      pTarget = pShip->LaserTarget();
+
+      // LASER RANGE CHECK (use corrected range check, not legacy buggy one)
+      if (pTarget != NULL) {
+        double target_distance = pShip->GetPos().DistTo(pTarget->GetPos());
+        if (target_distance > dLasPwr) {
+          pTarget = NULL;  // Target out of laser range
+        }
+      }
+
+      if (pTarget != NULL) {
+        TmpPos = pTarget->GetPos();
+        // Move impact point to one unit in front of the target along the beam
+        TmpTraj = pShip->GetPos().VectTo(TmpPos);
+        TmpTraj.rho = 1.0;
+        TmpPos -= (CCoord)TmpTraj;
+        LasThing.SetPos(TmpPos);
+
+        // Remaining beam power at impact
+        dLasRng = TmpPos.DistTo(pShip->GetPos());
+        LasThing.SetMass(g_laser_mass_scale_per_remaining_unit * (dLasPwr - dLasRng));
+
+        // Set laser velocity (photon momentum model in new physics)
+        double beam_direction = pShip->GetOrient();
+        double speed_of_light = g_game_max_speed;  // 30 u/s
+        CTraj laser_velocity(speed_of_light, beam_direction);
+        LasThing.SetVel(laser_velocity);
+
+        // Log laser hit with verbose logging
+        if (g_pParser && g_pParser->verbose) {
+          const char* targetType = (pTarget->GetKind() == SHIP) ? "SHIP" :
+                                   (pTarget->GetKind() == STATION) ? "STATION" :
+                                   (pTarget->GetKind() == ASTEROID) ? "ASTEROID" : "UNKNOWN";
+          const char* targetName = pTarget->GetName();
+          const char* shooterTeam = pShip->GetTeam() ? pShip->GetTeam()->GetName() : "NoTeam";
+          const char* targetTeam = pTarget->GetTeam() ? pTarget->GetTeam()->GetName() : "NoTeam";
+
+          CCoord laser_pos = LasThing.GetPos();
+          CCoord target_pos = pTarget->GetPos();
+          CTraj laser_vel = LasThing.GetVelocity();
+
+          printf("LASER_COLLISION: %s[%s] fires from pos=(%.1f,%.1f) power=%.1f range=%.1f -> %s[%s][%s] at pos=(%.1f,%.1f) laser_vel=(%.2f@%.1f°) mass=%.3f\n",
+                 pShip->GetName(), shooterTeam,
+                 pShip->GetPos().fX, pShip->GetPos().fY,
+                 dLasPwr, dLasRng,
+                 targetName ? targetName : "unnamed", targetType, targetTeam,
+                 target_pos.fX, target_pos.fY,
+                 laser_vel.rho, laser_vel.theta * 180.0 / PI,
+                 LasThing.GetMass());
+        }
+
+        // === DETERMINISTIC LASER COLLISION PROCESSING ===
+        // Create snapshots for laser and target
+        CollisionState laser_state = LasThing.MakeCollisionState();
+        CollisionState target_state = pTarget->MakeCollisionState();
+
+        // Build collision context with feature flags
+        bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
+        bool use_asteroid_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
+        bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
+
+        CollisionContext ctx(this, &target_state, &laser_state, 1.0,
+                             use_new_physics, use_asteroid_eat_damage, use_docking_fix);
+
+        // Generate commands from target's perspective (target being hit by laser)
+        CollisionOutcome outcome = pTarget->GenerateCollisionCommands(ctx);
+
+        // Apply commands immediately
+        CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, use_asteroid_eat_damage, use_docking_fix);
+
+        for (int i = 0; i < outcome.command_count; ++i) {
+          const CollisionCommand& cmd = outcome.commands[i];
+
+          // Handle announcer messages
+          if (cmd.type == CollisionCommandType::kAnnounceMessage) {
+            if (cmd.message) {
+              AddAnnouncerMessage(cmd.message);
+            }
+            continue;
+          }
+
+          // Skip if target is null or already dead
+          if (!cmd.target || !cmd.target->IsAlive()) continue;
+
+          // Apply the command
+          cmd.target->ApplyCollisionCommand(cmd, apply_ctx);
+        }
+
+        // Process spawn requests (asteroid fragments)
+        for (int i = 0; i < outcome.spawn_count; ++i) {
+          const SpawnRequest& spawn = outcome.spawns[i];
+
+          if (spawn.kind == ASTEROID) {
+            CAsteroid* fragment = new CAsteroid(spawn.mass, spawn.material);
+            CCoord pos = spawn.position;
+            CTraj vel = spawn.velocity;
+            fragment->SetPos(pos);
+            fragment->SetVel(vel);
+            AddThingToWorld(fragment);
+          }
+        }
+      }
+    }
+  }
+
+  AddNewThings();
+  KillDeadThings();
+}
+
 void CWorld::AddThingToWorld(CThing* pNewThing) {
   if (pNewThing == NULL || numNewThings >= MAX_THINGS) {
     return;
@@ -578,136 +764,317 @@ struct CollisionPair {
 };
 
 unsigned int CWorld::CollisionEvaluationNew() {
-  // NEW COLLISION PROCESSING - PHYSICS-ORDERED APPROACH
+  // NEW COLLISION HANDLING - DETERMINISTIC SNAPSHOT/COMMAND PIPELINE
+  // This implementation uses immutable snapshots and command emission to eliminate
+  // order-dependent bugs like asteroid multi-fragmentation and ship double-damage.
+  return CollisionEvaluationDeterministic();
+}
+
+unsigned int CWorld::CollisionEvaluationDeterministic() {
+  // DETERMINISTIC COLLISION ENGINE - SNAPSHOT/COMMAND PIPELINE
   //
-  // Design principles:
-  // 1. NO CASCADING COLLISIONS: We process only collisions that exist at the
-  //    current snapshot of positions. If resolving collision A moves an object
-  //    into overlap with object B, we do NOT process the A-B collision this frame.
-  //    This prevents chain reactions and keeps collision resolution deterministic.
+  // This implementation uses immutable snapshots and command emission to eliminate
+  // order-dependent bugs like asteroid multi-fragmentation and ship double-damage.
   //
-  // 2. PHYSICS-ORDERED PROCESSING: We resolve collisions in order of decreasing
-  //    overlap distance. Greater overlap suggests the collision occurred earlier
-  //    in the physics timestep, so we process it first. This is more physically
-  //    intuitive than arbitrary iteration order.
-  //
-  // 3. RANDOM TIE-BREAKING: When two collision pairs have equal overlap, we
-  //    randomly choose which to process first. This prevents subtle gameplay
-  //    biases from bookkeeping order (e.g., Team 1 always winning ties).
+  // Pipeline stages:
+  // 1. Create snapshots of all objects (read-only phase)
+  // 2. Detect all collision pairs using existing overlap logic
+  // 3. Generate commands from both collision participants
+  // 4. Sort commands by priority (kills first, then position, velocity, resources)
+  // 5. Apply commands deterministically
+  // 6. Process spawn requests (create new objects)
 
-  // Build list of team-controlled objects (stations + ships) for collision checking
-  CThing* team_objects[MAX_THINGS];
-  unsigned int num_team_objects = 0;
+  extern CParser* g_pParser;
 
-  // First pass: Collect all team-controlled objects into array
-  for (unsigned int team_idx = 0; team_idx < GetNumTeams(); ++team_idx) {
-    CTeam* team = GetTeam(team_idx);
-    if (team == NULL) {
-      continue;
-    }
+  if (g_pParser && g_pParser->verbose) {
+    printf("[DETERMINISTIC-COLLISION] Starting collision evaluation\n");
+  }
 
-    // Add station to collision list
-    CThing* station = team->GetStation();
-    team_objects[num_team_objects] = station;
-    num_team_objects++;
+  // Stage 1: Create snapshots of all objects
+  std::map<CThing*, CollisionState> snapshots;
 
-    // Skip ships if game is over (they become invisible)
-    if (bGameOver == true) {
-      continue;
-    }
-
-    // Add all ships from this team to collision list
-    for (unsigned int ship_idx = 0; ship_idx < team->GetShipCount(); ++ship_idx) {
-      CThing* ship = team->GetShip(ship_idx);
-      if (ship == NULL) {
-        continue;
-      }
-      team_objects[num_team_objects] = ship;
-      num_team_objects++;
+  for (unsigned int idx = UFirstIndex; idx != (unsigned int)-1; idx = GetNextIndex(idx)) {
+    CThing* thing = GetThing(idx);
+    if (thing && thing->IsAlive()) {
+      snapshots[thing] = thing->MakeCollisionState();
     }
   }
 
-  // Second pass: Build list of all currently-overlapping object pairs
-  // We snapshot all collisions NOW and will NOT process cascading collisions
-  // that result from resolving these collisions.
+  // Build list of team-controlled objects for collision detection
+  CThing* team_objects[MAX_THINGS];
+  unsigned int num_team_objects = 0;
+
+  for (unsigned int team_idx = 0; team_idx < GetNumTeams(); ++team_idx) {
+    CTeam* team = GetTeam(team_idx);
+    if (team == NULL) continue;
+
+    // Add station
+    CThing* station = team->GetStation();
+    team_objects[num_team_objects++] = station;
+
+    // Skip ships if game over
+    if (bGameOver) continue;
+
+    // Add ships
+    for (unsigned int ship_idx = 0; ship_idx < team->GetShipCount(); ++ship_idx) {
+      CThing* ship = team->GetShip(ship_idx);
+      if (ship) {
+        team_objects[num_team_objects++] = ship;
+      }
+    }
+  }
+
+  // Stage 2: Detect all collision pairs
   std::vector<CollisionPair> collisions;
+
+  // CRITICAL FIX: Deduplicate collision pairs
+  // The nested loop creates both (A,B) and (B,A) for each overlap.
+  // We use a set to track processed pairs and skip duplicates.
+  std::set<std::pair<CThing*, CThing*>> processed_pairs;
 
   for (unsigned int world_idx = UFirstIndex; world_idx != (unsigned int)-1;
        world_idx = GetNextIndex(world_idx)) {
     CThing* world_object = GetThing(world_idx);
+    if (!world_object || !world_object->IsAlive()) continue;
 
-    // Skip dead objects
-    if (world_object == NULL || !world_object->IsAlive()) {
-      continue;
-    }
-
-    // Check this world object against all team objects
     for (unsigned int team_obj_idx = 0; team_obj_idx < num_team_objects; ++team_obj_idx) {
       CThing* team_object = team_objects[team_obj_idx];
-      if (team_object == NULL) {
+      if (!team_object) continue;
+
+      // Skip self-collision
+      if (world_object == team_object) continue;
+
+      // Deduplicate: Skip if we've already processed this pair
+      // Canonicalize pair: always (lower_ptr, higher_ptr) order for consistent lookup
+      CThing* obj1 = world_object;
+      CThing* obj2 = team_object;
+      if (obj1 > obj2) {
+        CThing* temp = obj1;
+        obj1 = obj2;
+        obj2 = temp;
+      }
+      std::pair<CThing*, CThing*> pair_key(obj1, obj2);
+
+      if (processed_pairs.count(pair_key) > 0) {
+        continue;  // Already processed this collision pair
+      }
+
+      // Game collision rules:
+      // 1. Asteroids don't collide with other asteroids
+      // 2. Docked ships don't collide with ANYTHING
+      // 3. Everything else collides
+
+      ThingKind kind1 = world_object->GetKind();
+      ThingKind kind2 = team_object->GetKind();
+
+      // Rule 1: Skip asteroid-asteroid collisions
+      if (kind1 == ASTEROID && kind2 == ASTEROID) {
         continue;
       }
 
-      // Calculate overlap distance: (r1 + r2) - center_distance
-      // Positive overlap means the objects are currently intersecting
+      // Rule 2: Skip collisions involving docked ships
+      if (kind1 == SHIP) {
+        CShip* ship = (CShip*)world_object;
+        if (ship->IsDocked()) {
+          if (g_pParser && g_pParser->verbose) {
+            printf("[DEBUG] Skipping collision for docked ship: %s\n", ship->GetName());
+          }
+          continue;  // Docked ship doesn't collide with anything
+        }
+      }
+      if (kind2 == SHIP) {
+        CShip* ship = (CShip*)team_object;
+        if (ship->IsDocked()) {
+          if (g_pParser && g_pParser->verbose) {
+            printf("[DEBUG] Skipping collision for docked ship: %s\n", ship->GetName());
+          }
+          continue;  // Docked ship doesn't collide with anything
+        }
+      }
+
       double radius1 = world_object->GetSize();
       double radius2 = team_object->GetSize();
       double center_distance = world_object->GetPos().DistTo(team_object->GetPos());
       double overlap = (radius1 + radius2) - center_distance;
 
-      // If objects are overlapping, add to collision list
       if (overlap > 0.0) {
+        // Mark this pair as processed
+        processed_pairs.insert(pair_key);
+
         collisions.push_back(CollisionPair(world_object, team_object, overlap));
+
+        // Print collision detection message (for test harness and debugging)
+        // NOTE: We print ONCE now (not twice) since we deduplicated pairs
+        if (g_pParser && g_pParser->verbose) {
+          CCoord pos1 = world_object->GetPos();
+          CCoord pos2 = team_object->GetPos();
+          CTraj vel1 = world_object->GetVelocity();
+          CTraj vel2 = team_object->GetVelocity();
+          unsigned int turn = GetCurrentTurn();
+
+          const char* kind1_str = (kind1 == SHIP) ? "SHIP" : (kind1 == STATION) ? "STATION" : (kind1 == ASTEROID) ? "ASTEROID" : "LASER";
+          const char* kind2_str = (kind2 == SHIP) ? "SHIP" : (kind2 == STATION) ? "STATION" : (kind2 == ASTEROID) ? "ASTEROID" : "LASER";
+
+          // Print collision (single entry now that pairs are deduplicated)
+          printf("COLLISION_DETECTED: Turn %u: %s[%s] pos=(%.1f,%.1f) vel=(%.2f@%.1f°) rad=%.1f <-> %s[%s] pos=(%.1f,%.1f) vel=(%.2f@%.1f°) rad=%.1f | dist=%.3f overlap=%.3f\n",
+                 turn,
+                 world_object->GetName(), kind1_str, pos1.fX, pos1.fY, vel1.rho, vel1.theta * 180.0 / PI, world_object->GetSize(),
+                 team_object->GetName(), kind2_str, pos2.fX, pos2.fY, vel2.rho, vel2.theta * 180.0 / PI, team_object->GetSize(),
+                 center_distance, overlap);
+        }
       }
     }
   }
 
-  // Third pass: Sort collisions by overlap (most overlap first)
-  // Greater overlap suggests collision occurred earlier in timestep.
-  // We use std::stable_sort to maintain deterministic behavior within ties.
-  std::stable_sort(collisions.begin(), collisions.end(),
-                   [](const CollisionPair& a, const CollisionPair& b) {
-                     // Sort by overlap distance (descending - most overlap first)
-                     return a.overlap_distance > b.overlap_distance;
-                   });
-
-  // Fourth pass: Randomize order within each tie group to prevent bookkeeping bias
-  // We identify groups of collisions with identical overlap and shuffle each group.
-  size_t group_start = 0;
-  while (group_start < collisions.size()) {
-    // Find end of current tie group (all elements with same overlap distance)
-    size_t group_end = group_start + 1;
-    while (group_end < collisions.size() &&
-           collisions[group_end].overlap_distance == collisions[group_start].overlap_distance) {
-      group_end++;
-    }
-
-    // Shuffle this tie group using Fisher-Yates algorithm
-    for (size_t i = group_start; i < group_end - 1; ++i) {
-      size_t j = i + (rand() % (group_end - i));
-      if (i != j) {
-        CollisionPair temp = collisions[i];
-        collisions[i] = collisions[j];
-        collisions[j] = temp;
-      }
-    }
-
-    group_start = group_end;
+  if (g_pParser && g_pParser->verbose) {
+    printf("[DETERMINISTIC-COLLISION] Total collisions detected: %zu\n", collisions.size());
   }
 
-  // Fifth pass: Process collisions in physics-ordered sequence
-  unsigned int collision_count = 0;
+  // Stage 3: Generate commands from all collision pairs
+  std::vector<CollisionCommand> all_commands;
+  std::vector<SpawnRequest> all_spawns;
+
+  // CRITICAL FIX: Track pending kills to prevent multi-hit bugs
+  // Example: Asteroid collides with 2 ships → generates 2 kill commands + 6 fragment spawns
+  // Without this tracking, both spawn batches execute → 6 fragments instead of 3
+  std::set<CThing*> pending_kills;
+
+  // Build collision context with feature flags
+  bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
+  bool use_asteroid_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
+  bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
+
+  // Random number generator for ship-ship same-position collisions
+  std::random_device rd;
+  std::mt19937 rng(rd());
+  std::uniform_real_distribution<double> angle_dist(-PI, PI);
+
   for (size_t i = 0; i < collisions.size(); ++i) {
-    const CollisionPair& pair = collisions[i];
+    CThing* obj1 = collisions[i].object1;
+    CThing* obj2 = collisions[i].object2;
 
-    // Symmetric collision processing (same as legacy)
-    pair.object1->Collide(pair.object2, this);
-    if (pair.object2->Collide(pair.object1, this)) {
-      collision_count++;
+    // Skip if either object is already dead (killed by earlier command)
+    if (!obj1->IsAlive() || !obj2->IsAlive()) continue;
+
+    // Skip if either object has a pending kill command (multi-hit prevention)
+    if (pending_kills.count(obj1) > 0 || pending_kills.count(obj2) > 0) {
+      continue;
+    }
+
+    // Generate random separation angle for this collision pair
+    // (used only for ship-ship collisions at same position with same velocity)
+    double random_angle = angle_dist(rng);
+
+    // Build contexts for both directions (both get same random angle)
+    CollisionContext ctx1(this, &snapshots[obj1], &snapshots[obj2], 1.0,
+                          use_new_physics, use_asteroid_eat_damage, use_docking_fix, random_angle);
+    CollisionContext ctx2(this, &snapshots[obj2], &snapshots[obj1], 1.0,
+                          use_new_physics, use_asteroid_eat_damage, use_docking_fix, random_angle);
+
+    // Generate commands from both perspectives
+    CollisionOutcome out1 = obj1->GenerateCollisionCommands(ctx1);
+    CollisionOutcome out2 = obj2->GenerateCollisionCommands(ctx2);
+
+    // Collect commands and track kills
+    for (int j = 0; j < out1.command_count; ++j) {
+      if (out1.commands[j].type == CollisionCommandType::kKillSelf) {
+        pending_kills.insert(out1.commands[j].target);
+      }
+      all_commands.push_back(out1.commands[j]);
+    }
+    for (int j = 0; j < out2.command_count; ++j) {
+      if (out2.commands[j].type == CollisionCommandType::kKillSelf) {
+        pending_kills.insert(out2.commands[j].target);
+      }
+      all_commands.push_back(out2.commands[j]);
+    }
+
+    // Collect spawn requests
+    for (int j = 0; j < out1.spawn_count; ++j) {
+      all_spawns.push_back(out1.spawns[j]);
+    }
+    for (int j = 0; j < out2.spawn_count; ++j) {
+      all_spawns.push_back(out2.spawns[j]);
     }
   }
 
-  return collision_count;
+  // Stage 4: Sort commands by priority
+  std::sort(all_commands.begin(), all_commands.end(),
+            [](const CollisionCommand& a, const CollisionCommand& b) {
+              return GetCommandTypePriority(a.type) < GetCommandTypePriority(b.type);
+            });
+
+  // Stage 5: Apply commands in deterministic order
+  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, use_asteroid_eat_damage, use_docking_fix);
+
+  for (size_t i = 0; i < all_commands.size(); ++i) {
+    const CollisionCommand& cmd = all_commands[i];
+
+    // Handle announcer messages
+    if (cmd.type == CollisionCommandType::kAnnounceMessage) {
+      if (cmd.message) {
+        AddAnnouncerMessage(cmd.message);
+      }
+      continue;
+    }
+
+    // Skip if target is null or already dead
+    if (!cmd.target || !cmd.target->IsAlive()) continue;
+
+    // Apply the command
+    cmd.target->ApplyCollisionCommand(cmd, apply_ctx);
+  }
+
+  // Stage 5.5: Log final separation distances after all commands applied (verbose mode)
+  if (g_pParser && g_pParser->verbose && collisions.size() > 0) {
+    printf("\n[COLLISION-FINAL] After applying all %zu collision commands:\n", all_commands.size());
+
+    // Track which pairs we've already logged (to avoid duplicate A-B and B-A logs)
+    std::set<std::pair<CThing*, CThing*>> logged_pairs;
+
+    for (size_t i = 0; i < collisions.size(); ++i) {
+      CThing* obj1 = collisions[i].object1;
+      CThing* obj2 = collisions[i].object2;
+
+      // Canonicalize pair
+      if (obj1 > obj2) std::swap(obj1, obj2);
+      std::pair<CThing*, CThing*> pair_key(obj1, obj2);
+
+      if (logged_pairs.count(pair_key) > 0) {
+        continue;  // Already logged this pair
+      }
+      logged_pairs.insert(pair_key);
+
+      // Only log ship-ship collisions for clarity
+      if (obj1->GetKind() == SHIP && obj2->GetKind() == SHIP) {
+        double final_dist = obj1->GetPos().DistTo(obj2->GetPos());
+        double collision_threshold = obj1->GetSize() + obj2->GetSize();  // 24 for ships
+
+        printf("  %s <-> %s: dist=%.3f (threshold=%.1f) %s\n",
+               obj1->GetName(), obj2->GetName(),
+               final_dist, collision_threshold,
+               (final_dist > collision_threshold) ? "CLEAR" : "STILL OVERLAPPING!");
+      }
+    }
+    printf("\n");
+  }
+
+  // Stage 6: Process spawn requests (create new objects)
+  for (size_t i = 0; i < all_spawns.size(); ++i) {
+    const SpawnRequest& spawn = all_spawns[i];
+
+    if (spawn.kind == ASTEROID) {
+      CAsteroid* fragment = new CAsteroid(spawn.mass, spawn.material);
+      CCoord pos = spawn.position;  // Copy to non-const for SetPos
+      CTraj vel = spawn.velocity;   // Copy to non-const for SetVel
+      fragment->SetPos(pos);
+      fragment->SetVel(vel);
+      AddThingToWorld(fragment);
+    }
+    // Other spawn types can be added here if needed
+  }
+
+  return collisions.size();
 }
 
 unsigned int CWorld::AddNewThings() {
