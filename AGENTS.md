@@ -40,3 +40,6 @@
 - Ports: server defaults to `2323` (some scripts use `2626` for tests).
 - Deps (local): `cmake`, `libsdl2-dev`, `libsdl2-image-dev`, `libsdl2-ttf-dev`.
 - Containers run as non-root; prefer Docker for reproducible builds and long-term preservation.
+
+## Agent Capabilities Note
+- Agents can perform git operations (`checkout`, `merge`, `push`) when explicitly asked. Earlier assumptions that this was disallowed were incorrect, confirmed through recent usage.
