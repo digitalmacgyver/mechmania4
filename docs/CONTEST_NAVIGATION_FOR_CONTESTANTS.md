@@ -37,7 +37,7 @@
 - **Lasers:** Fired after the full one-second movement finishes. Firing while docked is not allowed.
 
 ## 7. Practical Tips
-- Plan manoeuvres with the 30 u/s cap in mind. Attempting to thrust past it wastes fuel.
+- Plan maneuvers with the 30 u/s cap in mind. Attempting to thrust past it wastes fuel.
 - Remember orientation resets after each turn. Use `O_TURN` to face the direction you expect to thrust next.
 - Launch turns are free—use them to gain momentum even when low on fuel.
 - Wraparound matters: shortest travel vectors often cross an edge.

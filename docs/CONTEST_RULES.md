@@ -3,7 +3,7 @@
 ## Game Overview
 MechMania IV is a 2D space resource collection and combat game where two teams compete to collect vinyl (the primary resource) while managing fuel and avoiding or engaging in combat. The contest runs for 300 seconds of simulated time.
 
-> **Looking for detail?** This rules summary targets players. Mechanics are documented in depth in the specialised references:
+> **Looking for detail?** This rules summary targets players. Mechanics are documented in depth in the specialized references:
 > - `CONTEST_PHYSICS_FOR_CONTESTANTS.md` / `CONTEST_PHYSICS_FOR_DEVS.md`
 > - `CONTEST_NAVIGATION_FOR_CONTESTANTS.md` / `CONTEST_NAVIGATION_FOR_DEVS.md`
 > - `CONTEST_DAMAGE_FOR_CONTESTANTS.md` / `CONTEST_DAMAGE_FOR_DEVS.md`
@@ -81,10 +81,14 @@ Ships can perform the following actions each turn:
 - **Launch Turn:** When launching from a station, the entire turn is free (no fuel consumed even after undocking)
 
 ### Rotation Mechanics
-- **Fuel Cost:** 1 ton of fuel rotates a 40-ton hull 6 full circles (12π radians)
-- **Formula:** Fuel = |rotation| × ship_mass / (6 × 2π × empty_mass)
+- **Physics Model:** Ship modeled as uniform disk with triangular angular velocity profile (accelerates to peak at 0.5s, decelerates to zero at 1.0s)
+- **Fuel Cost:** Based on rotational kinetic energy. For a 40-ton empty hull, 1 ton of fuel provides approximately 1.42 full rotations (8.95 radians)
+- **Formula:** Fuel = 2 × ship_mass × ship_radius² × angle² / (turn_duration² × energy_per_fuel_ton)
+  - Where energy_per_fuel_ton = 648,000 (same energy budget as thrust physics)
+  - Ship radius = 12 units
+  - Turn duration = 1.0 second
 - **While Docked:** No fuel consumed for rotation
-- **No Angular Momentum:** After each turn order to a desired heading a ship does not continue to rotate
+- **No Angular Momentum:** After each turn order completes, angular velocity returns to zero (ship does not continue to spin)
 
 ### Physics
 - **Momentum:** Ships maintain velocity when not thrusting (Newtonian physics)
@@ -98,25 +102,30 @@ Ships can issue **thrust orders up to ±60** units/second of **Δv** along their
 
 **How thrust is applied (per second):**
 1. The order’s Δv is split into **five equal instantaneous impulses** at **t = 0.0, 0.2, 0.4, 0.6, 0.8 s**.  
-2. After each impulse, the engine computes \(v_{\text{des}} = v_{\text{old}} + \Delta v\).  
-3. If \(\lVert v_{\text{des}}\rVert \le 30\) (**speed circle**), it is accepted.  
-4. If \(\lVert v_{\text{des}}\rVert > 30\), the engine **projects** \(v_{\text{des}}\) **back to the circle** along the same ray (Option‑A projection).
+2. After each impulse, the engine computes $v_{\text{des}} = v_{\text{old}} + \Delta v$.
+3. If $\lVert v_{\text{des}}\rVert \le 30$ (**speed circle**), it is accepted.
+4. If $\lVert v_{\text{des}}\rVert > 30$, the engine **projects** $v_{\text{des}}$ **back to the circle** along the same ray (Option‑A projection).
 
 **Governor penalty (fuel):** When projection is needed, the **overshoot length**
-\[
+
+$$
 \text{overshoot} \;=\; \big(\ \lVert v_{\text{des}}\rVert - 30\ \big)_+
-\]
-is charged as extra fuel using the **same per-Δv fuel slope** as base thrust for that impulse. (Think of it as paying for the “red” piece the engine chopped off.)  
-**Base thrust fuel** for an impulse of magnitude \(\lVert \Delta v\rVert\) is:
-\[
+$$
+
+is charged as extra fuel using the **same per-Δv fuel slope** as base thrust for that impulse. (Think of it as paying for the "red" piece the engine chopped off.)
+**Base thrust fuel** for an impulse of magnitude $\lVert \Delta v\rVert$ is:
+
+$$
 \text{fuel}_\text{base} \;=\; \lVert \Delta v\rVert \cdot
 \frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
-\]
+$$
+
 **Governor fuel** for that impulse is:
-\[
+
+$$
 \text{fuel}_\text{gov} \;=\; \text{overshoot} \cdot
 \frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
-\]
+$$
 Totals over the second are the sums of the five impulses.  
 **While docked:** thrust/turn remain **free**; projection still limits speed to 30 but **no governor fuel** is charged.
 
@@ -130,8 +139,8 @@ Consider these examples:
 
 ### Damage Overview
 - **Ships** lose shield points whenever they collide with asteroids or other ships, or when they are struck by lasers. If incoming damage exceeds the remaining shields the ship is destroyed. Docked ships cannot be harmed and take no damage when docking with their own station.
-- **Asteroids** are damaged by ship collisions and laser fire. Any qualifying hit fractures the rock into three equal-mass pieces unless the resulting fragments would fall below the minimum mass (`g_thing_minmass`, 3 tons), in which case the asteroid vaporises. Asteroids bounce off stations and do not collide with one another.
-- **Stations** only take laser damage. Each point of effective laser damage removes one ton of stored vinyl, floored at zero.
+- **Asteroids** are damaged by ship collisions and laser fire. Any qualifying hit fractures the rock into three equal-mass pieces unless the resulting fragments would fall below the minimum mass (`g_thing_minmass`, 3 tons), in which case the asteroid vaporises. Asteroids **do collide with stations** (perfectly elastic bounce, treating station as infinite mass) but **do not collide with other asteroids**.
+- **Stations** only take laser damage. Each point of effective laser damage removes one ton of stored vinyl, floored at zero. Stations are immovable and treat asteroid collisions as perfectly elastic bounces (asteroid reflects off without station movement).
 
 ### Turn Resolution Order
 Each turn spans one simulated second divided into five physics sub-steps (default `g_physics_simulation_dt = 0.2`). Within **every** sub-step the engine performs:
@@ -304,13 +313,21 @@ When a ship issues `O_THRUST` while docked, it is **teleported to a safe distanc
 - **Shield:** Limited by available fuel
 - **Laser:** Limited by fuel (Beam length/50 fuel cost), maximum beam length is 512, and cannot fire while docked
 - **Thrust:** ±60 units/second change (limited by fuel)
-- **Turn:** ±2π radians (limited by fuel). Note - you turn to the desired heading and stop - ships don't continue to spin after turning.
+- **Turn:** Rotation in radians (normalized to [-π, π], limited by fuel). Ships always take the shortest path - you cannot choose to turn "the long way around". After each turn completes, angular velocity returns to zero (ships don't continue to spin).
 - **Jettison:** Limited by cargo/fuel carried
 
 ### Jettison Mechanics
-- **Purpose:** Create new asteroids from ship resources, lightens ship to reduce fuel costs of maneuvering, prevent docking at enemy station with Vinyl, ??throw rocks at enemy ships??
+- **Purpose:** Create new asteroids from ship resources, lightens ship to reduce fuel costs of maneuvering, prevent docking at enemy station with Vinyl, create obstacles or projectiles
 - **Minimum:** Must jettison at least 3 tons, specifying a lower amount will have no effect
-- **Result:** Creates new asteroid at ship location
+- **Physics:** Momentum is conserved during jettison
+  - **Asteroid spawn position:** Placed at distance `(ship_radius + asteroid_radius) × 1.15` along ship's **orientation** vector (not velocity vector)
+  - **Asteroid velocity:** Magnitude equals ship's current speed, direction equals ship's **orientation** (the direction the ship is facing)
+  - **Ship recoil:** Ship's new velocity = `(ship_momentum - asteroid_momentum) / new_ship_mass`
+  - **Result:** Ship experiences recoil opposite to its facing direction; heavier jettisons cause more recoil
+- **Strategic notes:**
+  - Jettisoning while moving sideways (velocity ≠ orientation) will cause the asteroid to move in a different direction than the ship
+  - Can be used to shed mass for more fuel-efficient maneuvering
+  - Jettisoned asteroids behave identically to natural asteroids and can be collected by any ship
 
 ## Information Available to Teams
 
@@ -341,14 +358,10 @@ Teams do NOT know:
 - **Time Step:** Variable (typically 1 second per simulation cycle)
 
 ### Scoring
-- **Primary Score:** Total vinyl stored at team's station
+- **Score:** Total vinyl stored at team's station
 - **Measurement:** In tons (floating point)
 - **Winner:** Team with highest vinyl score when time expires
 - **Note:** The server (mm4serv) only prints final scores - it does not announce a winner. Determining the winner is left to observers/judges.
-
-### Ties
-- **No tiebreaker logic exists in the code** - determining the winner in case of a tie would be left to human judges
-- In practice, ties are extremely unlikely due to floating-point vinyl values
 
 ## Strategic Considerations
 
@@ -392,7 +405,7 @@ Teams do NOT know:
 - Origin (0,0) at world center
 - Positive X to the right
 - Positive Y upward
-- Angles in radians (0 = east,πPI/2 = north)
+- Angles in radians (0 = east, π/2 = north)
 
 ### Units
 - Distance: miles

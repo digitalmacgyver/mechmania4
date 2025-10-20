@@ -123,7 +123,7 @@ Ships can issue these orders each turn (all can be combined):
 ```cpp
 // Movement orders
 pShip->SetOrder(O_THRUST, value);   // -60 to +60 units/sec (Δv along orientation)
-pShip->SetOrder(O_TURN, radians);   // -2π to +2π radians
+pShip->SetOrder(O_TURN, radians);   // Rotation in radians (normalized to [-π, π])
 
 // Combat orders
 pShip->SetOrder(O_LASER, distance); // Fire laser beam
@@ -143,8 +143,11 @@ pShip->SetOrder(O_THRUST, 10.0);
 // Reverse thrust
 pShip->SetOrder(O_THRUST, -10.0);
 
-// Turn 90 degrees left
+// Turn 90 degrees counter-clockwise
 pShip->SetOrder(O_TURN, PI/2);
+
+// Turn 270 degrees clockwise is normalized to -90 degrees (shortest path)
+pShip->SetOrder(O_TURN, 3*PI/2);  // Normalized to -PI/2, charged for PI/2 rotation
 
 // Fire 200-mile laser
 pShip->SetOrder(O_LASER, 200.0);
@@ -156,8 +159,10 @@ pShip->SetOrder(O_SHIELD, 5.0);
 pShip->SetJettison(VINYL, 3.0);
 ```
 
+> **Turn Normalization:** Turn orders are automatically normalized to the range `[-π, π]` (shortest path). If you request a turn of `+3π/2` radians (270° clockwise), it will be normalized to `-π/2` radians (90° counter-clockwise) and you'll be charged fuel for the shorter `-π/2` rotation. You cannot choose to turn "the long way around."
+
 ### Turn Processing Pipeline
-Orders you submit during `Turn()` are latched for the upcoming second and then resolved in the following sequence **for each physics sub-step** (default 5 sub-steps of 0.2 s):
+Orders you submit during `Turn()` are batched for the upcoming second and then resolved in the following sequence **for each physics sub-step** (default 5 sub-steps of 0.2 s):
 1. **Jettison** – queued cargo/fuel ejections convert into asteroid spawns and immediately reduce ship mass.
 2. **Shield charge** – `O_SHIELD` consumes fuel and raises shields (clamped to capacity).
 3. **Turn / thrust integration** – the portion of `O_TURN` and `O_THRUST` scheduled for this slice is applied with velocity capping.
@@ -182,7 +187,7 @@ When a ship issues `O_THRUST` while docked at a station, it will **automatically
 
 **Launch Fuel Cost:**
 - **While docked**: `O_THRUST` orders are NOT limited by current fuel or fuel capacity
-- **Entire launch turn**: The full turn when launching (including after undocking) consumes NO fuel
+- **Entire launch turn**: The full `O_THRUST` order from a launching ship (including all thrust applied after undocking) consumes NO fuel. Other orders (`O_SHIELD`, `O_LASER`) still consume fuel normally.
 - **Subsequent turns**: Normal fuel costs apply after the launch turn completes
 
 **Example:**
@@ -223,19 +228,19 @@ double fuel_est = pShip->SetOrder(O_THRUST, 10.0);
 **How thrust fuel is computed (summary):**
 
 - A per-second thrust order is applied as **five equal instantaneous impulses** at 0.0, 0.2, 0.4, 0.6, and 0.8 seconds.
-- After each impulse the engine evaluates \(v_{\text{des}} = v_{\text{old}} + \Delta v\).
-- If \(\lVert v_{\text{des}} \rVert \le 30\) (the speed circle) the impulse is accepted as-is.
-- Otherwise the engine projects \(v_{\text{des}}\) back to the circle along the same ray and the trimmed portion is treated as **overshoot**.
+- After each impulse the engine evaluates $v_{\text{des}} = v_{\text{old}} + \Delta v$.
+- If $\lVert v_{\text{des}} \rVert \le 30$ (the speed circle) the impulse is accepted as-is.
+- Otherwise the engine projects $v_{\text{des}}$ back to the circle along the same ray and the trimmed portion is treated as **overshoot**.
 
 The fuel charged for each impulse uses the same slope for both the applied delta-v and any overshoot:
 
-\[
+$$
 \text{fuel}_{\text{base}} = \lVert \Delta v \rVert \cdot \frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
-\]
+$$
 
-\[
+$$
 \text{fuel}_{\text{gov}} = \max(0, \lVert v_{\text{des}} \rVert - 30) \cdot \frac{\text{ship\_mass}}{6 \cdot \text{max\_speed} \cdot \text{empty\_mass}}
-\]
+$$
 
 Totals for the order are the sums of the five impulses. While **docked**, thrust and turn orders remain free (no base or governor fuel), though velocity is still clamped to the 30-speed circle.
 
@@ -372,7 +377,6 @@ The shortest path automatically wraps through the right edge because 24 units < 
 **Important implications:**
 - Navigation algorithms work naturally - just use `DistTo()` and `AngleTo()`
 - No need to manually check for wrapping or calculate alternate paths
-- Pathfinding to asteroids/stations automatically uses the shortest route
 - Maximum distance between any two points is ~724 units (corner to opposite corner)
 
 **Testing toroidal calculations:** Run `./build/test_toroidal_coordinates` to see comprehensive examples of toroidal distance and angle calculations, including:
@@ -429,7 +433,7 @@ if (target && target->GetTeam() != team) {
     // Calculate required power
     double range = pShip->GetPos().DistTo(target->GetPos());
 
-    // Fire with extra power to ensure hit
+    // Fire with extra beam length to deal shield damage of: 30*(extra_beam_length=100)/1000.0 = 3 units
     pShip->SetOrder(O_LASER, range + 100.0);
 }
 ```
@@ -457,21 +461,32 @@ if (shields < g_ship_default_shield_amount) {
 - **Stations** only take damage from lasers. Laser damage removes vinyl from their storage until it reaches zero.
 
 #### Order Sequencing
-Once both teams have submitted orders, the server executes five physics sub-steps (`g_physics_simulation_dt`, default 0.2 s each) for a total of 1.0 second. Each sub-step processes:
-1. **Jettison** - Ships eject fuel/cargo as asteroids (queued until after collision detection)
-2. **Shield charging** - Shield orders consume fuel and restore shields
-3. **Turning and Thrust** - Ships rotate and accelerate based on orders
-4. **Drift** - All objects update position/velocity by dt
-5. **Collision detection and resolution** - Objects collide and take damage
-6. **Add/Kill** - Queued objects (jettisoned asteroids, fragments) are added; dead objects removed
-
-After all five physics sub-steps complete (1.0 second total), **laser shots are resolved** in a single batch, applying damage to all targets hit this turn.
+Orders are processed in a specific sequence each turn. See [Turn Processing Pipeline](#turn-processing-pipeline) for the complete execution order, including sub-step breakdown and laser timing.
 
 #### Collision Damage (Ships)
-- A ship that collides with an asteroid or another ship takes shield damage equal to  
-  `damage = (mass_of_other_object × relative_speed) / g_laser_damage_mass_divisor`.
-- Only the other object’s mass matters. Ships weigh their base 40 tons plus carried fuel and vinyl (up to 60 tons of cargo/fuel combined), so real ship masses live between 40 and 100 tons. Asteroids typically weigh 3–40 tons.
-- Because each ship’s speed is clamped to `g_game_max_speed` (30 units/s), the theoretical relative speed cap is ~60 units/s, yielding worst-case damage of about 6.0 shield units in a ship–ship collision and 2.4 against a 40-ton asteroid. The physics engine can momentarily allow slightly higher velocities (observed peaks near 8.4 damage), but those spikes are rare and may change in future builds.
+Ship collisions use **momentum change** to calculate damage. Both objects in a collision take damage equal to:
+```
+damage = |Δp| / g_laser_damage_mass_divisor
+```
+where `|Δp|` is the magnitude of momentum change experienced by each object.
+
+**Key properties:**
+- **Both objects take equal damage** (Newton's 3rd Law: equal and opposite momentum changes)
+- **Elastic collisions** (ship-ship, ship-large asteroid): `|Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal`
+- **Inelastic collisions** (ship-small asteroid): `|Δp| = (m₁ × m₂ / (m₁ + m₂)) × v_rel`
+- `v_rel_normal` is the relative velocity component along the collision line (depends on impact angle)
+
+**Mass ranges:**
+- Ships: 40–100 tons (40 ton hull + 0–60 tons fuel/cargo)
+- Asteroids: 3–40 tons (typically)
+
+**Maximum damage scenarios** (head-on collision at max relative velocity of 60 u/s):
+- Two heavy ships (100 tons each): **6.0 shield damage** to each
+- Two light ships (40 tons each): **2.4 shield damage** to each
+- Heavy vs light ship: **3.4 shield damage** to both
+- Ship (any mass) vs 40-ton asteroid (elastic): **~2.4–3.4 shield damage** depending on ship mass
+
+**Impact angle matters:** Glancing collisions have lower `v_rel_normal`, resulting in less damage than head-on collisions.
 
 #### Laser Damage (Ships)
 - A ship chooses a beam length up to `min(fWXMax, fWYMax)` (default 512). Firing costs `beam_length / g_laser_range_per_fuel_unit` fuel (`g_laser_range_per_fuel_unit` defaults to 50).
@@ -581,21 +596,90 @@ double dist1 = pos1.DistTo(pos2);  // Direct distance
 // DistTo automatically handles wrapping for shortest path
 ```
 
-### Constants
+### Game Constants
+
+All game constants are defined in `team/src/GameConstants.h` and initialized in `GameConstants.C`. Include the header to access these values:
 
 ```cpp
-// World boundaries
-const double fWXMin = -512.0, fWXMax = 512.0;
-const double fWYMin = -512.0, fWYMax = 512.0;
+#include "GameConstants.h"
+```
 
-// Physics
-const double maxspeed = 30.0;     // Maximum ship speed (radius of speed circle)
-const double PI = 3.14159265359;
-const double PI2 = 2 * PI;
+**Physics and Movement:**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_game_max_speed` | 30.0 | Maximum velocity (units/sec) for ships and asteroids |
+| `g_game_max_thrust_order_mag` | 60.0 | Maximum thrust order magnitude (±60 units/sec) |
+| `g_game_turn_duration` | 1.0 | Duration of each game turn (seconds) |
+| `g_physics_simulation_dt` | 0.2 | Time step for physics sub-steps (seconds) |
 
-// Special values
-const double NO_COLLIDE = -1.0;   // No collision detected
-const UINT BAD_INDEX = -1;        // Invalid object index
+**Object Sizes (Collision Radii):**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_ship_spawn_size` | 12.0 | Ship collision radius |
+| `g_station_spawn_size` | 30.0 | Station collision radius |
+| `g_asteroid_size_base` | 3.0 | Base asteroid radius (before mass scaling) |
+| `g_thing_minsize` | 1.0 | Minimum object collision radius |
+
+**Object Masses:**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_ship_spawn_mass` | 40.0 | Ship hull mass (empty, before fuel/cargo) |
+| `g_station_spawn_mass` | 99999.9 | Station mass (effectively infinite) |
+| `g_initial_asteroid_mass` | 40.0 | Initial asteroid mass at world spawn |
+| `g_thing_minmass` | 3.0 | Minimum object mass (fragments smaller than this vaporize) |
+
+**World Setup:**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_initial_team_ship_count` | 4 | Ships per team at game start |
+| `g_initial_vinyl_asteroid_count` | 5 | Vinyl asteroids spawned at start |
+| `g_initial_uranium_asteroid_count` | 5 | Uranium asteroids spawned at start |
+| `g_asteroid_split_child_count` | 3 | Fragments created when asteroid shatters |
+
+**Ship Configuration:**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_ship_total_stat_capacity` | 60.0 | Total fuel + cargo capacity (tons) |
+| `g_ship_default_fuel_capacity` | 30.0 | Default fuel capacity (tons) |
+| `g_ship_default_cargo_capacity` | 30.0 | Default cargo capacity (tons) |
+| `g_ship_default_shield_capacity` | 8000.0 | Maximum shield capacity |
+| `g_ship_default_shield_amount` | 30.0 | Starting shield amount |
+| `g_ship_default_docking_distance` | 30.0 | Max distance to dock with station |
+
+**Combat and Damage:**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_laser_range_per_fuel_unit` | 50.0 | Beam length per ton of fuel |
+| `g_laser_mass_scale_per_remaining_unit` | 30.0 | Converts remaining beam length to impact mass |
+| `g_laser_damage_mass_divisor` | 1000.0 | Converts momentum change to shield damage |
+
+**Sentinel Values (Special Return Codes):**
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `g_no_collide_sentinel` | -1.0 | Returned by `DetectCollisionCourse()` when no collision predicted |
+| `g_no_damage_sentinel` | -123.45 | Indicates no damage direction recorded |
+| `BAD_INDEX` | (UINT)-1 | Invalid world object index |
+
+**Example usage:**
+```cpp
+#include "GameConstants.h"
+
+// Check collision prediction
+double impact_time = pShip->DetectCollisionCourse(*target);
+if (impact_time == g_no_collide_sentinel) {
+    // No collision predicted
+}
+
+// Check if asteroid will vaporize when shattered
+if (asteroid->GetMass() / 3.0 < g_thing_minmass) {
+    // Asteroid too small to fragment - will vaporize instead
+}
+
+// Calculate maximum possible velocity after thrust
+double max_v_after_thrust = pShip->GetVelocity().rho + g_game_max_thrust_order_mag;
+if (max_v_after_thrust > g_game_max_speed) {
+    // Velocity will be clamped, causing governor fuel penalty
+}
 ```
 
 ## Hello World Example
