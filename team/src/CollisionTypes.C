@@ -26,6 +26,9 @@ CollisionState::CollisionState()
       ship_shield(0.0),
       ship_cargo(0.0),
       ship_fuel(0.0),
+      ship_shield_capacity(0.0),
+      ship_cargo_capacity(0.0),
+      ship_fuel_capacity(0.0),
       asteroid_material(static_cast<AsteroidKind>(0)),
       station_cargo(0.0) {
 }

@@ -52,6 +52,9 @@ struct CollisionState {
   double ship_shield;
   double ship_cargo;
   double ship_fuel;
+  double ship_shield_capacity;
+  double ship_cargo_capacity;
+  double ship_fuel_capacity;
 
   // Asteroid-specific state (valid only when kind == ASTEROID)
   AsteroidKind asteroid_material;

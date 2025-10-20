@@ -352,6 +352,72 @@ Lasers are modeled as colliding masses for damage purposes.
 ################# END GAME PHYSICS AND CONSTANTS QUICK REFERENCE ######################
 
 
+
+In our new collison logic, let's think about what happens if a ship is
+hit by two (or more) asteroids in the same turn.
+
+Does the "eat or break" logic correctly handle the fase where the
+second impact in our ordering can have a different answer than the
+first?
+
+Example: a ship has 40 vinyl capacity and 0 currently stored.
+
+It collides with a 40 ton vinyl asteroid, and a 13.33 ton vinyl
+asteroid in the same turn. The overlap with the 40 ton one is larger
+so that one is sequenced first.
+
+Here is what should happen:
+
+1. Ship eats 40 ton asteroid.
+2. Ship collides with 13.33 ton asteroid, it splits into 3 pieces.
+
+What in fact will happen?
+
+Because we evaluate each collision from snapshots taken before the
+turn starts, the ship still “looks empty” when the second asteroid is
+processed.
+
+Collision 1 (40 t vinyl) → ship snapshot says cargo = 0, so
+AsteroidFits() returns true. Commands add 40 t and kill the asteroid.
+
+Collision 2 (13.33 t vinyl) → the snapshot is still the same
+(cargo = 0, capacity = 40), so AsteroidFits() again returns true. The
+ship schedules another “eat” command and the asteroid is killed—no
+fragments are generated.
+
+When commands apply, the ship’s cargo is bumped to 40 by the first
+collision, then the second adjustment tries to add 13.33 but hits the
+capacity clamp and stays at 40. The second asteroid disappears instead
+of splitting.
+
+So the new engine doesn’t yet re-evaluate fit/don’t-fit using the
+already-pending cargo, and the “eat or break” rule is wrong in this
+scenario.
+
+We must think very hard about how to fix this behavior and apply a
+fix.
+
+We also need handle the related cases where on the same tick these things
+happen in these orders:
+
+Ship eat a vinyl asteroid and then docks => the eaten asteroid is
+added to the ships vinyl stores, and then the docks.
+
+Ship eats a uranium asteroid and then performs a fuel using order
+(shield, thurst, turn, laser) => the eaten uranium is added to the
+ships fuel stores and available for these ordeers.
+
+A ship jettisons some cargo on the same tick it collides with an
+asteroid. => The jettisoned cargo is deducted from the amount of the
+ship allowing the ship to potentially eat the asteroid it's going to
+collide with (this is checked against the post-jettison amount of
+cargo space available).
+
+I think the core insight here is that changes to ship cargo current
+amounts should be effective at the time the collision is processed,
+and subsequent collisions shold consider the updated values.
+
+
 ========================== ENGINE TODO ============================================
 
 Fix initial facing - both sides should face with no vertical direction

@@ -816,6 +816,10 @@ unsigned int CWorld::CollisionEvaluationNew() {
     }
   }
 
+  // Maintain a mutable copy of snapshots that we update as collision commands are emitted.
+  // This lets later collisions observe resource changes (fuel/cargo/shield) computed earlier.
+  std::map<CThing*, CollisionState> current_states = snapshots;
+
   // Build list of team-controlled objects for collision detection
   CThing* team_objects[MAX_THINGS];
   unsigned int num_team_objects = 0;
@@ -1073,6 +1077,98 @@ unsigned int CWorld::CollisionEvaluationNew() {
   std::mt19937 rng_angle(rd_angle());
   std::uniform_real_distribution<double> angle_dist(-PI, PI);
 
+  auto apply_command_to_state = [&](const CollisionCommand& cmd) {
+    if (cmd.target == NULL) {
+      return;
+    }
+
+    auto it = current_states.find(cmd.target);
+    if (it == current_states.end()) {
+      return;
+    }
+
+    CollisionState& state = it->second;
+
+    switch (cmd.type) {
+      case CollisionCommandType::kAdjustCargo: {
+        if (state.kind == SHIP) {
+          double max_cargo = state.ship_cargo_capacity;
+          double previous_cargo = state.ship_cargo;
+          double hull_mass = state.mass - previous_cargo - state.ship_fuel;
+          if (hull_mass < 0.0) {
+            hull_mass = 0.0;
+          }
+
+          state.ship_cargo += cmd.scalar;
+          if (state.ship_cargo < 0.0) {
+            state.ship_cargo = 0.0;
+          }
+          if (max_cargo > 0.0 && state.ship_cargo > max_cargo) {
+            state.ship_cargo = max_cargo;
+          }
+
+          state.mass = hull_mass + state.ship_cargo + state.ship_fuel;
+        } else if (state.kind == STATION) {
+          state.station_cargo += cmd.scalar;
+          if (state.station_cargo < 0.0) {
+            state.station_cargo = 0.0;
+          }
+        }
+        break;
+      }
+      case CollisionCommandType::kAdjustFuel: {
+        if (state.kind == SHIP) {
+          double max_fuel = state.ship_fuel_capacity;
+          double previous_fuel = state.ship_fuel;
+          double hull_mass = state.mass - state.ship_cargo - previous_fuel;
+          if (hull_mass < 0.0) {
+            hull_mass = 0.0;
+          }
+
+          state.ship_fuel += cmd.scalar;
+          if (state.ship_fuel < 0.0) {
+            state.ship_fuel = 0.0;
+          }
+          if (max_fuel > 0.0 && state.ship_fuel > max_fuel) {
+            state.ship_fuel = max_fuel;
+          }
+
+          state.mass = hull_mass + state.ship_cargo + state.ship_fuel;
+        }
+        break;
+      }
+      case CollisionCommandType::kAdjustShield: {
+        if (state.kind == SHIP) {
+          double max_shield = state.ship_shield_capacity;
+          state.ship_shield += cmd.scalar;
+          if (state.ship_shield < 0.0) {
+            state.ship_shield = 0.0;
+          }
+          if (max_shield > 0.0 && state.ship_shield > max_shield) {
+            state.ship_shield = max_shield;
+          }
+        }
+        break;
+      }
+      case CollisionCommandType::kSetDocked:
+        if (state.kind == SHIP) {
+          state.is_docked = cmd.bool_flag;
+        }
+        break;
+      case CollisionCommandType::kKillSelf:
+        state.is_alive = false;
+        break;
+      case CollisionCommandType::kSetVelocity:
+        state.velocity = cmd.velocity;
+        break;
+      case CollisionCommandType::kSetPosition:
+        state.position = cmd.position;
+        break;
+      default:
+        break;
+    }
+  };
+
   for (size_t i = 0; i < collisions.size(); ++i) {
     CThing* obj1 = collisions[i].object1;
     CThing* obj2 = collisions[i].object2;
@@ -1150,9 +1246,9 @@ unsigned int CWorld::CollisionEvaluationNew() {
     double random_angle = angle_dist(rng_angle);
 
     // Build contexts for both directions (both get same random angle)
-    CollisionContext ctx1(this, &snapshots[obj1], &snapshots[obj2], 1.0,
+    CollisionContext ctx1(this, &current_states[obj1], &current_states[obj2], 1.0,
                           use_new_physics, disable_eat_damage, use_docking_fix, random_angle);
-    CollisionContext ctx2(this, &snapshots[obj2], &snapshots[obj1], 1.0,
+    CollisionContext ctx2(this, &current_states[obj2], &current_states[obj1], 1.0,
                           use_new_physics, disable_eat_damage, use_docking_fix, random_angle);
 
     // Generate commands from both perspectives
@@ -1161,24 +1257,28 @@ unsigned int CWorld::CollisionEvaluationNew() {
 
     // Collect commands and track kills and docking
     for (int j = 0; j < out1.command_count; ++j) {
-      if (out1.commands[j].type == CollisionCommandType::kKillSelf) {
-        pending_kills.insert(out1.commands[j].target);
+      const CollisionCommand& cmd = out1.commands[j];
+      if (cmd.type == CollisionCommandType::kKillSelf) {
+        pending_kills.insert(cmd.target);
       }
       // Track ships with pending docking commands - they can't collide with anything else
-      if (out1.commands[j].type == CollisionCommandType::kSetDocked) {
-        pending_docks.insert(out1.commands[j].target);
+      if (cmd.type == CollisionCommandType::kSetDocked) {
+        pending_docks.insert(cmd.target);
       }
-      all_commands.push_back(out1.commands[j]);
+      apply_command_to_state(cmd);
+      all_commands.push_back(cmd);
     }
     for (int j = 0; j < out2.command_count; ++j) {
-      if (out2.commands[j].type == CollisionCommandType::kKillSelf) {
-        pending_kills.insert(out2.commands[j].target);
+      const CollisionCommand& cmd = out2.commands[j];
+      if (cmd.type == CollisionCommandType::kKillSelf) {
+        pending_kills.insert(cmd.target);
       }
       // Track ships with pending docking commands - they can't collide with anything else
-      if (out2.commands[j].type == CollisionCommandType::kSetDocked) {
-        pending_docks.insert(out2.commands[j].target);
+      if (cmd.type == CollisionCommandType::kSetDocked) {
+        pending_docks.insert(cmd.target);
       }
-      all_commands.push_back(out2.commands[j]);
+      apply_command_to_state(cmd);
+      all_commands.push_back(cmd);
     }
 
     // Collect spawn requests

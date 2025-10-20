@@ -187,6 +187,9 @@ CollisionState CShip::MakeCollisionState() const {
   state.ship_shield = GetAmount(S_SHIELD);
   state.ship_cargo = GetAmount(S_CARGO);
   state.ship_fuel = GetAmount(S_FUEL);
+  state.ship_shield_capacity = GetCapacity(S_SHIELD);
+  state.ship_cargo_capacity = GetCapacity(S_CARGO);
+  state.ship_fuel_capacity = GetCapacity(S_FUEL);
 
   return state;
 }
@@ -300,6 +303,37 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
 
   ThingKind other_kind = other_state->kind;
 
+  auto asteroid_fits_snapshot = [&](const CollisionState* ship_state,
+                                    const CollisionState* asteroid_state) -> bool {
+    if (ship_state == NULL || asteroid_state == NULL) {
+      return false;
+    }
+    if (ship_state->kind != SHIP || asteroid_state->kind != ASTEROID) {
+      return false;
+    }
+
+    double asteroid_mass = asteroid_state->mass;
+    AsteroidKind material = asteroid_state->asteroid_material;
+
+    if (material == VINYL) {
+      double max_cargo = ship_state->ship_cargo_capacity;
+      if (max_cargo <= 0.0) {
+        return false;
+      }
+      double projected_cargo = ship_state->ship_cargo + asteroid_mass;
+      return projected_cargo <= max_cargo;
+    }
+    if (material == URANIUM) {
+      double max_fuel = ship_state->ship_fuel_capacity;
+      if (max_fuel <= 0.0) {
+        return false;
+      }
+      double projected_fuel = ship_state->ship_fuel + asteroid_mass;
+      return projected_fuel <= max_fuel;
+    }
+    return false;
+  };
+
   // === STATION COLLISION: Docking ===
   if (other_kind == STATION) {
     // Move ship to station position
@@ -393,7 +427,7 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
   // === ASTEROID COLLISION ===
   if (other_kind == ASTEROID) {
     // Check if asteroid fits in cargo
-    bool asteroidFits = AsteroidFits((CAsteroid*)other_state->thing);
+    bool asteroidFits = asteroid_fits_snapshot(self_state, other_state);
 
     if (asteroidFits) {
       // SMALL ASTEROID: Ship eats it

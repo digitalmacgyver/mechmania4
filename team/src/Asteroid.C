@@ -261,11 +261,40 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
     return outcome;
   }
 
+  auto ship_can_consume_snapshot = [&](const CollisionState* asteroid_state,
+                                       const CollisionState* ship_state) -> bool {
+    if (asteroid_state == NULL || ship_state == NULL) {
+      return false;
+    }
+    if (asteroid_state->kind != ASTEROID || ship_state->kind != SHIP) {
+      return false;
+    }
+
+    double asteroid_mass = asteroid_state->mass;
+    AsteroidKind material = asteroid_state->asteroid_material;
+
+    if (material == VINYL) {
+      double max_cargo = ship_state->ship_cargo_capacity;
+      if (max_cargo <= 0.0) {
+        return false;
+      }
+      double projected_cargo = ship_state->ship_cargo + asteroid_mass;
+      return projected_cargo <= max_cargo;
+    }
+    if (material == URANIUM) {
+      double max_fuel = ship_state->ship_fuel_capacity;
+      if (max_fuel <= 0.0) {
+        return false;
+      }
+      double projected_fuel = ship_state->ship_fuel + asteroid_mass;
+      return projected_fuel <= max_fuel;
+    }
+    return false;
+  };
+
   // === SHIP COLLISION ===
   if (other_kind == SHIP) {
-    // Check if ship can eat this asteroid
-    CShip* ship = (CShip*)other_state->thing;
-    bool fits = ship->AsteroidFits((CAsteroid*)self_state->thing);
+    bool fits = ship_can_consume_snapshot(self_state, other_state);
 
     if (fits) {
       // Asteroid gets eaten - kill it and record who ate it
