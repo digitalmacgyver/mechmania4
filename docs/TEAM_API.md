@@ -611,13 +611,50 @@ if (pShip->IsDocked()) {
 
 ### Message Logging
 
+Teams can send messages to the observer for display using a safe, simple messaging interface:
+
 ```cpp
-// Print team messages (visible to observer)
+// Safe messaging interface (RECOMMENDED)
+// Replace entire message buffer (512 bytes max)
+MessageResult result = pmyTeam->SetMessage("Starting turn 5");
+
+// Append to message buffer
+result = pmyTeam->AppendMessage(" - found asteroid");
+result = pmyTeam->AppendMessage(" - going home");
+
+// Check if message was truncated
+if (result == MSG_TRUNCATED) {
+    // Message was too long and was truncated to fit
+}
+if (result == MSG_NO_SPACE) {
+    // No space available (append only)
+}
+
+// Clear the message buffer
+pmyTeam->ClearMessage();
+
+// Legacy interface (still supported but not recommended)
 char msg[256];
 sprintf(msg, "Ship %s collecting asteroid at (%.0f,%.0f)\n",
         pShip->GetName(), target->GetPos().fX, target->GetPos().fY);
-strcat(team->MsgText, msg);  // Append to team message buffer
+strncat(pmyTeam->MsgText, msg, maxTextLen - strlen(pmyTeam->MsgText) - 1);
 ```
+
+**Message System Details:**
+- **Buffer size**: 512 bytes per team (defined as `maxTextLen`)
+- **Lifecycle**: Message buffer is cleared at the start of each turn
+- **Display**: Messages are displayed by the observer and then cleared after each physics sub-step
+- **Return codes**:
+  - `MSG_SUCCESS` (0): Message fully written
+  - `MSG_TRUNCATED` (1): Message written but truncated to fit available space
+  - `MSG_NO_SPACE` (2): No space available (append only - buffer is full)
+- **Safety**: All operations ensure null termination and prevent buffer overflow
+
+**Best Practices:**
+- Use `SetMessage()` to start a fresh message each turn
+- Use `AppendMessage()` to build up messages incrementally
+- Always check return values when appending long or dynamic content
+- Use `ClearMessage()` if you decide not to send a message this turn
 
 ### Coordinate Wrapping
 

@@ -111,6 +111,103 @@ git diff | grep -i "printf.*DEBUG"
 git diff | grep -i "printf.*VERBOSE"
 ```
 
+## Team Messaging System
+
+### Overview
+
+The messaging system allows teams to send text messages to the observer for display. This is useful for debugging AI strategies, logging decisions, and providing commentary during matches.
+
+### Messaging API (New - Recommended)
+
+Teams have access to a safe messaging interface via the `CTeam` class:
+
+```cpp
+// Replace entire message buffer (512 bytes max)
+MessageResult result = pmyTeam->SetMessage("Starting turn 5");
+
+// Append to message buffer
+result = pmyTeam->AppendMessage(" - found asteroid");
+result = pmyTeam->AppendMessage(" - going home");
+
+// Check return value
+if (result == MSG_TRUNCATED) {
+    // Message was too long and was truncated
+}
+if (result == MSG_NO_SPACE) {
+    // No space available (append only)
+}
+
+// Clear the message buffer
+pmyTeam->ClearMessage();
+```
+
+**MessageResult Return Codes:**
+- `MSG_SUCCESS` (0): Message fully written
+- `MSG_TRUNCATED` (1): Message written but truncated to fit available space
+- `MSG_NO_SPACE` (2): No space available (append only - buffer is full)
+
+**Buffer Details:**
+- Maximum size: 512 bytes (defined as `maxTextLen` in Team.h)
+- Buffer is cleared automatically at the start of each turn
+- Messages are displayed by the observer and then cleared after each physics sub-step
+- All operations are null-terminated and buffer-overflow safe
+
+### Legacy Messaging Interface
+
+The old interface using direct buffer manipulation is still supported but not recommended:
+
+```cpp
+char msg[256];
+sprintf(msg, "Ship %s collecting asteroid\n", pShip->GetName());
+strncat(pmyTeam->MsgText, msg, maxTextLen - strlen(pmyTeam->MsgText) - 1);
+```
+
+### Testing the Messaging System
+
+A comprehensive test suite is available at `teams/testteam/tests/test6_test_client_messages.txt`.
+
+Run the test:
+```bash
+bash teams/testteam/tests/test6.sh
+```
+
+The test covers:
+- Basic SetMessage, AppendMessage, ClearMessage operations
+- Message overwrites and concatenation
+- Zero-length messages
+- Buffer overflow scenarios (511+ byte messages)
+- Appending to full buffers (MSG_NO_SPACE behavior)
+- Multiple sequential operations
+
+**TestTeam Message Command Format:**
+
+TestTeam can execute message commands from test files using this format:
+```
+turn,MSG_OP,test_name,message_text
+```
+
+Where `MSG_OP` is one of:
+- `MSG_SET`: Call SetMessage()
+- `MSG_APPEND`: Call AppendMessage()
+- `MSG_CLEAR`: Call ClearMessage()
+
+Example test file:
+```
+# Turn 1: Set initial message
+1,MSG_SET,TEST_BASIC_SET,Hello World
+
+# Turn 2: Append to message
+2,MSG_APPEND,TEST_APPEND, - additional text
+
+# Turn 3: Clear message
+3,MSG_CLEAR,TEST_CLEAR,
+
+# Turn 4: Test overflow (600 char message, buffer is 512)
+4,MSG_SET,TEST_OVERFLOW,AAAA...(600 A's)...AAAA
+```
+
+TestTeam will log detailed output showing buffer state before/after operations and return codes.
+
 ## Simple Method Dispatch for Legacy/New Feature Implementations
 
 ### Overview

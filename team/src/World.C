@@ -113,25 +113,96 @@ unsigned int CWorld::GetCurrentTurn() const { return currentTurn; }
 
 void CWorld::IncrementTurn() { currentTurn++; }
 
-void CWorld::AddAnnouncerMessage(const char* message) {
-  if (message == NULL) return;
+// Safe announcer messaging interface
+MessageResult CWorld::SetAnnouncerMessage(const char* message) {
+  if (message == NULL) {
+    ClearAnnouncerMessage();
+    return MSG_SUCCESS;
+  }
 
-  size_t currentLen = strlen(AnnouncerText);
   size_t messageLen = strlen(message);
 
-  // Ensure we have space for the message plus a newline and null terminator
-  if (currentLen + messageLen + 2 < maxAnnouncerTextLen) {
-    if (currentLen > 0) {
-      strcat(AnnouncerText, "\n");  // Add newline between messages
-    }
-    strcat(AnnouncerText, message);
+  // Check if message fits completely (including null terminator)
+  if (messageLen < maxAnnouncerTextLen) {
+    strncpy(AnnouncerText, message, maxAnnouncerTextLen - 1);
+    AnnouncerText[maxAnnouncerTextLen - 1] = '\0';  // Always null-terminate
 
     // Log announcer messages to stdout for debugging
     extern CParser* g_pParser;
     if (g_pParser && g_pParser->verbose) {
       printf("[ANNOUNCER] %s\n", message);
     }
+
+    return MSG_SUCCESS;
+  } else {
+    // Truncate to fit
+    strncpy(AnnouncerText, message, maxAnnouncerTextLen - 1);
+    AnnouncerText[maxAnnouncerTextLen - 1] = '\0';
+
+    // Log announcer messages to stdout for debugging
+    extern CParser* g_pParser;
+    if (g_pParser && g_pParser->verbose) {
+      printf("[ANNOUNCER] %s (TRUNCATED)\n", message);
+    }
+
+    return MSG_TRUNCATED;
   }
+}
+
+MessageResult CWorld::AppendAnnouncerMessage(const char* message) {
+  if (message == NULL || message[0] == '\0') {
+    return MSG_SUCCESS;
+  }
+
+  size_t currentLen = strlen(AnnouncerText);
+  size_t messageLen = strlen(message);
+  size_t availableSpace = maxAnnouncerTextLen - currentLen - 1;  // -1 for null terminator
+
+  // No space available
+  if (availableSpace == 0) {
+    return MSG_NO_SPACE;
+  }
+
+  // Add newline if buffer is not empty
+  if (currentLen > 0 && availableSpace > 1) {
+    strcat(AnnouncerText, "\n");
+    currentLen++;
+    availableSpace--;
+  }
+
+  // Message fits completely
+  if (messageLen <= availableSpace) {
+    strncat(AnnouncerText, message, availableSpace);
+
+    // Log announcer messages to stdout for debugging
+    extern CParser* g_pParser;
+    if (g_pParser && g_pParser->verbose) {
+      printf("[ANNOUNCER] %s\n", message);
+    }
+
+    return MSG_SUCCESS;
+  } else {
+    // Truncate to fit available space
+    strncat(AnnouncerText, message, availableSpace);
+    AnnouncerText[maxAnnouncerTextLen - 1] = '\0';  // Ensure null termination
+
+    // Log announcer messages to stdout for debugging
+    extern CParser* g_pParser;
+    if (g_pParser && g_pParser->verbose) {
+      printf("[ANNOUNCER] %s (TRUNCATED)\n", message);
+    }
+
+    return MSG_TRUNCATED;
+  }
+}
+
+void CWorld::ClearAnnouncerMessage() {
+  AnnouncerText[0] = '\0';
+}
+
+// Legacy interface - wraps AppendAnnouncerMessage for backward compatibility
+void CWorld::AddAnnouncerMessage(const char* message) {
+  AppendAnnouncerMessage(message);
 }
 
 CThing* CWorld::GetThing(unsigned int index) const {

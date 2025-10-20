@@ -188,6 +188,58 @@ void CTeam::Reset() {
   }
 }
 
+// Safe messaging interface implementation
+MessageResult CTeam::SetMessage(const char* message) {
+  if (message == NULL) {
+    ClearMessage();
+    return MSG_SUCCESS;
+  }
+
+  size_t messageLen = strlen(message);
+
+  // Check if message fits completely (including null terminator)
+  if (messageLen < maxTextLen) {
+    strncpy(MsgText, message, maxTextLen - 1);
+    MsgText[maxTextLen - 1] = '\0';  // Always null-terminate
+    return MSG_SUCCESS;
+  } else {
+    // Truncate to fit
+    strncpy(MsgText, message, maxTextLen - 1);
+    MsgText[maxTextLen - 1] = '\0';
+    return MSG_TRUNCATED;
+  }
+}
+
+MessageResult CTeam::AppendMessage(const char* message) {
+  if (message == NULL || message[0] == '\0') {
+    return MSG_SUCCESS;
+  }
+
+  size_t currentLen = strlen(MsgText);
+  size_t messageLen = strlen(message);
+  size_t availableSpace = maxTextLen - currentLen - 1;  // -1 for null terminator
+
+  // No space available
+  if (availableSpace == 0) {
+    return MSG_NO_SPACE;
+  }
+
+  // Message fits completely
+  if (messageLen <= availableSpace) {
+    strncat(MsgText, message, availableSpace);
+    return MSG_SUCCESS;
+  } else {
+    // Truncate to fit available space
+    strncat(MsgText, message, availableSpace);
+    MsgText[maxTextLen - 1] = '\0';  // Ensure null termination
+    return MSG_TRUNCATED;
+  }
+}
+
+void CTeam::ClearMessage() {
+  MsgText[0] = '\0';
+}
+
 double CTeam::GetWallClock() {
   if (pmyWorld == NULL) {
     return 0.0;

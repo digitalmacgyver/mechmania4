@@ -117,6 +117,12 @@ void TestTeam::Turn() {
   // Execute any moves scheduled for this turn
   for (const TestMove& move : moves) {
     if (move.turn == current_turn) {
+      // Handle message commands
+      if (move.is_message) {
+        ExecuteMessageCommand(move);
+        continue;
+      }
+
       // Validate ship number
       if (move.shipnum < 0 || move.shipnum >= (int)GetShipCount()) {
         printf("[TestTeam] Turn %d: Invalid ship number %d (skipping)\n",
@@ -200,6 +206,32 @@ void TestTeam::LoadTestMovesFromStream(std::istream& stream, const char* source_
       }
     }
 
+    // Check if this is a message command (format: turn,MSG_OP,test_name,message_text)
+    if (tokens.size() >= 3 && (tokens[1] == "MSG_SET" || tokens[1] == "MSG_APPEND" || tokens[1] == "MSG_CLEAR")) {
+      try {
+        TestMove move;
+        move.is_message = true;
+        move.turn = std::stoi(tokens[0]);
+
+        if (tokens[1] == "MSG_SET") {
+          move.msg_op = MSG_OP_SET;
+        } else if (tokens[1] == "MSG_APPEND") {
+          move.msg_op = MSG_OP_APPEND;
+        } else {
+          move.msg_op = MSG_OP_CLEAR;
+        }
+
+        move.msg_test_name = (tokens.size() >= 3) ? tokens[2] : "";
+        move.msg_text = (tokens.size() >= 4) ? tokens[3] : "";
+
+        moves.push_back(move);
+      } catch (const std::exception& e) {
+        printf("[TestTeam] Warning: Line %d message parse error: %s, skipping: %s\n",
+               line_num, e.what(), line.c_str());
+      }
+      continue;
+    }
+
     if (tokens.size() != 4) {
       printf("[TestTeam] Warning: Line %d has %zu fields (expected 4), skipping: %s\n",
              line_num, tokens.size(), line.c_str());
@@ -208,6 +240,7 @@ void TestTeam::LoadTestMovesFromStream(std::istream& stream, const char* source_
 
     try {
       TestMove move;
+      move.is_message = false;
       move.shipnum = std::stoi(tokens[0]);
       move.turn = std::stoi(tokens[1]);
       move.order = ParseOrderKind(tokens[2]);
@@ -234,4 +267,65 @@ OrderKind TestTeam::ParseOrderKind(const std::string& order_str) {
            order_str.c_str());
     return O_THRUST;
   }
+}
+
+void TestTeam::ExecuteMessageCommand(const TestMove& move) {
+  printf("\n[MSG-TEST] Testing %s\n", move.msg_test_name.c_str());
+
+  size_t len_before = strlen(MsgText);
+
+  if (move.msg_op == MSG_OP_SET) {
+    printf("[MSG-TEST] Calling SetMessage(\"%s\")\n", move.msg_text.c_str());
+    printf("[MSG-TEST] Buffer before: length=%zu\n", len_before);
+
+    MessageResult result = SetMessage(move.msg_text.c_str());
+
+    size_t len_after = strlen(MsgText);
+    printf("[MSG-TEST] Buffer after: length=%zu\n", len_after);
+    printf("[MSG-TEST] Result: ");
+    switch (result) {
+      case MSG_SUCCESS:
+        printf("MSG_SUCCESS\n");
+        break;
+      case MSG_TRUNCATED:
+        printf("MSG_TRUNCATED (expected for long messages)\n");
+        break;
+      case MSG_NO_SPACE:
+        printf("MSG_NO_SPACE (unexpected for SetMessage)\n");
+        break;
+    }
+
+  } else if (move.msg_op == MSG_OP_APPEND) {
+    printf("[MSG-TEST] Calling AppendMessage(\"%s\")\n", move.msg_text.c_str());
+    printf("[MSG-TEST] Buffer before: length=%zu content=\"%s\"\n", len_before, MsgText);
+
+    MessageResult result = AppendMessage(move.msg_text.c_str());
+
+    size_t len_after = strlen(MsgText);
+    printf("[MSG-TEST] Buffer after: length=%zu content=\"%s\"\n", len_after, MsgText);
+    printf("[MSG-TEST] Result: ");
+    switch (result) {
+      case MSG_SUCCESS:
+        printf("MSG_SUCCESS\n");
+        break;
+      case MSG_TRUNCATED:
+        printf("MSG_TRUNCATED (message was too long)\n");
+        break;
+      case MSG_NO_SPACE:
+        printf("MSG_NO_SPACE (buffer is full)\n");
+        break;
+    }
+
+  } else if (move.msg_op == MSG_OP_CLEAR) {
+    printf("[MSG-TEST] Calling ClearMessage()\n");
+    printf("[MSG-TEST] Buffer before: length=%zu\n", len_before);
+
+    ClearMessage();
+
+    size_t len_after = strlen(MsgText);
+    printf("[MSG-TEST] Buffer after: length=%zu\n", len_after);
+    printf("[MSG-TEST] Result: Buffer cleared successfully\n");
+  }
+
+  printf("[MSG-TEST] Test %s complete\n\n", move.msg_test_name.c_str());
 }

@@ -10,6 +10,7 @@
 
 #include "Brain.h"
 #include "Coord.h"
+#include "MessageResult.h"
 #include "Sendable.h"
 #include "Ship.h"
 #include "Station.h"
@@ -46,6 +47,11 @@ class CTeam : public CSendable {
   unsigned int SetTeamNumber(unsigned int newTN);      // Returns old
   char* SetName(const char* strname);  // Returns ptr to Name
   void Reset();                        // Resets orders and text
+
+  // Safe messaging interface
+  MessageResult SetMessage(const char* message);     // Replace entire message buffer
+  MessageResult AppendMessage(const char* message);  // Append to message buffer
+  void ClearMessage();                               // Clear message buffer
 
   // Brain management for strategic context switching
   // Teams use these to assign appropriate tactical behaviors to ships

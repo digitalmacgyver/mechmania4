@@ -3,95 +3,71 @@
 
 ===
 
-Here is the code to review, let me explain a few bits:
+We're going to conduct a code review for a portion of a codebase that
+simulates a simple 2d toroidal starship exploration and combat game
+which is the basis for a coding contest.
 
+The purpose of this review is to make sure the implementation matches
+the requirements, features, and interfeaces described in docs.md.
 
+The code path we care about begins in:
 
-The most relevant code lives in:
+Server's Simulation() method which itrerates and calls World's
+PhysicsModel()
 
+PhysicsModel() in turn calls the Drift() method on each thing in the
+world, and then resolves collisions via CollisionEvaluation()
 
+Things in the word are polymorphic types derived from CThing and are one of:
 
-Server.C Simulation() method which iterates and calls World.C's PhysicsModel()
+CAsteroids
+CShips
+CStations
 
+Or generic things (GENTHING) which are used to implement short lived
+laser beams.
 
+The key point here is for this code review we are ONLY reviewing the
+Server Side implementation of the game physics, collision handling
+system, etc. to ensure it meets the specifications in the docs. We
+needent worry about client state or anything like that - we can treat
+it as a black box.
 
-PhysicsModel() in turn calls the Drift() method on each thing in the world, and then resolves collisions via CollisionEvaluation()
-
-
-
-Things in the word are polymorphic types derived from CThing in Thing.C/.h and are one of:
-
-Asteroid.C/h CAsteroids
-
-Ship.C/h CShips
-
-Station.C/h Stations
-
-
-
-Or generic things (GENTHING) which are used to implement short lived laser beams.
-
-
-
-One thing not to get confused about:
-
-
-
-The over codebase here supports a client, a server, and an observer. When the game contest is running the mm4server.C server starts up, and then mm4team.C clients connect it, and then a mm4observer.C observer connects.
-
-
-
-On each game turn the Server issues a serialized view of the World to each team and the Observer.
-
-
-
-Teams determine ORDERs for their ships, which are sent back to the Server.
-
-
-
-The Server then processes the ORDERs withing the world
-
-
-
-The key point here is for this code review we are ONLY reviewing the Server Side implementation of the game physics, collision handling system, etc. to ensure it meets the specifications in the docs. We needent worry about client state or anything like that - we can treat it as a black box.
-
-
-
-The second key point is there is a default mode of operation, and a LEGACY mode, enabled with various --legacy command line flags. This review is ONLY of our default modes - consult the the default in ArgumentParser.C - IGGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE BY DEFAULT.
-
-
+The second key point is there is a default mode of operation, and a
+LEGACY mode, enabled with various --legacy command line flags. This
+review is ONLY of our default modes - consult the the default in
+ArgumentParser.C - IGGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE
+BY DEFAULT.
 
 Review this code for:
-
-
 
 1. Correctness in the physics model - watch for:
 
 * Errors in implementation of supposedly perfectly elastic or inelastic collisions
-
 * Dangerous floating point equality comparisons
-
 * Dead/logically unreachable code which may indicate a logic error
-
 
 
 2. Correctness of the collision system - watch for:
 
 * Unintended race conditions
-
 * Ways a duplicate collision could be registered between the same two items twice on the same turn
-
 * Access to current/live Ship stats via GetXyZ() methods off the SHip object when it should be using cached or snapshotted states
-
 * Systemic biases that predictably favor one team over the other
 
+3. General errors like: Sign errors, inqueality wrong direction
+errors, extensive computations whose values are never used, etc.
 
+After we identify and fix crucial bugs I'll ask you for help
+rearchitecting and simplifying the code for improved elegance - but
+for now leave architectural or design issues for later and focus on
+bugs/errrors that will lead to bad gameplay results.
 
-3. General errors like: Sign errors, inqueality wrong direction errors, extensive computations whose values are never used, etc.
-
-
-
-After we identify and fix crucial bugs I'll ask you for help rearchitecting and simplifying the code for improved elegance - but for now leave architectural or design issues for later and focus on bugs/errrors that will lead to bad gameplay results.
+Please report a list of detected issues, and for each issue include a
+brief summary of the problem, the relevant line numbers / triggering
+conditions, etc.. Each issue you flag will become an issue for a
+developer to fix so include the correct level of detail that a
+developer could address it.
 
 ====
 

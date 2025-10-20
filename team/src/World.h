@@ -17,6 +17,7 @@
 #define _WORLD_H_DSDFJSFLJKSEGFKLESF
 
 #include "Asteroid.h"
+#include "MessageResult.h"
 #include "Sendable.h"
 #include "Thing.h"
 #include "stdafx.h"
@@ -40,7 +41,10 @@ class CWorld : public CSendable {
   void IncrementTurn();                   // Increment turn counter
 
   // Announcer system
-  void AddAnnouncerMessage(const char* message);
+  void AddAnnouncerMessage(const char* message);  // Legacy interface (wraps AppendAnnouncerMessage)
+  MessageResult SetAnnouncerMessage(const char* message);     // Replace entire announcer buffer
+  MessageResult AppendAnnouncerMessage(const char* message);  // Append to announcer buffer
+  void ClearAnnouncerMessage();                               // Clear announcer buffer
 
   unsigned int PhysicsModel(double dt = 1.0, double turn_phase = 0.0);  // Specify amt of time to pass
   void LaserModel();                   // Compute all laser firings (dispatcher)
