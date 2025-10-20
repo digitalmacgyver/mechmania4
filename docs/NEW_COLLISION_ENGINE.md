@@ -20,19 +20,36 @@ An immutable snapshot of an object's state at the time of collision detection:
 
 ```cpp
 struct CollisionState {
-  CThing* thing;              // Pointer to actual object (for command targeting)
-  CCoord position;            // Position snapshot
-  CTraj velocity;             // Velocity snapshot
-  double mass;                // Total mass (hull + cargo + fuel for ships)
-  ThingKind kind;             // Object type (SHIP, ASTEROID, STATION, GENTHING)
-  unsigned int world_index;   // Deterministic ordering key
+  CThing* thing;                // Pointer to actual object (for command targeting)
+  ThingKind kind;               // Object type (SHIP, ASTEROID, STATION, GENTHING)
+  unsigned int world_index;     // Deterministic ordering key
+
+  // Physics state
+  CCoord position;              // Position snapshot
+  CTraj velocity;               // Velocity snapshot
+  double mass;                  // Total mass (hull + cargo + fuel for ships)
+  double size;
+  double orient;
+  double omega;
+
+  // Ownership / status
+  CTeam* team;
+  bool is_alive;
 
   // Ship-specific state
-  double ship_shield;         // Current shield level
-  bool ship_docked;           // Docking state
+  bool is_docked;
+  double ship_shield;
+  double ship_cargo;
+  double ship_fuel;
+  double ship_shield_capacity;
+  double ship_cargo_capacity;
+  double ship_fuel_capacity;
 
   // Asteroid-specific state
-  AsteroidType asteroid_material;  // Iron, Nickel, or Ice
+  AsteroidKind asteroid_material;
+
+  // Station-specific state
+  double station_cargo;
 };
 ```
 
@@ -84,33 +101,39 @@ Represents a single state change to be applied after all collisions are detected
 
 ```cpp
 enum class CollisionCommandType {
-  kKillSelf,           // Mark object dead
-  kSetDocked,          // Dock ship at station
-  kSetVelocity,        // Update velocity
-  kSetPosition,        // Update position
-  kAdjustShield,       // Apply damage/healing
-  kAdjustCargo,        // Transfer cargo
-  kAnnounceMessage     // Send message to announcer
+  kNoOp,
+  kKillSelf,
+  kSetVelocity,
+  kSetPosition,
+  kAdjustShield,
+  kAdjustCargo,
+  kAdjustFuel,
+  kSetDocked,
+  kRecordEatenBy,
+  kAnnounceMessage
 };
 
 struct CollisionCommand {
   CollisionCommandType type;
-  CThing* target;              // Object to apply command to
-  CTraj velocity;              // For kSetVelocity
-  CCoord position;             // For kSetPosition
-  double value;                // For kAdjustShield, kAdjustCargo
-  char message_buffer[256];    // For kAnnounceMessage (owned buffer, no dangling pointers!)
+  CThing* target;             // Object to apply command to
+
+  CTraj velocity;             // For kSetVelocity
+  CCoord position;            // For kSetPosition
+  double scalar;              // For kAdjustShield/Cargo/Fuel
+  bool bool_flag;             // For kSetDocked
+  CThing* thing_ptr;          // For kRecordEatenBy
+  char message_buffer[256];   // For kAnnounceMessage (owned buffer)
 };
 ```
 
 **Command Priority Order** (from highest to lowest):
-1. `kKillSelf` - Must execute first to prevent dead objects from processing further commands
-2. `kSetDocked` - Docking teleports ship to station center, affects subsequent position updates
-3. `kSetVelocity` - Physics updates before damage calculations
-4. `kSetPosition` - Position updates before announcements
-5. `kAdjustShield` - Damage/healing before cargo transfers
-6. `kAdjustCargo` - Cargo transfers before announcements
-7. `kAnnounceMessage` - Informational messages last
+1. `kKillSelf` – ensure dead objects skip later mutations
+2. `kSetPosition` – resolve separation and docking teleports
+3. `kSetVelocity` – apply momentum changes before resource math
+4. `kSetDocked` – flag docking state for later collision filtering
+5. `kAdjustShield`, `kAdjustCargo`, `kAdjustFuel` – resource deltas
+6. `kRecordEatenBy` – metadata for announcers / stats
+7. `kAnnounceMessage` – informational output only
 
 ## Pipeline Stages
 
@@ -191,7 +214,7 @@ if (pending_kills.count(obj1) > 0 || pending_kills.count(obj2) > 0) {
 ### Stage 4: Sort Commands by Priority
 
 ```cpp
-// Sort commands: Kill > SetDocked > SetVelocity > SetPosition > AdjustShield > AdjustCargo > Announce
+// Sort commands using the priority table in CollisionTypes.C
 std::sort(all_commands.begin(), all_commands.end(),
   [](const CollisionCommand& a, const CollisionCommand& b) {
     return GetCommandTypePriority(a.type) < GetCommandTypePriority(b.type);
@@ -199,9 +222,12 @@ std::sort(all_commands.begin(), all_commands.end(),
 ```
 
 **Why This Order Matters**:
-- Kills must execute first so dead objects don't receive damage, cargo, or position updates
-- Docking must execute before velocity/position updates (docking teleports ships to station center)
-- Announcements execute last (informational only, no gameplay impact)
+- `kKillSelf` runs first so dead objects ignore later mutations.
+- `kSetPosition` applies separation / docking teleports before any velocity or resource math.
+- `kSetVelocity` executes next to keep momentum updates consistent.
+- `kSetDocked` flips the docking flag so later collision pairs treat the ship as docked.
+- Resource adjustments (`kAdjustShield`, `kAdjustCargo`, `kAdjustFuel`) happen once position/velocity are settled.
+- Metadata (`kRecordEatenBy`) and announcer output execute last.
 
 ### Stage 5: Apply Commands
 
