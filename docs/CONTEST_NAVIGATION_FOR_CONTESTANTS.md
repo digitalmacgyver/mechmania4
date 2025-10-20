@@ -60,7 +60,6 @@ In the "exceeds limit" cases (right column), notice how the ship changes directi
 
 ### Other Tips
 - **Ship orientation is independent from velocity** - turn to the heading you wish to direct thrust toward before issuing thrust orders. Remember that angular velocity resets to zero after each turn (no spinning).
-- Launch turns are free—use them to gain momentum even when low on fuel.
 - Wraparound matters: shortest travel vectors often cross an edge.
 
 For deeper implementation details (fuel formulas, governor penalties, sub-step scheduling, collision sequencing), see `CONTEST_NAVIGATION_FOR_DEVS.md` and `CONTEST_RULES.md`.

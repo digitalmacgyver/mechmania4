@@ -18,22 +18,34 @@
 
 ## 2. Order Semantics
 - **Thrust (`O_THRUST`):** Requested Δv ∈ [-60, 60] u/s. Split evenly across slices. Fuel cost uses `CalcThrustCost`, scaling with total mass. While docked, fuel cost is forced to 0; the entire launch turn is free.
-- **Turn (`O_TURN`):** Requested angle ∈ [-2π, 2π]. Triangular angular velocity profile ensures start/stop symmetry. Fuel cost equals rotational kinetic energy delta / `g_ship_turn_energy_per_fuel_ton`.
-- **Laser (`O_LASER`):** Request beam length. Validation clamps by map half-width/height. Fuel cost `length / g_laser_range_per_fuel_unit`. Cannot fire while docked.
+- **Turn (`O_TURN`):** Requested angle may be any value (e.g., +3π/2 or -5π). The engine normalizes it to the shortest path ∈ [-π, π] to achieve the target heading (e.g., +3π/2 → -π/2). The ship is modeled as a **uniform disk** for rotational physics. The triangular angular velocity profile linearly accelerates from rest to peak angular velocity at the midpoint, then linearly decelerates back to rest. Ships never spin continuously - orientation changes only via turn orders and angular velocity always returns to zero at turn end. **Fuel cost** is calculated from the rotational kinetic energy changes during the acceleration/deceleration phases (not the total turn KE delta, which is zero since the ship starts and ends at rest). Total fuel = 2 × (peak rotational KE) / `g_ship_turn_energy_per_fuel_ton`.
+- **Laser (`O_LASER`):** Request beam length. Maximum beam length is clamped to `min(map_width / 2, map_height / 2)` (default: 512 units for a 1024×1024 map). Fuel cost `length / g_laser_range_per_fuel_unit`. Cannot fire while docked.
 - **Shield (`O_SHIELD`):** Consumes fuel 1:1 with requested shield gain (clamped to capacity). Applies before thrust.
-- **Jettison:** `SetJettison` queues positive amounts for fuel (uranium) or negative for cargo (vinyl). The helper converts to `O_JETTISON` order internally.
+- **Jettison:** Use the `SetJettison(MaterialKind, amount)` helper function, which takes a cargo type (`URANIUM` or `VINYL`) and a positive amount in tons. Internally, this converts to an `O_JETTISON` order with positive magnitude for uranium and negative magnitude for vinyl, but this is an implementation detail - **all jettison orders should be issued through `SetJettison()`**, not by calling `SetOrder(O_JETTISON, ...)` directly.
 - **Order clearing:** After execution each turn, `SetOrder(..., 0)` resets orders. Laser/shield/thrust/turn orders do not persist.
 
 ## 3. Velocity Governor
-- Velocity is clamped to `g_game_max_speed = 30`. After each thrust impulse, the engine projects the desired velocity onto the 30 u/s circle if necessary.
-- When clamping triggers, the ship still pays the original fuel cost (`CalcThrustCost` is unaware of the clamp). Excess Δv is lost, producing an extra fuel penalty beyond what was needed to reach 30 u/s.
-- Thrust is applied along the ship’s current orientation; reverse thrust uses the opposite vector.
+- Velocity is clamped to `g_game_max_speed = 30` units/second. After each thrust impulse, the engine calculates the desired velocity and clamps it to the speed circle if necessary.
+- **Governor fuel penalty:** `CalcThrustCost` **is aware of velocity clamping** and applies an additional fuel penalty equal to the overshoot amount. The ship pays:
+  1. **Base thrust cost** for the requested thrust magnitude
+  2. **Governor penalty cost** for the overshoot amount (how much the velocity exceeds 30 u/s before clamping)
+  3. **Total fuel cost** = base cost + governor penalty (effectively paying for more thrust than was actually applied)
+- **Example:** Ship moving at 15 u/s issues thrust of 45 u/s in the same direction:
+  - Desired velocity = 15 + 45 = 60 u/s
+  - Clamped to 30 u/s (overshoot = 30 u/s)
+  - Fuel cost = equivalent to **75 u/s of thrust** (45 requested + 30 penalty)
+- Thrust is applied along the ship's current orientation; reverse thrust uses the opposite vector.
 - Orientation is independent of velocity; the ship may drift sideways relative to its nose until thrust or collisions alter the trajectory.
 
 ## 4. Docking / Undocking Mechanics
-- Docked ships have `bDockFlag = true`, `Vel = 0`, and are filtered from collision pairing except with their own station.
-- Launch logic (`ProcessThrustDriftNew`) teleports the ship along orientation by `station_radius + ship_radius + ship_radius / 2`. Launch occurs before the first thrust impulse of the turn.
-- Launch turns are fuel-free even after teleport.
+- **Docking:** When a ship docks (collides with any station):
+  - Sets `bDockFlag = true` and `Vel = 0`
+  - **Immediately transfers all vinyl cargo** to the station's vinyl reserves (deducted from ship's cargo, added to station's score)
+  - Ship is filtered from collision pairing except with their own station
+- **Launch:** When issuing a thrust order while docked:
+  - `ProcessThrustDriftNew` teleports the ship along orientation by `station_radius + ship_radius + ship_radius / 2` (48 units for default sizes)
+  - Launch occurs before the first thrust impulse of the turn
+  - **Thrust orders cost 0 fuel** for the entire launch turn (shield and laser orders still consume fuel normally)
 - `pending_docks` set in `CollisionEvaluationNew` prevents newly docked ships from colliding again later in the same slice.
 
 ## 5. World Geometry
@@ -45,7 +57,7 @@
 - `SetOrder` returns the estimated fuel cost actually scheduled (after clamping to available fuel). Callers should rely on the returned value for planning.
 - During execution, fuel is re-validated. If remaining fuel is insufficient for a slice, the engine scales the impulse proportionally.
 - Shield charges happen before thrust; shield fuel draw can therefore reduce thrust capability within the same turn.
-- Launch turns bypass fuel validation entirely (special-case in `ProcessThrustDriftNew`).
+- Thrust orders on launch turns bypass fuel validation entirely (special-case in `ProcessThrustDriftNew`). Shield and laser orders still consume fuel normally.
 
 ## 7. Implementation Notes
 - Orders live in `CShip::adOrders`. Values persist until consumed during `Drift`.
