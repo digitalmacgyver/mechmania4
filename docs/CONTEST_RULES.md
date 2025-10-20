@@ -312,8 +312,9 @@ When a ship issues `O_THRUST` while docked, it is **teleported to a safe distanc
 ## Orders and Actions
 
 ### Order System
-- **Simultaneous:** All orders can be issued in same turn
-- **Compatibility:** Shield and Lasers can be used every turn. Only one of Jettison, Turn, or Thrust may be used per turn.
+- **Order restrictions:**
+  - **Movement orders (mutually exclusive):** At most ONE of `O_THRUST`, `O_TURN`, or `O_JETTISON` may be issued per turn. Issuing any of these cancels the other two.
+  - **Combat/defense orders (combinable):** Both `O_LASER` and `O_SHIELD` may be issued every turn, and can be combined with any movement order.
 - **Execution:** Physics motion happens before combat each turn
 
 ### Order Limits

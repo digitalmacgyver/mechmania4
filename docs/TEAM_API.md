@@ -118,21 +118,23 @@ void MyShipAI::Decide() {
 
 ### Order Types
 
-Ships can issue these orders each turn (all can be combined):
+Ships can issue these orders each turn:
 
 ```cpp
-// Movement orders
+// Movement orders (MUTUALLY EXCLUSIVE - choose at most ONE per turn)
 pShip->SetOrder(O_THRUST, value);   // -60 to +60 units/sec (Δv along orientation)
 pShip->SetOrder(O_TURN, radians);   // Rotation in radians (normalized to [-π, π])
-
-// Combat orders
-pShip->SetOrder(O_LASER, distance); // Fire laser beam
-pShip->SetOrder(O_SHIELD, amount);  // Add to shields
-
-// Resource management
 pShip->SetJettison(VINYL, tons);    // Eject cargo
 pShip->SetJettison(URANIUM, tons);  // Eject fuel
+
+// Combat/defense orders (COMBINABLE - can use both per turn, with any movement order)
+pShip->SetOrder(O_LASER, distance); // Fire laser beam
+pShip->SetOrder(O_SHIELD, amount);  // Add to shields
 ```
+
+> **Order Restrictions:**
+> - **Movement orders are mutually exclusive:** Issuing `O_THRUST`, `O_TURN`, or `O_JETTISON` automatically cancels the other two. Only ONE movement order executes per turn.
+> - **Combat/defense orders are combinable:** Both `O_LASER` and `O_SHIELD` can be issued every turn and can be combined with any movement order.
 
 ### Order Examples
 
