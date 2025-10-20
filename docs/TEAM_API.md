@@ -468,7 +468,9 @@ Ship collisions use **momentum change** to calculate damage. Both objects in a c
 ```
 damage = |Δp| / g_laser_damage_mass_divisor
 ```
-where `|Δp|` is the magnitude of momentum change experienced by each object.
+where `|Δp|` is the magnitude of momentum change experienced by each object, and `g_laser_damage_mass_divisor` defaults to 1000.0.
+
+**Damage to shield conversion:** 1000 damage points = 1 shield unit depleted.
 
 **Key properties:**
 - **Both objects take equal damage** (Newton's 3rd Law: equal and opposite momentum changes)
@@ -481,24 +483,32 @@ where `|Δp|` is the magnitude of momentum change experienced by each object.
 - Asteroids: 3–40 tons (typically)
 
 **Maximum damage scenarios** (head-on collision at max relative velocity of 60 u/s):
-- Two heavy ships (100 tons each): **6.0 shield damage** to each
-- Two light ships (40 tons each): **2.4 shield damage** to each
-- Heavy vs light ship: **3.4 shield damage** to both
-- Ship (any mass) vs 40-ton asteroid (elastic): **~2.4–3.4 shield damage** depending on ship mass
+- Two heavy ships (100 tons each): **~6000 damage** (~6.0 shield units depleted) to each
+- Two light ships (40 tons each): **~2400 damage** (~2.4 shield units depleted) to each
+- Heavy vs light ship: **~3400 damage** (~3.4 shield units depleted) to both
+- Ship (any mass) vs 40-ton asteroid (elastic): **~2400–3400 damage** (~2.4–3.4 shield units depleted) depending on ship mass
 
 **Impact angle matters:** Glancing collisions have lower `v_rel_normal`, resulting in less damage than head-on collisions.
 
 #### Laser Damage (Ships)
 - A ship chooses a beam length up to `min(fWXMax, fWYMax)` (default 512). Firing costs `beam_length / g_laser_range_per_fuel_unit` fuel (`g_laser_range_per_fuel_unit` defaults to 50).
-- When the beam hits, the engine pretends it collided with an object whose mass is  
-  `g_laser_mass_scale_per_remaining_unit × (beam_length − distance_to_target)`. That mass feeds into the same shield-damage formula used for collisions.
+- When the beam hits, the engine treats it as a collision with a virtual object of mass
+  `g_laser_mass_scale_per_remaining_unit × (beam_length − distance_to_target)` (default scale: 30.0).
+- **Damage formula:** `damage = virtual_mass = 30.0 × (beam_length − distance_to_target)`
+- **Shield depletion:** 1000 damage = 1 shield unit depleted, so `shields_lost = damage / 1000`
+- **Example:** A beam with 100 units of remaining length deals 3000 damage, depleting 3.0 shield units.
 - At point blank range (ships are at least 24 units apart because of their radii) each unit of fuel spent on a laser costs the shooter 1 fuel but forces the target to spend roughly 1.5 fuel to rebuild shields. The trade flips once the target is farther than one third of the chosen beam length; at two thirds the beam costs twice as much fuel to shoot as the target needs to raise shields.
 
 #### Laser Damage (Asteroids)
-- Any single laser hit that would inflict ≥1 unit of shield damage shatters the asteroid into three equal chunks (subject to the minimum-mass rule). Shots that would deal <1 shield point do nothing—damage does not accumulate between laser hits.
+- **Damage threshold:** A laser must deal **≥1000 damage** to shatter an asteroid into three equal chunks (subject to the minimum-mass rule of 3 tons per fragment).
+- **Required beam length:** Since damage = 30 × (beam_length − distance), you need at least 33.33 units of remaining beam to reach the 1000 damage threshold.
+- **Example:** To shatter an asteroid at distance 100, fire a beam of length ≥133.33 (damage = 30 × 33.33 = 1000).
+- Shots that deal <1000 damage have no effect—damage does not accumulate between laser hits.
 
 #### Laser Damage (Stations)
-- Stations treat incoming laser damage exactly like shield loss: a shot that would inflict `X` shield damage removes `X` vinyl from the station, never below zero.
+- **Vinyl depletion:** Stations lose vinyl based on damage: `vinyl_lost = damage / 1000`
+- **Example:** A laser dealing 5000 damage removes 5.0 tons of vinyl from the station.
+- Vinyl is clamped at zero (cannot go negative).
 
 #### Default Combat Constants
 The numeric examples above use the default configuration defined in `team/src/GameConstants.C` and `team/src/Coord.h`:
@@ -721,8 +731,10 @@ private:
 
 #endif
 
-/* HelloWorld.cpp - Implementation */
+/* HelloWorld.C - Implementation */
 #include "HelloWorld.h"
+#include "GameConstants.h"
+#include <cmath>
 
 // Factory function - required by game
 CTeam* CTeam::CreateTeam() {
@@ -735,7 +747,7 @@ void HelloWorld::Init() {
     SetName("Hello World");
 
     // Configure each ship with balanced fuel/cargo
-    for (UINT i = 0; i < GetShipCount(); i++) {
+    for (unsigned int i = 0; i < GetShipCount(); i++) {
         CShip* ship = GetShip(i);
 
         // 35 fuel, 25 cargo - balanced configuration
@@ -749,7 +761,7 @@ void HelloWorld::Init() {
 
 void HelloWorld::Turn() {
     // Each ship's brain decides independently
-    for (UINT i = 0; i < GetShipCount(); i++) {
+    for (unsigned int i = 0; i < GetShipCount(); i++) {
         CShip* ship = GetShip(i);
         if (ship && ship->GetBrain()) {
             ship->GetBrain()->Decide();
@@ -791,7 +803,7 @@ void SimpleCollector::FindTarget() {
     double best_dist = 99999;
 
     // Scan all objects
-    for (UINT i = world->UFirstIndex;
+    for (unsigned int i = world->UFirstIndex;
          i != BAD_INDEX;
          i = world->GetNextIndex(i)) {
 
@@ -826,7 +838,7 @@ void SimpleCollector::NavigateToTarget() {
 
     // Check if we'll collide anyway
     double impact_time = pShip->DetectCollisionCourse(*target);
-    if (impact_time != NO_COLLIDE && impact_time < 10.0) {
+    if (impact_time != g_no_collide_sentinel && impact_time < 10.0) {
         // Already on collision course - just drift
         return;
     }
@@ -850,7 +862,7 @@ void SimpleCollector::AvoidCollision() {
     CWorld* world = pShip->GetWorld();
 
     // Check all objects for collisions
-    for (UINT i = world->UFirstIndex;
+    for (unsigned int i = world->UFirstIndex;
          i != BAD_INDEX;
          i = world->GetNextIndex(i)) {
 

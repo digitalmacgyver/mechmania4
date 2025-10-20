@@ -165,9 +165,9 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
   if (other_kind == GENTHING) {
     double laser_mass = other_state->mass;
 
-    // Check if laser has enough power to shatter asteroid
+    // Check if laser deals enough damage to shatter asteroid (threshold: 1000 damage)
     if (laser_mass < g_asteroid_laser_shatter_threshold) {
-      // Laser too weak to shatter, but still imparts photon momentum (new physics)
+      // Laser damage below 1000 threshold - too weak to shatter, but still imparts photon momentum (new physics)
       if (ctx.use_new_physics) {
         // Calculate momentum transfer (perfectly inelastic collision)
         double m_ast = self_state->mass;
@@ -456,11 +456,11 @@ void CAsteroid::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
   // CWorld::LaserModel. That temporary "laser thing" is positioned
   // one unit shy of the target along the beam, and its mass encodes
   // the remaining beam power at impact:
-  //   mass = g_laser_mass_scale_per_remaining_unit * (L - D)
+  //   damage = mass = g_laser_mass_scale_per_remaining_unit * (L - D)
+  //                 = 30.0 * (beam_length - distance_to_target)
   // where L is the requested beam length and D is the shooter-to-
   // impact distance. We require at least g_asteroid_laser_shatter_threshold
-  // units of laser mass to
-  // shatter the asteroid. If below threshold, the beam glances off.
+  // (1000 damage) to shatter the asteroid. If below threshold, the beam glances off.
   if (OthKind == GENTHING &&
       pOthThing->GetMass() < g_asteroid_laser_shatter_threshold) {
     return;
@@ -551,11 +551,11 @@ void CAsteroid::HandleCollisionNew(CThing* pOthThing, CWorld* pWorld) {
   // CWorld::LaserModel. That temporary "laser thing" is positioned
   // one unit shy of the target along the beam, and its mass encodes
   // the remaining beam power at impact:
-  //   mass = g_laser_mass_scale_per_remaining_unit * (L - D)
+  //   damage = mass = g_laser_mass_scale_per_remaining_unit * (L - D)
+  //                 = 30.0 * (beam_length - distance_to_target)
   // where L is the requested beam length and D is the shooter-to-
   // impact distance. We require at least g_asteroid_laser_shatter_threshold
-  // units of laser mass to
-  // shatter the asteroid. If below threshold, the beam glances off.
+  // (1000 damage) to shatter the asteroid. If below threshold, the beam glances off.
   if (OthKind == GENTHING &&
       pOthThing->GetMass() < g_asteroid_laser_shatter_threshold) {
     return;

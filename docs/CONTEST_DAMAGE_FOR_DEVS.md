@@ -12,7 +12,9 @@ For any collision where damage applies, each participant takes:
 ```
 damage = |Δp| / g_laser_damage_mass_divisor
 ```
-where `|Δp|` is the magnitude of the momentum change experienced by that object.
+where `|Δp|` is the magnitude of the momentum change experienced by that object, and `g_laser_damage_mass_divisor` defaults to 1000.0.
+
+**Damage to shield conversion:** 1000 damage = 1 shield unit depleted
 
 ### 2.1 Elastic collisions
 - **Ship ↔ Ship**, **Ship ↔ large Asteroid**:
@@ -27,9 +29,13 @@ where `|Δp|` is the magnitude of the momentum change experienced by that object
 
 ### 2.3 Laser impacts
 - Laser event synthesises a virtual object with mass `beam_remaining × g_laser_mass_scale_per_remaining_unit`.
-- Damage is `mass / g_laser_damage_mass_divisor`.
+- **Damage formula:** `damage = mass = beam_remaining × 30.0` (with default scale)
+  - **Example:** A beam with 100 units remaining deals 3000 damage
+- **Shield depletion:** `shields_lost = damage / 1000` (so 3000 damage = 3.0 shield units)
+- **Vinyl depletion:** `vinyl_lost = damage / 1000` (for station hits)
+- **Asteroid threshold:** Asteroid shatters if `damage ≥ 1000`
 - On ships (new physics mode) the beam is merged inelastically: final velocity `v_final = (m_ship v_ship + m_beam v_beam) / (m_ship + m_beam)`.
-- On stations the command is `kAdjustCargo` (subtract vinyl). On asteroids, `kKillSelf` + fragment commands fire if damage ≥ 1.
+- On stations the command is `kAdjustCargo` (subtract vinyl). On asteroids, `kKillSelf` + fragment commands fire if damage ≥ 1000.
 
 ## 3. Fragmentation Rules
 - `g_thing_minmass = 3.0`. If `asteroid_mass / 3 < g_thing_minmass` the asteroid disappears instead of fragmenting.
@@ -49,14 +55,24 @@ where `|Δp|` is the magnitude of the momentum change experienced by that object
 4. Commands are applied immediately (not deferred like regular collisions) because lasers occur after the last physics slice.
 
 ## 6. Constants Summary
+
+All constants are defined in `team/src/GameConstants.h` and initialized in `team/src/GameConstants.C`.
+
 | Constant | Default | Role |
 | --- | --- | --- |
-| `g_laser_damage_mass_divisor` | 1000.0 | Momentum-to-damage scale (collisions & lasers). |
-| `g_laser_mass_scale_per_remaining_unit` | 30.0 | Beam energy per unit length. |
+| `g_laser_damage_mass_divisor` | 1000.0 | Converts damage to shield/vinyl units (1000 damage = 1 unit). |
+| `g_laser_mass_scale_per_remaining_unit` | 30.0 | Damage per unit of remaining beam length. |
 | `g_laser_range_per_fuel_unit` | 50.0 | Laser length purchased per ton of fuel. |
-| `g_ship_default_shield_capacity` | 8000.0 | Upper limit for shields. |
+| `g_ship_default_shield_capacity` | 8000.0 | Upper limit for shields (in shield units). |
 | `g_ship_collision_bump` | 3.0 | Separation padding after ship collisions. |
 | `g_thing_minmass` | 3.0 | Minimum fragment size. |
+| `g_asteroid_laser_shatter_threshold` | 1000.0 | Minimum damage to shatter an asteroid. |
+
+**Key conversions:**
+- Laser damage: `damage = 30.0 × (beam_length - distance_to_target)`
+- Shield loss: `shields_lost = damage / 1000`
+- Vinyl loss: `vinyl_lost = damage / 1000`
+- Asteroid shatter threshold: `damage ≥ 1000`
 
 ## 7. Implementation Touchpoints
 - Collision damage issuance resides in `CShip::GenerateCollisionCommands` (ship perspective) and `CAsteroid::GenerateCollisionCommands`.

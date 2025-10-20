@@ -100,10 +100,15 @@ extern double g_ship_collision_separation_clearance;
 // Conversion between requested laser range (world units) and fuel consumed.
 extern double g_laser_range_per_fuel_unit;
 
-// Factor used to convert remaining laser length into impact mass.
+// Factor used to convert remaining laser length into damage.
+// damage = g_laser_mass_scale_per_remaining_unit × (beam_length - distance)
+// Default: 30.0, so a beam with 100 units remaining deals 3000 damage.
 extern double g_laser_mass_scale_per_remaining_unit;
 
-// Divisor converting incoming laser mass into effective damage on shields.
+// Divisor converting damage into shield/vinyl units (default: 1000.0).
+// shields_lost = damage / g_laser_damage_mass_divisor
+// vinyl_lost = damage / g_laser_damage_mass_divisor
+// Example: 3000 damage depletes 3.0 shield units or removes 3.0 vinyl tons.
 extern double g_laser_damage_mass_divisor;
 
 // Number of full ship revolutions achievable per ton of fuel consumed (legacy).
@@ -155,7 +160,9 @@ extern unsigned int g_asteroid_split_child_count;
 // Divisor applied when converting laser mass into asteroid velocity impulse.
 extern double g_asteroid_laser_impulse_divisor;
 
-// Minimum laser mass required to vaporize (rather than deflect) an asteroid.
+// Minimum laser damage required to shatter an asteroid (default: 1000).
+// Since damage = 30.0 × (beam_length - distance), this requires at least
+// 33.33 units of remaining beam length to reach the threshold.
 extern double g_asteroid_laser_shatter_threshold;
 
 // ---------------------------------------------------------------------------

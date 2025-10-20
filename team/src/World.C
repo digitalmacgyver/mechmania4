@@ -220,8 +220,8 @@ void CWorld::LaserModelOld() {
    * target along the beam line. By positioning just before the target
    * and using (L - D), the target's HandleCollision() sees the
    * remaining beam power when the beam reaches it, not the initial
-   * requested length. Targets can then use the laser "mass" to decide
-   * effects (e.g., asteroids break if mass >= 1000.0).
+   * requested length. Targets can then use the laser "mass" (damage value) to decide
+   * effects (e.g., asteroids shatter if damage >= 1000, ships lose shields/1000 units).
    */
 
   for (nteam = 0; nteam < GetNumTeams(); ++nteam) {

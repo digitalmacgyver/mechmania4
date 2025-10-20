@@ -95,7 +95,8 @@ Commands are applied in priority order. Non-metadata commands targeting dead obj
 - Cargo adjustments come from docking deposits, enemy laser depletion, or game scripts.
 
 ### 4.7 Lasers vs Asteroids
-- If computed shield damage ≥ 1, asteroid shatters into three fragments as in the ship case. Otherwise command sequence is empty (laser glances off).
+- If computed damage ≥ 1000, asteroid shatters into three fragments as in the ship case. Otherwise command sequence is empty (laser glances off).
+- Damage formula: `damage = 30.0 × (beam_length - distance_to_target)` (with default scale)
 
 ## 5. Object Properties (Defaults)
 | Object | Radius | Hull Mass | Notes |

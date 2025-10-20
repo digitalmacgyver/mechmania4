@@ -138,7 +138,7 @@ Consider these examples:
 ## Combat System
 
 ### Damage Overview
-- **Ships** lose shield points whenever they collide with asteroids or other ships, or when they are struck by lasers. If incoming damage exceeds the remaining shields the ship is destroyed. Docked ships cannot be harmed and take no damage when docking with their own station.
+- **Ships** lose shields whenever they collide with asteroids or other ships, or when they are struck by lasers (1000 damage = 1 shield unit depleted). If incoming damage exceeds the remaining shields the ship is destroyed. Docked ships cannot be harmed and take no damage when docking with their own station.
 - **Asteroids** are damaged by ship collisions and laser fire. Any qualifying hit fractures the rock into three equal-mass pieces unless the resulting fragments would fall below the minimum mass (`g_thing_minmass`, 3 tons), in which case the asteroid vaporises. Asteroids **do collide with stations** (perfectly elastic bounce, treating station as infinite mass) but **do not collide with other asteroids**.
 - **Stations** only take laser damage. Each point of effective laser damage removes one ton of stored vinyl, floored at zero. Stations are immovable and treat asteroid collisions as perfectly elastic bounces (asteroid reflects off without station movement).
 
@@ -158,9 +158,10 @@ After the final sub-step, **laser orders fire** once for the turn. A full breakd
 > Detailed numbers and examples live in `CONTEST_DAMAGE_FOR_CONTESTANTS.md`.
 - **Range:** Up to `min(fWXMax, fWYMax)` units (512 with default map).
 - **Fuel Cost:** `beam_length / g_laser_range_per_fuel_unit` (defaults to 50 units of beam per ton of fuel). Ships cannot fire while docked.
-- **Impact Mass:** The engine treats a beam hit as a collision with a virtual object of mass  
-  `g_laser_mass_scale_per_remaining_unit × max(0, beam_length − distance_to_target)` (default scale: 30).
-- **Shield Damage:** The virtual mass feeds into the collision damage equation (see below), so longer beams are only efficient when the target is close. At point-blank range, every ton of fuel spent on a laser forces the target to spend roughly 1.5 tons to restore shields. Beyond one third of the chosen beam length the laser becomes less fuel-efficient than shield charging, and at two thirds it costs twice as much fuel as the defender spends.
+- **Damage Formula:** `damage = g_laser_mass_scale_per_remaining_unit × max(0, beam_length − distance_to_target)`
+  - With default scale of 30: `damage = 30 × (beam_length − distance_to_target)`
+  - **Example:** A beam with 100 units of remaining length deals 3000 damage
+- **Shield Damage:** The damage feeds into shield depletion (1000 damage = 1 shield unit), so longer beams are only efficient when the target is close. At point-blank range, every ton of fuel spent on a laser forces the target to spend roughly 1.5 tons to restore shields. Beyond one third of the chosen beam length the laser becomes less fuel-efficient than shield charging, and at two thirds it costs twice as much fuel as the defender spends.
 - **Line of Sight:** Beams strike the first object along their path, including friendly ships or stations.
 
 ### Collision Damage (Ships)
@@ -170,18 +171,24 @@ After the final sub-step, **laser orders fire** once for the turn. A full breakd
   ```
   where `|Δp|` is the magnitude of momentum change and `g_laser_damage_mass_divisor` defaults to 1000.
 
+- **Damage to shield conversion:** 1000 damage points = 1 shield unit depleted
+
 - **Both objects take the same damage** in a collision (Newton's 3rd Law: equal and opposite momentum changes)
 
 - The momentum change depends on the collision type:
   - **Elastic collisions** (ship-ship, ship-large asteroid): `|Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal`
   - **Inelastic collisions** (ship-small asteroid): `|Δp| = (m₁ × m₂ / (m₁ + m₂)) × v_rel`
 
-- Ships weigh their 40-ton hull plus carried fuel and vinyl (0–60 tons combined), while naturally spawned asteroids range from roughly 3 to 40 tons. With velocity capped at `g_game_max_speed` (30 units/s), typical collisions cause 1-3 shield points of damage per ship.
+- Ships weigh their 40-ton hull plus carried fuel and vinyl (0–60 tons combined), while naturally spawned asteroids range from roughly 3 to 40 tons. With velocity capped at `g_game_max_speed` (30 units/s), typical collisions cause 1000-3000 damage (1-3 shield units depleted) per ship.
 
 ### Laser Targets by Object Type
 - **Ships:** Lose shields as described above; destruction occurs when shields drop below zero.
-- **Asteroids:** Shatter if the computed damage is ≥1 shield point; otherwise the shot has no effect (damage does not accumulate between hits).
-- **Stations:** Lose vinyl equal to the computed damage, clamped at zero. Friendly fire is possible.
+  - **Shield depletion:** 1000 damage = 1 shield unit depleted
+- **Asteroids:** Shatter if the computed damage is ≥1000; otherwise the shot has no effect (damage does not accumulate between hits).
+  - **Example:** Since damage = 30 × (beam_length − distance), you need at least 33.33 units of remaining beam to reach the 1000 damage threshold
+- **Stations:** Lose vinyl based on damage dealt.
+  - **Vinyl depletion:** 1000 damage = 1 vinyl ton removed
+  - Vinyl is clamped at zero. Friendly fire is possible.
 
 ### Shields
 - Charging shields consumes fuel at a 1:1 ratio and can be done every turn (even while docked, though fuel still comes out of the tank). There is no automatic regeneration.
@@ -213,7 +220,7 @@ The engine models collisions with Newtonian physics. All collision handling foll
 - **Physics:** Perfectly inelastic collision
   - Final velocity = `(m_ship × v_ship + m_asteroid × v_asteroid) / (m_ship + m_asteroid)`
   - Momentum conserved, kinetic energy lost
-- **Damage:** No shield damage (successful collection)
+- **Damage:** No damage (successful collection)
 - **Result:** Asteroid destroyed (absorbed into ship)
 
 #### Large Asteroids (doesn't fit in cargo hold)
@@ -277,14 +284,14 @@ When a ship issues `O_THRUST` while docked, it is **teleported to a safe distanc
   - Kinetic energy IS conserved (asteroid speed constant)
 
 ### Asteroid-Laser "Collisions"
-- **Threshold:** Laser must deal ≥1 shield damage to shatter asteroid
-  - Damage = `(laser_virtual_mass × relative_speed) / 1000`
-  - Virtual mass = `30.0 × max(0, beam_length - distance_to_target)`
+- **Threshold:** Laser must deal ≥1000 damage to shatter asteroid
+  - Damage = `30.0 × max(0, beam_length - distance_to_target)` (with default scale)
+  - **Example:** Need at least 33.33 units of remaining beam to reach 1000 damage threshold
 - **Physics:** Perfectly inelastic collision with laser energy
   - Laser treated as virtual object with mass proportional to beam energy
   - Asteroid absorbs laser momentum
   - Final velocity = `(m_asteroid × v_asteroid + m_laser × v_laser) / (m_asteroid + m_laser)`
-- **Fragmentation:** If damage ≥1, asteroid shatters into 3 pieces
+- **Fragmentation:** If damage ≥1000, asteroid shatters into 3 pieces
   - Fragments inherit post-collision velocity (center of mass)
   - Plus spread pattern scaled by laser energy
   - If fragments < 3 tons each, asteroid vaporizes
