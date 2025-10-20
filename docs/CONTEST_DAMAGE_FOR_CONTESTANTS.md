@@ -96,4 +96,60 @@ Ships in docked state cannot be hit by anything. They can only take damage again
 8. Shield loss for ship = 328 ÷ 1000 = **0.328 shield units depleted**
 9. Asteroid also takes 328 damage, causing it to shatter into three fragments (each ~4.67 tons)
 
+## 6. Damage Ranges and Strategic Considerations
+
+### Maximum Theoretical Damage Values
+Understanding worst-case damage helps with risk assessment:
+
+**Ship-Ship Collisions:**
+- Ship mass range: 40-100 tons (40-ton hull + 0-60 tons fuel/cargo)
+- Maximum relative velocity: 60 units/second (both ships at max speed, head-on)
+- Maximum damage: ~6.0 shield units per ship
+  - Example: Two 100-ton ships colliding head-on at 30 units/second each
+  - |Δp| = 100 × 60 = 6000, damage = 6000/1000 = 6.0
+
+**Ship-Asteroid Collisions:**
+- Natural asteroid mass range: 3-40 tons
+- Maximum damage: ~2.4 shield units
+  - Example: Ship vs 40-ton asteroid at 60 units/second relative velocity
+  - |Δp| ≈ 2400, damage ≈ 2.4
+
+**Laser Damage:**
+- Maximum beam length: 512 units (for 1024×1024 map)
+- Point-blank minimum distance: 24 units (sum of two ship radii = 12+12)
+- Maximum single laser: 30 × (512 - 24) / 1000 = **14.64 shield units**
+
+### Laser Efficiency Break-Even Analysis
+
+Lasers are most fuel-efficient at close range but become increasingly wasteful at distance:
+
+**Point-Blank Range (24 units):**
+- Attacker spends: 1 fuel
+- Defender needs: ~1.5 fuel to restore shields
+- **Result: Lasers are 50% more fuel-efficient than shields**
+
+**Break-Even Distance (Db = L/3):**
+- For a beam of length L, efficiency equals shields at distance L/3
+- Example: 300-unit beam breaks even at 100 units
+- **Result: Equal fuel trade**
+
+**Beyond Break-Even:**
+- At 2L/3: Lasers cost **2x more** fuel than shield restoration
+- At 7L/9: Lasers cost **3x more** fuel
+- At 14L/15: Lasers cost **10x more** fuel
+- **Strategy: Don't shoot distant targets unless tactical reasons justify the waste**
+
+### Practical Strategy Implications
+
+**When to Use Lasers:**
+1. Target is within L/3 of your beam length (fuel-efficient)
+2. Target has no fuel to raise shields (they can't defend)
+3. Tactical momentum push is needed (alter their trajectory)
+4. Destroying the target is worth fuel inefficiency
+
+**When to Avoid Lasers:**
+1. Target is beyond 2L/3 (severely fuel-inefficient)
+2. You're low on fuel (prioritize shields/thrust)
+3. Target is about to dock (waste of fuel if they reach safety)
+
 For detailed formulas and constants, consult `CONTEST_DAMAGE_FOR_DEVS.md`.

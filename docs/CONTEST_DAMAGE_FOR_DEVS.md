@@ -74,13 +74,271 @@ All constants are defined in `team/src/GameConstants.h` and initialized in `team
 - Vinyl loss: `vinyl_lost = damage / 1000`
 - Asteroid shatter threshold: `damage ≥ 1000`
 
-## 7. Implementation Touchpoints
+## 7. Turn Sequencing and Damage Timing
+
+Understanding when damage is applied during a turn is critical for predicting battle outcomes and debugging collision events.
+
+### 7.1 Physics Tick Structure
+
+Each game turn (default: 1.0 second) is subdivided into **5 physics sub-steps** (default `dt = 0.2` seconds):
+
+```cpp
+// Server.C: Main turn loop
+int stepCount = static_cast<int>(g_game_turn_duration / g_physics_simulation_dt);  // 1.0 / 0.2 = 5
+for (int step = 0; step < stepCount; ++step) {
+    double turn_phase = (double)step / (double)stepCount;  // 0.0, 0.2, 0.4, 0.6, 0.8
+    pmyWorld->PhysicsModel(g_physics_simulation_dt, turn_phase);
+    if (step == stepCount - 1) {  // Only on LAST sub-step
+        pmyWorld->LaserModel();
+    }
+}
+```
+
+### 7.2 Sub-Step Execution Order
+
+Within **each** `PhysicsModel(dt, turn_phase)` call, the following sequence executes:
+
+1. **Jettison orders** (`HandleJettison()`) - Converts cargo/fuel to free-floating asteroids
+2. **Shield orders** (`O_SHIELD`) - Converts fuel to shields (up to capacity)
+3. **Turn/Thrust integration** (`O_TURN`, `O_THRUST`) - Updates orientation and velocity
+4. **Drift** (`CThing::Drift()`) - Applies velocity to position with wraparound
+5. **Collision evaluation** (`CollisionEvaluation()`) - Detects overlaps, applies damage
+
+This 5-step sequence repeats **5 times per turn** (once per sub-step).
+
+### 7.3 Laser Timing
+
+**Critical:** Lasers fire **after all 5 physics sub-steps complete**, not after each sub-step:
+
+```cpp
+if (step == stepCount - 1) {  // Only when step == 4 (last iteration)
+    pmyWorld->LaserModel();
+}
+```
+
+This means:
+- Ships move and collide 5 times before any laser fires
+- Laser damage is applied in a single batch at turn end
+- Targets can move significantly from their starting position before being hit
+- `LaserTarget()` uses the ship's **final orientation** (after all drift completes)
+
+### 7.4 Collision Damage Timing Implications
+
+**Scenario:** Ship A and Ship B collide head-on during sub-step 2 (turn_phase = 0.2)
+
+**Timeline:**
+1. **Sub-step 1** (phase 0.0): Both ships thrust toward each other, no overlap yet
+2. **Sub-step 2** (phase 0.2): Ships overlap → `CollisionEvaluation()` detects collision → damage applied immediately
+3. **Sub-step 3-5** (phase 0.4-0.8): Ships bounce apart (elastic collision), no further collisions
+4. **End of turn**: Laser phase begins
+
+**Result:** Collision damage is applied **during the sub-step when overlap is detected**, not deferred until turn end.
+
+### 7.5 Maximum Collision Damage per Turn
+
+Since collisions are evaluated **5 times per turn**, a ship could theoretically take damage up to 5 times if:
+- It collides with different objects across multiple sub-steps, OR
+- Legacy mode bugs allow multi-hit on same object (fixed in new collision engine)
+
+**Practical maximum damage scenarios:**
+
+**Ship-Ship Head-On Collision (100-ton ships, 30 u/s each):**
+- Relative velocity: 60 u/s
+- Momentum change: |Δp| = 100 × 60 = 6000
+- Damage per collision: 6000 / 1000 = **6.0 shield units**
+- After collision: Ships separate by `ship1_radius + ship2_radius + g_ship_collision_bump` = 27 units
+- **Result:** Single collision event (separation prevents re-collision in subsequent sub-steps)
+
+**Ship-Asteroid Collision (50-ton ship, 40-ton asteroid, 60 u/s relative):**
+- Momentum change: |Δp| ≈ 2400
+- Damage: 2400 / 1000 = **2.4 shield units**
+- Asteroid also takes 2400 damage → shatters into 3 fragments (each ~13 tons)
+
+**Laser Barrage (5 ships firing at one target):**
+- Each laser: 250-unit beam at 50 units distance
+- Remaining beam: 200 units
+- Damage per laser: 30 × 200 = 6000 (**6.0 shield units**)
+- Total damage: 5 × 6.0 = **30.0 shield units** (far exceeds default capacity of 8.0)
+- **Result:** Target destroyed if shields < 30.0
+
+### 7.6 Damage Application Order
+
+When multiple damage sources occur in the same sub-step:
+
+1. **Collision damage** (applied during `CollisionEvaluation()` in that sub-step)
+   - Ships marked dead when shields ≤ 0
+   - Dead ships filtered from subsequent collision pairs (new mode)
+
+2. **Laser damage** (applied during `LaserModel()` after all 5 sub-steps)
+   - Fires even if target was destroyed during physics sub-steps
+   - Dead ships can still be hit by lasers (pointless but harmless)
+
+### 7.7 Debugging Collision Timing
+
+To trace collision events during development:
+
+```bash
+./build/mm4obs -p2323 -hlocalhost --verbose
+```
+
+Verbose logging shows:
+- Which sub-step collision occurred (via turn_phase value)
+- Momentum changes and damage calculations
+- Object states before/after collision
+- Laser firing sequence after physics completes
+
+## 8. Laser Efficiency Mathematics
+
+This section derives the fuel efficiency formulas for laser attacks, explaining when lasers are cost-effective versus shields.
+
+### 8.1 Cost Model Overview
+
+**Attacker's perspective:**
+- Fuel spent: `F_attack = beam_length / g_laser_range_per_fuel_unit`
+- Default: `F_attack = L / 50` (where L is beam length in units)
+
+**Defender's perspective:**
+- Damage received: `damage = g_laser_mass_scale_per_remaining_unit × (L - d)`
+- Default: `damage = 30 × (L - d)` (where d is distance to target)
+- Shields lost: `shields_lost = damage / 1000 = 30(L - d) / 1000`
+- Fuel to restore shields: `F_defend = shields_lost = 30(L - d) / 1000`
+
+### 8.2 Efficiency Ratio Derivation
+
+The **fuel exchange ratio** R is defined as:
+```
+R = F_defend / F_attack = (defender's fuel to restore) / (attacker's fuel spent)
+```
+
+Substituting the formulas:
+```
+R = [30(L - d) / 1000] / (L / 50)
+  = [30(L - d) / 1000] × (50 / L)
+  = 1500(L - d) / (1000L)
+  = 1.5(L - d) / L
+  = 1.5 - 1.5d/L
+```
+
+**Key insight:** Efficiency decreases linearly with distance as a fraction of beam length.
+
+### 8.3 Break-Even Distance
+
+Lasers are **equally efficient** to shields when R = 1:
+```
+1.5 - 1.5d/L = 1
+1.5d/L = 0.5
+d/L = 1/3
+d = L/3
+```
+
+**Break-even formula:** `d_breakeven = L / 3`
+
+**Example:** A 300-unit beam breaks even at 100 units distance.
+
+### 8.4 Efficiency Zones
+
+| Distance Range | Efficiency Ratio R | Interpretation |
+| --- | --- | --- |
+| **d = 0 (point-blank)** | R = 1.5 | Attacker gets **1.5x return** (defender needs 1.5 fuel to restore) |
+| **d = L/3** | R = 1.0 | **Break-even** (equal fuel trade) |
+| **d = L/2** | R = 0.75 | Attacker wastes 25% fuel |
+| **d = 2L/3** | R = 0.5 | Attacker wastes 50% fuel (2x cost) |
+| **d = 3L/4** | R = 0.375 | Attacker wastes 62.5% fuel |
+| **d = 7L/9** | R = 0.333... | Attacker wastes 67% fuel (3x cost) |
+| **d = L (max range)** | R = 0 | **Infinite waste** (no damage delivered) |
+
+### 8.5 Practical Distance Examples
+
+For standard beam lengths (fuel spent → beam length):
+
+**10 fuel → 500-unit beam:**
+- Point-blank (d=24): R = 1.5 - 1.5(24)/500 = **1.428** (42.8% gain)
+- Break-even: d = 500/3 = **166.7 units**
+- Half efficiency: d = 2(500)/3 = **333.3 units**
+
+**5 fuel → 250-unit beam:**
+- Point-blank (d=24): R = 1.5 - 1.5(24)/250 = **1.356** (35.6% gain)
+- Break-even: d = 250/3 = **83.3 units**
+- Half efficiency: d = 2(250)/3 = **166.7 units**
+
+**1 fuel → 50-unit beam:**
+- Point-blank (d=24): R = 1.5 - 1.5(24)/50 = **0.78** (22% loss even at point-blank!)
+- Break-even: d = 50/3 = **16.7 units** (impractical - ships are 12-unit radius)
+- **Note:** Short beams are inefficient at all realistic distances
+
+### 8.6 Minimum Ship Separation
+
+Two ships in contact have separation `d_min = ship1_radius + ship2_radius = 12 + 12 = 24 units`.
+
+**Point-blank efficiency for various beam lengths:**
+
+| Beam Length L | d_min/L ratio | Efficiency R | Fuel advantage |
+| --- | --- | --- | --- |
+| 512 (max) | 24/512 = 0.047 | 1.43 | +43% |
+| 250 | 24/250 = 0.096 | 1.36 | +36% |
+| 100 | 24/100 = 0.24 | 1.14 | +14% |
+| 50 | 24/50 = 0.48 | 0.78 | -22% (loss!) |
+
+**Strategic implication:** Very short beams (<100 units) are inefficient even at minimum separation.
+
+### 8.7 Maximum Damage Efficiency
+
+To maximize fuel efficiency when attacking:
+
+1. **Minimize distance d** - Get as close as possible before firing
+2. **Use long beams** - Longer beams have better R at any given distance
+3. **Target stationary/docked ships** - Predictable positions allow close-range shots
+4. **Avoid distant shots** - Beyond d=L/3, you're trading fuel at a loss
+
+**Optimal attack pattern:**
+- Approach to d < 50 units (well inside break-even for most beam lengths)
+- Fire maximum-length beam your fuel allows (up to 512 units)
+- Example: 10-fuel beam (500 units) at 50 units distance:
+  - R = 1.5 - 1.5(50)/500 = 1.35
+  - You spend 10 fuel, they need 13.5 fuel to restore shields
+
+### 8.8 Diminishing Returns Formula
+
+For a fixed fuel budget F, efficiency decreases as you spread attacks across distance:
+
+**Concentrated attack (single close shot):**
+- 1 shot at d=50, L=500: Total damage ÷ fuel = 30(450)/1000 ÷ 10 = **1.35 shields per fuel**
+
+**Spread attack (multiple distant shots):**
+- 5 shots at d=200, L=100 each: Damage per shot = 30(100-200) → **negative (misses!)**
+- Corrected: 5 shots at d=50, L=100 each: Damage per shot = 30(50)/1000 = 1.5, total = 7.5 shields ÷ 10 fuel = **0.75 shields per fuel**
+
+**Conclusion:** Single long-range beams at close distance are more fuel-efficient than multiple short beams.
+
+### 8.9 Implementation Verification
+
+To verify these calculations match the implementation:
+
+```cpp
+// From GameConstants.h defaults
+g_laser_range_per_fuel_unit = 50.0;         // L = F × 50
+g_laser_mass_scale_per_remaining_unit = 30.0;  // damage = 30 × (L - d)
+g_laser_damage_mass_divisor = 1000.0;       // shields_lost = damage / 1000
+
+// Example: 5 fuel, 50 units distance
+double fuel = 5.0;
+double beam_length = fuel * 50.0;           // L = 250
+double distance = 50.0;                     // d = 50
+double damage = 30.0 * (beam_length - distance);  // damage = 30 × 200 = 6000
+double shields_lost = damage / 1000.0;      // shields_lost = 6.0
+
+// Efficiency ratio
+double R = shields_lost / fuel;             // R = 6.0 / 5.0 = 1.2
+// Cross-check with formula: R = 1.5 - 1.5(50)/250 = 1.5 - 0.3 = 1.2 ✓
+```
+
+## 9. Implementation Touchpoints
 - Collision damage issuance resides in `CShip::GenerateCollisionCommands` (ship perspective) and `CAsteroid::GenerateCollisionCommands`.
 - Shield application occurs in `CShip::ApplyCollisionCommandDerived`.
 - Station cargo changes on lasers/deliveries are handled by `CStation::ApplyCollisionCommandDerived`.
 - Mutable snapshot updates for resource deltas live in `apply_command_to_state` (`World.C`). **Any new resource-affecting command must update this helper.**
 
-## 8. Testing
+## 10. Testing
 - The regression scripts in `teams/testteam/tests/test[1-5].sh` cover ship-station, station-laser, ship-ship, ship-asteroid, and ship-laser scenarios in both legacy and new modes.
 - For focused physics checks, `scripts/test_collision_modes.py` runs paired games and emits server/testteam logs for manual inspection.
 
