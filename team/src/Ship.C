@@ -107,7 +107,19 @@ CShip::CShip(CCoord StPos, CTeam *pteam, unsigned int ShNum)
 
   size = g_ship_spawn_size;
   mass = g_ship_spawn_mass;
-  orient = 0.0;
+
+  // Initial orientation: face toward map center for balance
+  extern CParser* g_pParser;
+  if (g_pParser && !g_pParser->UseNewFeature("initial-orientation")) {
+    // Legacy mode: all ships face east (asymmetric)
+    orient = 0.0;
+  } else {
+    // New mode: ships face toward map center (balanced)
+    // Negative X stations: face east (0)
+    // Positive X stations: face west (π)
+    orient = (StPos.fX < 0.0) ? 0.0 : PI;
+  }
+
   uImgSet = 0;
   pBrain = NULL;
 

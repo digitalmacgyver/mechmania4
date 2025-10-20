@@ -65,4 +65,39 @@
 - Random launch logging and collision ties use `std::random_device` seeded per evaluation. No team-owned RNGs influence physics.
 - When extending navigation, ensure new orders respect the sub-step schedule and interact correctly with the velocity governor.
 
+### 7.1 Initial Ship Orientation Fix
+
+**Location:** `team/src/Ship.C`, lines 102-121 (CShip constructor)
+
+**Feature Flag:** `initial-orientation` (enabled by default, disabled in `--legacy-mode`)
+
+**Problem:** Legacy engine initialized all ships with `orient = 0.0` (facing east), creating an asymmetry:
+- Station at (-256, -256): Ships face east (0°), which is ~45° **away** from map center (southeast)
+- Station at (256, 256): Ships face east (0°), which is ~45° **toward** map center (southwest)
+
+This gave one team an unfair advantage in initial positioning for resource collection toward the center.
+
+**Solution:** Ships now face toward the map center for balanced gameplay:
+```cpp
+// In CShip::CShip() constructor (Ship.C:111-121):
+extern CParser* g_pParser;
+if (g_pParser && !g_pParser->UseNewFeature("initial-orientation")) {
+    // Legacy mode: all ships face east (asymmetric)
+    orient = 0.0;
+} else {
+    // New mode: ships face toward map center (balanced)
+    // Negative X stations: face east (0)
+    // Positive X stations: face west (π)
+    orient = (StPos.fX < 0.0) ? 0.0 : PI;
+}
+```
+
+**Result:**
+- Team at (-256, -256): `orient = 0.0` (east, toward center)
+- Team at (256, 256): `orient = π` (west, toward center)
+
+Both teams now have symmetric starting conditions. The orientation is set once during ship construction and affects only initial spawn state - teams can rotate freely after that.
+
+**Testing:** Run with `--legacy-initial-orientation` to restore the old asymmetric behavior for comparison.
+
 For contest-level descriptions, see `CONTEST_NAVIGATION_FOR_CONTESTANTS.md`. For collision specifics, refer to the physics guides.

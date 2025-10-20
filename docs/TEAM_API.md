@@ -295,6 +295,30 @@ double orientation = pShip->GetOrient(); // radians
 double mass = pShip->GetMass();         // includes cargo/fuel
 ```
 
+**Initial Ship Orientation:**
+
+All ships spawn docked at their team's station, facing toward the map center for balanced gameplay:
+
+```cpp
+// At game start (during Init()):
+CStation* station = team->GetStation();
+CCoord station_pos = station->GetPos();
+
+// Check which team you are to predict initial orientation
+if (station_pos.fX < 0.0) {
+    // Team at (-256, -256): ships face EAST
+    // GetOrient() returns 0.0 radians at spawn
+} else {
+    // Team at (256, 256): ships face WEST
+    // GetOrient() returns PI (≈3.14159) radians at spawn
+}
+
+// All ships on your team have same initial orientation
+double initial_orient = pShip->GetOrient();  // 0 or π depending on team
+```
+
+This orientation fix ensures both teams have symmetric starting conditions (both face toward center), eliminating the legacy asymmetry where one team faced away from center.
+
 ### Team Information
 
 ```cpp

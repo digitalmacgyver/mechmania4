@@ -217,10 +217,6 @@ Lasers are modeled as colliding masses for damage purposes.
 
 ========================== ENGINE TODO ============================================
 
-Fix initial facing - both sides should face with no vertical direction
-towards the center. As it is they both face 0 - which is asymmetric
-relative to the center.
-
 A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it
 possible thinking this through there are other such races, like what
 if a ship gets hit by 2 asteroids in one turn, does the engine

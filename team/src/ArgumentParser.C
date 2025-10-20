@@ -37,6 +37,9 @@ void ArgumentParser::InitializeFeatures() {
   // Announcer features
   features["announcer-velocity-clamping"] = false;  // Disabled by default
 
+  // Initial orientation fix
+  features["initial-orientation"] = true;  // New: ships face toward map center (balanced)
+
   // Add more features as they are implemented
 }
 
@@ -76,6 +79,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-laser-exploit", "Enable TOCTOU laser exploit (fire before validation)")(
         "legacy-docking", "Use legacy docking (dDockDist+5, can get stuck re-docking)")(
         "legacy-rangecheck-bug", "Use buggy laser range check (floating-point comparison dLasRng > dLasPwr)")(
+        "legacy-initial-orientation", "Use legacy initial orientation (all ships face east, asymmetric)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -212,6 +216,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-rangecheck-bug")) {
       features["rangecheck-bug"] = true;  // Enable bug (true = buggy behavior)
     }
+    if (result.count("legacy-initial-orientation")) {
+      features["initial-orientation"] = false;  // Disable fix (false = legacy asymmetric behavior)
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -250,6 +257,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["laser-exploit"] = true;       // Enable exploit for legacy mode
     features["docking"] = false;            // Enable docking bug for legacy mode
     features["rangecheck-bug"] = true;      // Enable range check bug for legacy mode
+    features["initial-orientation"] = false; // Enable asymmetric orientation for legacy mode
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

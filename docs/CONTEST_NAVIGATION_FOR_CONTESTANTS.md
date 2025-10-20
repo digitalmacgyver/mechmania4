@@ -27,6 +27,15 @@
 - **Fine timestep:** Behind the scenes the engine applies thrust and turn in several smaller slices inside each one-second turn. This improves numerical stability but may produce slight deviations from simple “thrust × dt” mental math.
 
 ## 4. Docking & Undocking
+
+### Initial Ship Orientation
+All ships spawn docked at their team's station, **facing toward the map center** for competitive balance:
+- **Team at (-256, -256):** Ships spawn facing **east** (orientation = 0 radians)
+- **Team at (256, 256):** Ships spawn facing **west** (orientation = π radians ≈ 3.14159)
+
+This ensures both teams have symmetric starting conditions. Without this fix, one team would face toward the center while the other faced away, creating an unfair advantage.
+
+### Docking and Launch Mechanics
 - **Docking:** Colliding with **any station** (friendly or enemy) has the following effects:
   - Teleports the ship to the station center
   - Zeroes velocity

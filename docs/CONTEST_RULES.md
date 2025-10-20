@@ -56,6 +56,13 @@ Ships can perform the following actions each turn:
 4. **Charge Shield** - Add energy to defensive shields
 5. **Jettison** - Eject cargo or fuel into space
 
+### Initial Ship Orientation
+All ships spawn docked at their team's station, **facing toward the map center** for competitive balance:
+- **Team at (-256, -256):** Ships face **east** (orientation = 0 radians, pointing right toward center)
+- **Team at (256, 256):** Ships face **west** (orientation = π radians, pointing left toward center)
+
+This ensures both teams have symmetric starting conditions.
+
 ## Resources
 
 ### Vinyl (Primary Resource)
