@@ -1,6 +1,9 @@
 # MechMania IV Team API Reference
 
-This document provides the programming interface for implementing team strategies in MechMania IV. For game rules and mechanics, see CONTEST_RULES.md.
+This document provides the programming interface for implementing team strategies in MechMania IV. For a narrative rules overview see `CONTEST_RULES.md`. For detailed mechanics consult:
+- `CONTEST_NAVIGATION_FOR_CONTESTANTS.md` / `CONTEST_NAVIGATION_FOR_DEVS.md`
+- `CONTEST_PHYSICS_FOR_CONTESTANTS.md` / `CONTEST_PHYSICS_FOR_DEVS.md`
+- `CONTEST_DAMAGE_FOR_CONTESTANTS.md` / `CONTEST_DAMAGE_FOR_DEVS.md`
 
 ## Table of Contents
 1. [Team Setup](#team-setup)
@@ -152,6 +155,17 @@ pShip->SetOrder(O_SHIELD, 5.0);
 // Dump 3 tons of cargo
 pShip->SetJettison(VINYL, 3.0);
 ```
+
+### Turn Processing Pipeline
+Orders you submit during `Turn()` are latched for the upcoming second and then resolved in the following sequence **for each physics sub-step** (default 5 sub-steps of 0.2 s):
+1. **Jettison** – queued cargo/fuel ejections convert into asteroid spawns and immediately reduce ship mass.
+2. **Shield charge** – `O_SHIELD` consumes fuel and raises shields (clamped to capacity).
+3. **Turn / thrust integration** – the portion of `O_TURN` and `O_THRUST` scheduled for this slice is applied with velocity capping.
+4. **Drift** – positions and orientations advance by the slice duration.
+5. **Collisions** – the snapshot-based collision engine resolves overlaps and applies damage/resource transfers.
+6. **Add / remove** – newly spawned objects are added; destroyed ones are culled.
+
+After all sub-steps finish, **lasers fire** once, applying damage and momentum changes to their targets. Shield orders therefore always precede thrust, and lasers always evaluate after movement.
 
 ### Launch from Station (Undocking)
 
@@ -405,6 +419,8 @@ CTraj rel_vel = pShip->RelativeVelocity(*thing);
 ## Combat and Defense
 
 ### Firing Lasers
+
+> Damage behaviour and worked examples are consolidated in `CONTEST_DAMAGE_FOR_DEVS.md`.
 
 ```cpp
 // Find what laser will hit

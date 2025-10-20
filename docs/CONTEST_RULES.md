@@ -3,6 +3,11 @@
 ## Game Overview
 MechMania IV is a 2D space resource collection and combat game where two teams compete to collect vinyl (the primary resource) while managing fuel and avoiding or engaging in combat. The contest runs for 300 seconds of simulated time.
 
+> **Looking for detail?** This rules summary targets players. Mechanics are documented in depth in the specialised references:
+> - `CONTEST_PHYSICS_FOR_CONTESTANTS.md` / `CONTEST_PHYSICS_FOR_DEVS.md`
+> - `CONTEST_NAVIGATION_FOR_CONTESTANTS.md` / `CONTEST_NAVIGATION_FOR_DEVS.md`
+> - `CONTEST_DAMAGE_FOR_CONTESTANTS.md` / `CONTEST_DAMAGE_FOR_DEVS.md`
+
 ## Playing Field
 
 ### World Dimensions
@@ -129,17 +134,19 @@ Consider these examples:
 - **Stations** only take laser damage. Each point of effective laser damage removes one ton of stored vinyl, floored at zero.
 
 ### Turn Resolution Order
-After both teams submit orders, the server resolves each turn by running five physics sub-steps (`g_physics_simulation_dt`, default 0.2 s each) for a total of 1.0 second. Each sub-step processes:
-1. **Jettison** - Ships eject fuel/cargo as asteroids (queued for addition after collision detection)
-2. **Shield charging** - Shield orders consume fuel and restore shields
-3. **Turning and Thrust** - Ships rotate and accelerate based on orders
-4. **Drift** - All objects update position/velocity by dt
-5. **Collision detection and resolution** - Objects collide and take damage
-6. **Add/Kill** - Queued objects (jettisoned asteroids, fragments) are added; dead objects removed
+Each turn spans one simulated second divided into five physics sub-steps (default `g_physics_simulation_dt = 0.2`). Within **every** sub-step the engine performs:
 
-After all five physics sub-steps complete (1.0 second total), **laser shots are resolved** in a single batch, applying damage immediately to all targets hit this turn.
+1. **Jettison resolution** – queued cargo/fuel dumps spawn asteroids and adjust ship mass.
+2. **Shield charging** – fuel is spent to raise shields (clamped to capacity).
+3. **Turn + thrust integration** – the requested rotation/thrust increment is applied with velocity clamping.
+4. **Drift** – positions and orientations advance by the sub-step duration.
+5. **Collision pass** – snapshot-based collision detection and resolution.
+6. **Spawn/cull** – add newly spawned objects and remove destroyed ones.
+
+After the final sub-step, **laser orders fire** once for the turn. A full breakdown of the timing is documented in `CONTEST_NAVIGATION_FOR_DEVS.md`; the contestant-facing summary appears in `CONTEST_NAVIGATION_FOR_CONTESTANTS.md`.
 
 ### Laser Mechanics
+> Detailed numbers and examples live in `CONTEST_DAMAGE_FOR_CONTESTANTS.md`.
 - **Range:** Up to `min(fWXMax, fWYMax)` units (512 with default map).
 - **Fuel Cost:** `beam_length / g_laser_range_per_fuel_unit` (defaults to 50 units of beam per ton of fuel). Ships cannot fire while docked.
 - **Impact Mass:** The engine treats a beam hit as a collision with a virtual object of mass  
