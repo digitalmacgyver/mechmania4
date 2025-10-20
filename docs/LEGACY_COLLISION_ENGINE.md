@@ -18,7 +18,18 @@ Asteroids that do not fit inside a ship (or are destroyed by lasers) set their d
 
 ## Docking Order Artifacts
 
-Stations are inserted into the pairing list before their ships. Any ship overlapping its station therefore processes the docking branch first. That branch teleports the ship to the station center, zeroes velocity, and sets the docked flag. Later pairings for that ship occur with the docked guard active, so collision handling exits early. The non-station partner still ran its own collision handler earlier in the sequence, which can mark an asteroid dead without the ship ever receiving cargo. The behavior is an artifact of the fixed station-first ordering.
+Stations are inserted into the pairing list before their ships. Any ship overlapping its station therefore processes the docking branch first. That branch teleports the ship to the station center, zeroes velocity, and sets the docked flag. Later pairings for that ship occur with the docked guard active, so collision handling exits early.
+
+**Concrete Example:** Consider a ship that simultaneously collides with both an asteroid and its station in the same frame:
+
+1. Station is processed first (fixed ordering)
+2. Ship-station collision triggers docking: ship teleports to station center, velocity zeroed, docked flag set
+3. Ship-asteroid collision is evaluated next, but ship now has docked flag active
+4. Ship's collision handler exits early due to docked guard - **ship never receives the asteroid's cargo**
+5. However, the asteroid's own collision handler already ran earlier in the sequence and marked the asteroid dead
+6. Result: **Asteroid disappears without being collected by anyone and without fragmenting**
+
+The non-station partner (asteroid) ran its own collision handler in the forward pass, which can mark it dead without the ship ever receiving cargo. The ship's reciprocal handler then exits early due to the docked flag. The behavior is an artifact of the fixed station-first ordering.
 
 ## Multi-Ship Collision Ordering
 

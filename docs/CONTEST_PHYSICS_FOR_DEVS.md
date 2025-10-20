@@ -35,17 +35,17 @@ Snapshots are stored in both an immutable map (`snapshots`) and a mutable workin
 - Every live world object is tested against every team-controlled object (ships + stations).
 - Pairs are canonicalised by `world_index` to avoid duplicate `(A,B)` / `(B,A)` processing.
 - Overlaps are computed against the circular radii.
-- Collisions are stored with their overlap depth. Pairs where either object is docked (and the partner is not its own station) are filtered.
+- Collisions are stored with their overlap depth. Pairs where either object is docked are filtered, except ship-station collisions (docked ships can still collide with any station for undocking mechanics).
 
 ### 3.3 Ordering and randomisation
-- Collision list sorted descending by overlap depth.
+- Collision list sorted descending by overlap depth. **Rationale:** Deeper overlap correlates with which collision would have occurred first in reality - objects that have penetrated further likely collided earlier in continuous time.
 - Groups whose overlap difference is < `0.001` are shuffled using a RNG seeded per evaluation, ensuring no deterministic bias when distances tie.
 
 ### 3.4 Command generation
 For each collision pair:
 1. Skip pair if either object is already dead or marked for kill.
 2. Apply docking guards: once a ship queues `kSetDocked`, further non-station collisions are ignored.
-3. Build two `CollisionContext` instances (A→B and B→A) using the **current** snapshots from `current_states`. Both contexts share a pre-generated random angle used as a tie-breaker when velocity and position coincide.
+3. Build two `CollisionContext` instances (A→B and B→A) using the **current** snapshots from `current_states`. For resolving collision dynamics, the line of interaction is usually the relative velocity direction (intercept line), or the line of centers when relative velocity is zero. When both relative velocity and positions coincide, both contexts share a pre-generated random angle as a tie-breaker to ensure a deterministic collision normal.
 4. Each object’s `GenerateCollisionCommands` fills a `CollisionOutcome`.
 5. Commands are appended to `all_commands`, and each command is mirrored into `current_states` via `apply_command_to_state`.
 6. Spawn requests are queued for after command execution.
@@ -68,7 +68,7 @@ Commands are applied in priority order. Non-metadata commands targeting dead obj
 ## 4. Collision Semantics
 ### 4.1 Ships
 - Mass = hull (40) + cargo + fuel. Capacities draw from `g_ship_default_*` constants.
-- Docking sets velocity to zero, teleports the ship to station position, and flags `bDockFlag = true`. Docked ships are filtered from subsequent collisions that turn.
+- Docking sets velocity to zero, teleports the ship to station position, flags `bDockFlag = true`, and transfers all vinyl cargo from the ship to the station's vinyl store. Docked ships are filtered from subsequent collisions that turn.
 - Departure thrust triggers the launch teleport: distance = `station_radius + ship_radius + ship_radius / 2`.
 
 ### 4.2 Ship ↔ Ship
@@ -86,13 +86,13 @@ Commands are applied in priority order. Non-metadata commands targeting dead obj
 - Treated as a docking interaction. Ship is set docked/zero velocity; station cargo is credited/debited with delivered vinyl. Announcements are queued for home/enemy delivery messages.
 
 ### 4.5 Laser Interactions
-- Lasers synthesise a temporary “beam” object whose mass equals remaining beam length × `g_laser_mass_scale_per_remaining_unit`. Impact direction aligns with the firing ship’s facing.
+- Lasers synthesise a temporary "beam" object whose mass equals remaining beam length × `g_laser_mass_scale_per_remaining_unit` (default: 30.0). The remaining beam length is calculated as: `remaining_beam_length = original_beam_length - distance_from_shooter_to_target`. Impact direction aligns with the firing ship's facing.
 - Targets receive `kAdjustShield` or `kAdjustCargo` (for stations) equal to `mass / g_laser_damage_mass_divisor`.
 - Under the new physics flag, the target’s momentum is updated via a perfectly inelastic merge with the beam mass.
 
 ### 4.6 Stations
 - Immovable. Asteroid collisions bounce elastically off them; stations themselves never translate.
-- Cargo adjustments come from docking deposits, enemy laser depletion, or game scripts.
+- Cargo adjustments come from docking deposits and enemy laser depletion.
 
 ### 4.7 Lasers vs Asteroids
 - If computed damage ≥ 1000, asteroid shatters into three fragments as in the ship case. Otherwise command sequence is empty (laser glances off).
@@ -103,7 +103,7 @@ Commands are applied in priority order. Non-metadata commands targeting dead obj
 | --- | --- | --- | --- |
 | Station | 30 | Immovable | Stores vinyl score |
 | Ship | 12 | 40 | Mass increases with cargo + fuel |
-| Asteroid | varies | equals mass | Material = VINYL or URANIUM |
+| Asteroid | `g_asteroid_size_base + g_asteroid_size_mass_scale × √mass` | equals mass | Material = VINYL or URANIUM; defaults: base=3.0, scale=1.6 |
 
 Key constants (`GameConstants.C`):
 - `g_game_max_speed = 30.0`
