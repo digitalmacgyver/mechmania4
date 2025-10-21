@@ -8,53 +8,20 @@
 #include "Brain.h"
 #include "GameConstants.h"
 #include "ParserModern.h"
+#include "PhysicsUtils.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
 #include "World.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
 #include <algorithm>         // For std::swap
-#include <cmath>             // For cos/sin fallback normals
+#include <cmath>
 #include <functional>        // For std::function (recursive lambda)
 
 extern CParser* g_pParser;
 
 ///////////////////////////////////////////
 // Helper functions (must be defined before use in member functions)
-
-// Calculate fuel cost for rotation using physical model based on rotational kinetics.
-// Ship modeled as uniform disk with triangular angular velocity profile.
-static inline double CalcTurnCostPhysical(double angle_radians, double ship_mass, double ship_radius) {
-  // Physical model:
-  // - Ship is a uniform disk: moment of inertia I = 0.5 * M * R²
-  // - Angular velocity follows triangular profile (smooth acceleration/deceleration)
-  // - Peak angular velocity: ω_max = 2θ/T (occurs at midpoint)
-  // - Peak rotational kinetic energy: KE_peak = 0.5 * I * ω_max²
-  //
-  // Total energy expenditure includes BOTH acceleration and deceleration:
-  // - Energy to accelerate from 0 to ω_max: KE_peak
-  // - Energy to decelerate from ω_max to 0: KE_peak
-  // - Total work done: 2 * KE_peak
-  //
-  // Derivation:
-  //   I = 0.5 * M * R²
-  //   ω_max = 2θ/T
-  //   KE_peak = 0.5 * (0.5 * M * R²) * (2θ/T)²
-  //           = 0.5 * 0.5 * M * R² * 4θ²/T²
-  //           = M * R² * θ² / T²
-  //   Total energy = 2 * KE_peak = 2 * M * R² * θ² / T²
-  //
-  // Fuel cost = Total energy / energy_per_fuel_ton
-
-  const double T = 1.0;  // Turn duration in seconds (one game turn)
-  const double T_squared = T * T;
-
-  // Calculate peak rotational kinetic energy
-  double KE_peak = ship_mass * ship_radius * ship_radius * angle_radians * angle_radians / T_squared;
-
-  // Total energy is 2× peak (accel + decel), convert to fuel cost
-  return 2.0 * KE_peak / g_ship_turn_energy_per_fuel_ton;
-}
 
 // Calculate angular velocity at a specific phase in the triangular velocity profile.
 // Phase ∈ [0, 1] represents progress through the turn (0 = start, 1 = end).
@@ -511,7 +478,7 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       // Physics: Update ship velocity based on collision
       if (ctx.use_new_physics) {
         // Perfectly elastic collision - conserves momentum and energy
-        ElasticCollisionResult elastic = CalculateElastic2DCollision(
+        auto elastic = PhysicsUtils::CalculateElastic2DCollision(
             self_state->mass, self_state->velocity, self_state->position,
             other_state->mass, other_state->velocity, other_state->position,
             ctx.random_separation_angle, true);
@@ -600,7 +567,7 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       }
 
       // New physics: Perfectly elastic collision - conserves momentum and energy
-      ElasticCollisionResult elastic = CalculateElastic2DCollision(
+      auto elastic = PhysicsUtils::CalculateElastic2DCollision(
           self_state->mass, self_state->velocity, self_state->position,
           other_state->mass, other_state->velocity, other_state->position,
           ctx.random_separation_angle, true);
@@ -719,101 +686,6 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
 
 // Helper function: Calculate 2D elastic collision velocities
 // Uses proper 2D elastic collision physics with normal/tangential decomposition
-CShip::ElasticCollisionResult CShip::CalculateElastic2DCollision(
-    double m1, const CTraj& v1, const CCoord& p1,
-    double m2, const CTraj& v2, const CCoord& p2,
-    double random_angle, bool has_random) {
-
-  ElasticCollisionResult result;
-
-  // Handle edge case: one or both masses are zero
-  if (m1 < 0.001 || m2 < 0.001) {
-    result.v1_final = v1;
-    result.v2_final = v2;
-    return result;
-  }
-
-  // Convert velocities to Cartesian coordinates
-  CCoord v1_cart = v1.ConvertToCoord();
-  CCoord v2_cart = v2.ConvertToCoord();
-
-  // === CORRECT 2D ELASTIC COLLISION PHYSICS ===
-  //
-  // Standard formulas for elastic collision between two circles:
-  // 1. Calculate collision normal (geometric center-to-center line)
-  // 2. Decompose velocities into normal and tangential components
-  // 3. Exchange ONLY the normal components (tangential components unchanged)
-  // 4. Reconstruct final velocities
-  //
-  // This is the physically correct approach for 2D elastic collisions.
-
-  // Step 1: Determine collision normal using line-of-centers priority.
-  // Line-of-centers is always preferred; if positions coincide, fall back to a
-  // deterministic random heading supplied by the collision context.
-  CCoord normal = p2 - p1;
-  double normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
-
-  if (normal_mag_sq < g_fp_error_epsilon) {
-    if (has_random) {
-      normal.fX = std::cos(random_angle);
-      normal.fY = std::sin(random_angle);
-      normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
-    } else {
-      // As a final guard, choose a canonical axis to prevent divide-by-zero.
-      normal.fX = 1.0;
-      normal.fY = 0.0;
-      normal_mag_sq = 1.0;
-    }
-  }
-
-  double normal_mag = sqrt(normal_mag_sq);
-
-  // Normalize the collision normal to unit vector
-  CCoord n;  // Unit normal vector
-  n.fX = normal.fX / normal_mag;
-  n.fY = normal.fY / normal_mag;
-
-  // Tangent vector (perpendicular to normal, rotated 90° counterclockwise)
-  CCoord t;  // Unit tangent vector
-  t.fX = -n.fY;
-  t.fY = n.fX;
-
-  // Step 2: Decompose velocities into normal and tangential components
-  // v = (v·n)n + (v·t)t
-
-  // Object 1 components
-  double v1_n = v1_cart.fX * n.fX + v1_cart.fY * n.fY;  // normal component (scalar)
-  double v1_t = v1_cart.fX * t.fX + v1_cart.fY * t.fY;  // tangent component (scalar)
-
-  // Object 2 components
-  double v2_n = v2_cart.fX * n.fX + v2_cart.fY * n.fY;  // normal component
-  double v2_t = v2_cart.fX * t.fX + v2_cart.fY * t.fY;  // tangent component
-
-  // Step 3: Exchange normal components using 1D elastic collision formula
-  // Tangential components remain unchanged (no force in tangent direction)
-  double total_mass = m1 + m2;
-  double v1_n_final = ((m1 - m2) * v1_n + 2.0 * m2 * v2_n) / total_mass;
-  double v2_n_final = ((m2 - m1) * v2_n + 2.0 * m1 * v1_n) / total_mass;
-
-  // Tangent components unchanged
-  double v1_t_final = v1_t;
-  double v2_t_final = v2_t;
-
-  // Step 4: Reconstruct velocity vectors from components
-  // v = v_n * n + v_t * t
-  CCoord v1_final_cart, v2_final_cart;
-  v1_final_cart.fX = v1_n_final * n.fX + v1_t_final * t.fX;
-  v1_final_cart.fY = v1_n_final * n.fY + v1_t_final * t.fY;
-  v2_final_cart.fX = v2_n_final * n.fX + v2_t_final * t.fX;
-  v2_final_cart.fY = v2_n_final * n.fY + v2_t_final * t.fY;
-
-  // Convert back to polar coordinates
-  result.v1_final = CTraj(v1_final_cart);
-  result.v2_final = CTraj(v2_final_cart);
-
-  return result;
-}
-
 double CShip::GetLaserBeamDistance() { return dLaserDist; }
 
 CBrain *CShip::GetBrain() { return pBrain; }
@@ -1001,7 +873,7 @@ double CShip::SetOrder(OrderKind ord, double value) {
       double normalized_value = normalize_angle(value);
 
       // Calculate fuel using physically consistent rotation model (quadratic in angle)
-      fuelcon = CalcTurnCostPhysical(fabs(normalized_value), GetMass(), size);
+      fuelcon = PhysicsUtils::CalcTurnCostPhysical(fabs(normalized_value), GetMass(), size);
 
       if (IsDocked() == true) {
         fuelcon = 0.0;

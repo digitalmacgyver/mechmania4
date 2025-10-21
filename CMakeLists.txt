@@ -25,6 +25,7 @@ set(COMMON_SOURCES
     ${SRC_DIR}/Asteroid.C
     ${SRC_DIR}/Station.C
     ${SRC_DIR}/Ship.C
+    ${SRC_DIR}/PhysicsUtils.C
     ${SRC_DIR}/World.C
     ${SRC_DIR}/Team.C
     ${SRC_DIR}/ArgumentParser.C
@@ -335,6 +336,7 @@ add_executable(test_toroidal_coordinates
     ${SRC_DIR}/Traj.C
     ${SRC_DIR}/Sendable.C
     ${SRC_DIR}/GameConstants.C
+    ${SRC_DIR}/PhysicsUtils.C
 )
 target_include_directories(test_toroidal_coordinates PRIVATE ${SRC_DIR})
 target_link_libraries(test_toroidal_coordinates m)  # Link math library

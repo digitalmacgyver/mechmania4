@@ -8,6 +8,7 @@
 #include "Asteroid.h"
 #include "ArgumentParser.h"
 #include "GameConstants.h"
+#include "PhysicsUtils.h"
 #include "Ship.h"
 #include "World.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
@@ -318,7 +319,7 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
         //
         // Step 1: Calculate what the asteroid's velocity would be after elastic collision
         // (Ship calculates its own velocity change separately)
-        CShip::ElasticCollisionResult elastic = CShip::CalculateElastic2DCollision(
+        auto elastic = PhysicsUtils::CalculateElastic2DCollision(
             other_state->mass, other_state->velocity, other_state->position,  // Ship (object 1)
             self_state->mass, self_state->velocity, self_state->position,
             ctx.random_separation_angle, true);    // Asteroid (object 2)

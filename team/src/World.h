@@ -59,6 +59,9 @@ class CWorld : public CSendable {
   CTeam* SetTeam(unsigned int n,
                  CTeam* pTm);  // Returns previous team ptr, NULL on fail
 
+  void ApplyCommandToSnapshot(const CollisionCommand& cmd,
+                              std::map<CThing*, CollisionState>& states);
+
   CThing* GetThing(unsigned int index) const;      // returns NULL on failure
   unsigned int GetNextIndex(unsigned int curindex) const;  // returns (unsigned int)-1 if at end of list
   unsigned int GetPrevIndex(

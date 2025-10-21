@@ -513,6 +513,14 @@ void CWorld::LaserModelNew() {
   CTraj LasTraj, TarVel, TmpTraj;
   double dfuel, dLasPwr, dLasRng;
 
+  std::vector<CollisionCommand> all_commands;
+  std::vector<SpawnRequest> all_spawns;
+  std::map<CThing*, CollisionState> current_states;
+
+  bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
+  bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
+  bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
+
   for (nteam = 0; nteam < GetNumTeams(); ++nteam) {
     pTeam = GetTeam(nteam);
     if (pTeam == NULL) {
@@ -614,52 +622,84 @@ void CWorld::LaserModelNew() {
         CollisionState laser_state = LasThing.MakeCollisionState();
         CollisionState target_state = pTarget->MakeCollisionState();
 
-        // Build collision context with feature flags
-        bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
-        bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
-        bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
+        // Use existing snapshot if target already processed this frame
+        CollisionState* current_target_state = nullptr;
+        auto current_it = current_states.find(pTarget);
+        if (current_it == current_states.end()) {
+          current_it = current_states.emplace(pTarget, target_state).first;
+        }
+        current_target_state = &current_it->second;
 
-        CollisionContext ctx(this, &target_state, &laser_state, 1.0,
+        // Skip if target already marked dead this frame
+        if (!current_target_state->is_alive) {
+          continue;
+        }
+
+        CollisionContext ctx(this, current_target_state, &laser_state, 1.0,
                              use_new_physics, disable_eat_damage, use_docking_fix);
 
         // Generate commands from target's perspective (target being hit by laser)
         CollisionOutcome outcome = pTarget->GenerateCollisionCommands(ctx);
 
-        // Apply commands immediately
-        CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage, use_docking_fix);
-
         for (int i = 0; i < outcome.command_count; ++i) {
           const CollisionCommand& cmd = outcome.commands[i];
 
-          // Handle announcer messages
-          if (cmd.type == CollisionCommandType::kAnnounceMessage) {
-            if (cmd.message_buffer[0] != '\0') {
-              AddAnnouncerMessage(cmd.message_buffer);
-            }
-            continue;
-          }
-
-          // Skip if target is null or already dead
-          if (!cmd.target || !cmd.target->IsAlive()) continue;
-
-          // Apply the command
-          cmd.target->ApplyCollisionCommand(cmd, apply_ctx);
+          ApplyCommandToSnapshot(cmd, current_states);
+          all_commands.push_back(cmd);
         }
 
         // Process spawn requests (asteroid fragments)
         for (int i = 0; i < outcome.spawn_count; ++i) {
           const SpawnRequest& spawn = outcome.spawns[i];
-
-          if (spawn.kind == ASTEROID) {
-            CAsteroid* fragment = new CAsteroid(spawn.mass, spawn.material);
-            CCoord pos = spawn.position;
-            CTraj vel = spawn.velocity;
-            fragment->SetPos(pos);
-            fragment->SetVel(vel);
-            AddThingToWorld(fragment);
-          }
+          all_spawns.push_back(spawn);
         }
       }
+    }
+  }
+
+  // Apply commands in deterministic order
+  std::sort(all_commands.begin(), all_commands.end(),
+            [](const CollisionCommand& a, const CollisionCommand& b) {
+              return GetCommandTypePriority(a.type) < GetCommandTypePriority(b.type);
+            });
+
+  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage, use_docking_fix);
+
+  for (size_t i = 0; i < all_commands.size(); ++i) {
+    const CollisionCommand& cmd = all_commands[i];
+
+    // Handle announcer messages
+    if (cmd.type == CollisionCommandType::kAnnounceMessage) {
+      if (cmd.message_buffer[0] != '\0') {
+        AddAnnouncerMessage(cmd.message_buffer);
+      }
+      continue;
+    }
+
+    // Skip if target is null or already dead (unless metadata)
+    bool is_metadata_command =
+        (cmd.type == CollisionCommandType::kRecordEatenBy ||
+         cmd.type == CollisionCommandType::kAnnounceMessage);
+
+    if (!cmd.target || !cmd.target->IsAlive()) {
+      if (!is_metadata_command) {
+        continue;
+      }
+    }
+
+    cmd.target->ApplyCollisionCommand(cmd, apply_ctx);
+  }
+
+  // Spawn new objects after all commands applied
+  for (size_t i = 0; i < all_spawns.size(); ++i) {
+    const SpawnRequest& spawn = all_spawns[i];
+    if (spawn.kind == ASTEROID) {
+      CAsteroid* fragment = new CAsteroid(spawn.mass, spawn.material);
+      CCoord pos = spawn.position;
+      CTraj vel = spawn.velocity;
+      fragment->SetPos(pos);
+      fragment->SetVel(vel);
+      AddThingToWorld(fragment);
     }
   }
 
@@ -743,6 +783,99 @@ CTeam* CWorld::SetTeam(unsigned int n, CTeam* pTm) {
   }
 
   return oldteam;
+}
+
+void CWorld::ApplyCommandToSnapshot(const CollisionCommand& cmd,
+                                    std::map<CThing*, CollisionState>& states) {
+  if (cmd.target == NULL) {
+    return;
+  }
+
+  auto it = states.find(cmd.target);
+  if (it == states.end()) {
+    return;
+  }
+
+  CollisionState& state = it->second;
+
+  switch (cmd.type) {
+    case CollisionCommandType::kAdjustCargo: {
+      if (state.kind == SHIP) {
+        double max_cargo = state.ship_cargo_capacity;
+        double previous_cargo = state.ship_cargo;
+        double hull_mass = state.mass - previous_cargo - state.ship_fuel;
+        if (hull_mass < 0.0) {
+          hull_mass = 0.0;
+        }
+
+        state.ship_cargo += cmd.scalar;
+        if (state.ship_cargo < 0.0) {
+          state.ship_cargo = 0.0;
+        }
+        if (max_cargo > 0.0 && state.ship_cargo > max_cargo) {
+          state.ship_cargo = max_cargo;
+        }
+
+        state.mass = hull_mass + state.ship_cargo + state.ship_fuel;
+      } else if (state.kind == STATION) {
+        state.station_cargo += cmd.scalar;
+        if (state.station_cargo < 0.0) {
+          state.station_cargo = 0.0;
+        }
+      }
+      break;
+    }
+    case CollisionCommandType::kAdjustFuel: {
+      if (state.kind == SHIP) {
+        double max_fuel = state.ship_fuel_capacity;
+        double previous_fuel = state.ship_fuel;
+        double hull_mass = state.mass - state.ship_cargo - previous_fuel;
+        if (hull_mass < 0.0) {
+          hull_mass = 0.0;
+        }
+
+        state.ship_fuel += cmd.scalar;
+        if (state.ship_fuel < 0.0) {
+          state.ship_fuel = 0.0;
+        }
+        if (max_fuel > 0.0 && state.ship_fuel > max_fuel) {
+          state.ship_fuel = max_fuel;
+        }
+
+        state.mass = hull_mass + state.ship_cargo + state.ship_fuel;
+      }
+      break;
+    }
+    case CollisionCommandType::kAdjustShield: {
+      if (state.kind == SHIP) {
+        double max_shield = state.ship_shield_capacity;
+        state.ship_shield += cmd.scalar;
+        if (state.ship_shield < 0.0) {
+          state.ship_shield = 0.0;
+        }
+        if (max_shield > 0.0 && state.ship_shield > max_shield) {
+          state.ship_shield = max_shield;
+        }
+      }
+      break;
+    }
+    case CollisionCommandType::kSetDocked:
+      if (state.kind == SHIP) {
+        state.is_docked = cmd.bool_flag;
+      }
+      break;
+    case CollisionCommandType::kKillSelf:
+      state.is_alive = false;
+      break;
+    case CollisionCommandType::kSetVelocity:
+      state.velocity = cmd.velocity;
+      break;
+    case CollisionCommandType::kSetPosition:
+      state.position = cmd.position;
+      break;
+    default:
+      break;
+  }
 }
 
 //////////////////////////////////////////////
@@ -1164,101 +1297,6 @@ unsigned int CWorld::CollisionEvaluationNew() {
 
   // ship_collision_angle_dist_ draws from collision_rng_ seeded in constructor.
 
-  auto apply_command_to_state = [&](const CollisionCommand& cmd) {
-    // current_states is the running simulation state for this frame. By folding each
-    // command into it we preserve conservation physics across the ordered collision list
-    // while still keeping the original snapshots immutable for logging/spawns.
-    if (cmd.target == NULL) {
-      return;
-    }
-
-    auto it = current_states.find(cmd.target);
-    if (it == current_states.end()) {
-      return;
-    }
-
-    CollisionState& state = it->second;
-
-    switch (cmd.type) {
-      case CollisionCommandType::kAdjustCargo: {
-        if (state.kind == SHIP) {
-          double max_cargo = state.ship_cargo_capacity;
-          double previous_cargo = state.ship_cargo;
-          double hull_mass = state.mass - previous_cargo - state.ship_fuel;
-          if (hull_mass < 0.0) {
-            hull_mass = 0.0;
-          }
-
-          state.ship_cargo += cmd.scalar;
-          if (state.ship_cargo < 0.0) {
-            state.ship_cargo = 0.0;
-          }
-          if (max_cargo > 0.0 && state.ship_cargo > max_cargo) {
-            state.ship_cargo = max_cargo;
-          }
-
-          state.mass = hull_mass + state.ship_cargo + state.ship_fuel;
-        } else if (state.kind == STATION) {
-          state.station_cargo += cmd.scalar;
-          if (state.station_cargo < 0.0) {
-            state.station_cargo = 0.0;
-          }
-        }
-        break;
-      }
-      case CollisionCommandType::kAdjustFuel: {
-        if (state.kind == SHIP) {
-          double max_fuel = state.ship_fuel_capacity;
-          double previous_fuel = state.ship_fuel;
-          double hull_mass = state.mass - state.ship_cargo - previous_fuel;
-          if (hull_mass < 0.0) {
-            hull_mass = 0.0;
-          }
-
-          state.ship_fuel += cmd.scalar;
-          if (state.ship_fuel < 0.0) {
-            state.ship_fuel = 0.0;
-          }
-          if (max_fuel > 0.0 && state.ship_fuel > max_fuel) {
-            state.ship_fuel = max_fuel;
-          }
-
-          state.mass = hull_mass + state.ship_cargo + state.ship_fuel;
-        }
-        break;
-      }
-      case CollisionCommandType::kAdjustShield: {
-        if (state.kind == SHIP) {
-          double max_shield = state.ship_shield_capacity;
-          state.ship_shield += cmd.scalar;
-          if (state.ship_shield < 0.0) {
-            state.ship_shield = 0.0;
-          }
-          if (max_shield > 0.0 && state.ship_shield > max_shield) {
-            state.ship_shield = max_shield;
-          }
-        }
-        break;
-      }
-      case CollisionCommandType::kSetDocked:
-        if (state.kind == SHIP) {
-          state.is_docked = cmd.bool_flag;
-        }
-        break;
-      case CollisionCommandType::kKillSelf:
-        state.is_alive = false;
-        break;
-      case CollisionCommandType::kSetVelocity:
-        state.velocity = cmd.velocity;
-        break;
-      case CollisionCommandType::kSetPosition:
-        state.position = cmd.position;
-        break;
-      default:
-        break;
-    }
-  };
-
   for (size_t i = 0; i < collisions.size(); ++i) {
     CThing* obj1 = collisions[i].object1;
     CThing* obj2 = collisions[i].object2;
@@ -1355,7 +1393,7 @@ unsigned int CWorld::CollisionEvaluationNew() {
       if (cmd.type == CollisionCommandType::kSetDocked) {
         pending_docks.insert(cmd.target);
       }
-      apply_command_to_state(cmd);
+      ApplyCommandToSnapshot(cmd, current_states);
       all_commands.push_back(cmd);
     }
     for (int j = 0; j < out2.command_count; ++j) {
@@ -1367,7 +1405,7 @@ unsigned int CWorld::CollisionEvaluationNew() {
       if (cmd.type == CollisionCommandType::kSetDocked) {
         pending_docks.insert(cmd.target);
       }
-      apply_command_to_state(cmd);
+      ApplyCommandToSnapshot(cmd, current_states);
       all_commands.push_back(cmd);
     }
 
