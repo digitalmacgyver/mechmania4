@@ -97,9 +97,44 @@ developer to fix so include the correct level of detail that a
 developer could address it.
 
 ====
-Great - we've got our engineers working on those fixes.
 
 
+
+We're going to conduct a code review for a portion of a codebase that
+simulates a simple 2d toroidal starship exploration and combat game
+which is the basis for a coding contest.
+
+I have attached the latest requirements / design docs ihn the docs.md
+file, and updated project code in the .cpp files.
+
+The code path we care about begins in:
+
+Server's Simulation() method which itrerates and calls World's
+PhysicsModel()
+
+PhysicsModel() in turn calls the Drift() method on each thing in the
+world, and then resolves collisions via CollisionEvaluation()
+
+Things in the word are polymorphic types derived from CThing and are one of:
+
+CAsteroids
+CShips
+CStations
+
+Or generic things (GENTHING) which are used to implement short lived
+laser beams.
+
+The key point here is for this code review we are ONLY reviewing the
+Server Side implementation of the game physics, collision handling
+system, etc. to ensure it meets the specifications in the docs. We
+needent worry about client state or anything like that - we can treat
+it as a black box.
+
+The second key point is there is a default mode of operation, and a
+LEGACY mode, enabled with various --legacy command line flags. This
+review is ONLY of our default modes - consult the the default in
+ArgumentParser.C - IGGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE
+BY DEFAULT.
 
 Now review the system for architectural concerns:
 
