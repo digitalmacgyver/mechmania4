@@ -414,27 +414,6 @@ bool SDL2Graphics::LoadFont(const std::string& fontPath, int size) {
     return dirs;
   };
 
-  auto findInDirs = [&](const std::vector<std::string>& names) -> std::string {
-    std::vector<std::string> dirs = getBaseDirs();
-    for (const auto& dir : dirs) {
-      for (const auto& name : names) {
-        // Absolute paths are tried as-is
-        if (!name.empty() && name[0] == '/') {
-          if (fileExists(name)) {
-            return name;
-          }
-          continue;
-        }
-
-        std::string candidate = joinPath(dir, name);
-        if (fileExists(candidate)) {
-          return candidate;
-        }
-      }
-    }
-    return std::string();
-  };
-
   // Environment overrides (absolute or relative paths)
   const char* envReg = std::getenv("MM4_FONT_REGULAR_PATH");
   const char* envBold = std::getenv("MM4_FONT_BOLD_PATH");
@@ -810,6 +789,7 @@ SDL_Texture* SDL2Graphics::LoadImage(const std::string& path) {
 // Removed BMP frame dump helper to revert bitmap generation functionality
 
 SDL_Texture* SDL2Graphics::LoadXPM(const char** xpmData) {
+  (void)xpmData;
   // SDL2 doesn't have native XPM support, but SDL_image can load XPM from
   // memory For now, return nullptr - we'll implement XPM conversion if needed
   return nullptr;

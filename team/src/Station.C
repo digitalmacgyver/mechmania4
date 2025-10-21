@@ -55,6 +55,7 @@ CollisionState CStation::MakeCollisionState() const {
 
 // Deterministic collision engine - apply station-specific commands
 void CStation::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  (void)ctx;
   // This method handles station-specific command types
   // Base class already handled kKillSelf, kSetVelocity, kSetPosition
 

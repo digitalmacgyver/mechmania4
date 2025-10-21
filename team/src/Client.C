@@ -30,11 +30,12 @@ CClient::CClient(int port, char *hostname, bool bObserv) {
     return;  // Connection failed
   }
 
-  while (pmyNet->GetQueueLength() < strlen(n_servconack)) {
+  const int ack_length = static_cast<int>(strlen(n_servconack));
+  while (pmyNet->GetQueueLength() < ack_length) {
     pmyNet->CatchPkt();
   }
 
-  if (memcmp(pmyNet->GetQueue(), n_servconack, strlen(n_servconack)) != 0) {
+  if (memcmp(pmyNet->GetQueue(), n_servconack, ack_length) != 0) {
     printf("Connection failed\n");
     exit(-1);
   }
@@ -150,7 +151,7 @@ unsigned int CClient::ReceiveWorld() {
   unsigned int netlen, len, aclen;
   char *buf = pmyNet->GetQueue();
 
-  while (pmyNet->GetQueueLength() < sizeof(unsigned int)) {
+  while (pmyNet->GetQueueLength() < static_cast<int>(sizeof(unsigned int))) {
     pmyNet->CatchPkt();
     if (IsOpen() == 0) {
       return 0;  // Eek!  World disappeared!

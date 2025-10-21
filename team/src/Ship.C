@@ -372,6 +372,7 @@ CollisionState CShip::MakeCollisionState() const {
 
 // Deterministic collision engine - apply ship-specific commands
 void CShip::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  (void)ctx;
   // This method handles ship-specific command types
   // Base class already handled kKillSelf, kSetVelocity, kSetPosition
 
@@ -859,7 +860,6 @@ double CShip::SetOrder(OrderKind ord, double value) {
   // readability
   double valtmp, fuelcon, maxfuel;
   CTraj AccVec;
-  unsigned int oit;
 
   maxfuel = GetAmount(S_FUEL);
   if (IsDocked() == true) {
@@ -1029,6 +1029,9 @@ double CShip::SetOrder(OrderKind ord, double value) {
         return 0.0;
       }
     }
+
+    case O_ALL_ORDERS:
+      return 0.0;
 
       /*
       // LEGACY CODE: This is the legacy implementation of O_JETTISON, which is
@@ -2168,6 +2171,7 @@ unsigned CShip::SerialUnpack(char *buf, unsigned buflen) {
 // here based on command line options.
 
 double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
+  (void)ord;
   // This is substantially similar to the legacy code, however we leave speed
   // enforcement to the Drift engine entirely in the new version. Drift knows
   // about the real situaion, perhaps we've collided or otherwise our velocity
@@ -2227,6 +2231,7 @@ double CShip::ProcessThrustOrderNew(OrderKind ord, double value) {
 }
 
 double CShip::ProcessThrustOrderOld(OrderKind ord, double value) {
+  (void)ord;
   // Legacy thrust order processing - contains the current SetOrder O_THRUST logic
   double valtmp, fuelcon, maxfuel;
   CTraj AccVec;

@@ -22,8 +22,9 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag)
       spriteManager(nullptr),
       myWorld(nullptr),
       logoTexture(nullptr),
-      attractor(0),
-      useSpriteMode(gfxFlag == 1) {  // Enable sprite mode when -G is used
+      useSpriteMode(gfxFlag == 1),
+      attractor(0) {  // Enable sprite mode when -G is used
+  (void)regFileName;
 
   drawnames = 1;
   isPaused = false;
@@ -443,6 +444,8 @@ void ObserverSDL::DrawLaserBeam(CShip* ship, int teamNum) {
     return;
   }
 
+  (void)teamNum;
+
   double laserRange = ship->GetLaserBeamDistance();
   if (laserRange <= 0.0) {
     return;  // No laser active
@@ -793,7 +796,7 @@ void ObserverSDL::DrawMessages() {
     }
 
     // Build timestamp string and measure its width
-    char tbuf[8];
+    char tbuf[16];
     snprintf(tbuf, sizeof(tbuf), "%3ds ", std::max(0, msg.seconds));
     int timeW = 0, timeH = 0;
     graphics->GetTextSizeEx(tbuf, timeW, timeH, true, true);

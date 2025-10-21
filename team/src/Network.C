@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <unistd.h>
 
 #include "Network.h"
 
@@ -86,8 +87,11 @@ CNetwork::~CNetwork() {
 
 int CNetwork::SendPkt(int conn, const char *data, int len) {
   // FIXME: should check for write errors
-  write(fds[conn - 1], data, len);
-  return 0;
+  ssize_t written = write(fds[conn - 1], data, len);
+  if (written < 0) {
+    return -1;
+  }
+  return (written == len) ? 0 : -1;
 }
 
 int CNetwork::RecvPkt(char *data, int &len) {

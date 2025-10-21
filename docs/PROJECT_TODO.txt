@@ -2,33 +2,109 @@
 # project. Please ignore.
 
 ===
+ 
+
+=== GrooReview ===
+
+We are ready for another round of code reviews.
+
+I have attached the latest simulator design docs in the docs.md
+file, and updated project code in the .cpp files.
+
+In addition the the checks requested below, perform a standard battery
+of C/C++ static analysis checks such as those in the style of the ones
+offered by Coverity, Black Duck, Clockwork, etc. (e.g. use after free,
+inconsistent access of potentially null pointer after checks, and so
+on).
+
+We're going to conduct a code review for a portion of a codebase that
+runs team Groonew in a simple 2d toroidal starship exploration and
+combat game for a coding contest. Team Groonew has 4 ships which it
+can issue order to once a second. These orders are designed to achieve
+the game goals of returning vinyl to team Groonew's base, and removing
+vinyl from the opposing teams base (by shooting it with lasers), and
+potentially destroying or damaging opposing team ships.
+
+The purpose of this review is to make sure the GrooNew's
+implementation matches it's own internal comments for what it's
+supposed to be doing, and is using game APIs correctly.
+
+In particular we want to make sure it's pathfinding is toriodally
+aware so that if, for example, one of Team Groonew's ships is trying
+to intercept a target M, and:
+
+Both are on the the y=0 worldline, with:
+ship position = -300, 0
+target position = 300, 0
+Ship velocity = 30 to the right
+Target velocity = 30 to the left
+
+We correctly figure out that the fastest intrcept is to stay on our
+current path (which is closing at 60 units per second), rather than
+chase the target as it receeds from us by following the shorter (424
+distance around the world boundary) distance (Note: the world speed
+limit for all objects is 30 units per second).
+
+The key point here is we are ONLY reviewing the Team Groonew's code -
+some server code is provided for context, but we can only change the
+code related to Team Groonew, it's pathfinding, GetVinyl, MagicBag,
+Pathinfo, FuelTraj, etc.
+
+Review this code for:
+
+1. Errors in pathfinding, going the wrong way, over or undershooting,
+etc.
+
+2. Essential agreement between comments and code (e.g. if a comment
+says "//shoot it!" we should be issuing an O_LASER command at some
+point soon.
+
+3. General errors like: Sign errors, inqueality wrong direction
+errors, extensive computations whose values are never used, etc.
+
+After we identify and fix crucial bugs I'll ask you for help
+rearchitecting and simplifying the code for improved elegance - but
+for now leave architectural or design issues for later and focus on
+bugs/errrors that will lead to bad gameplay results.
+
+Please report a list of detected issues, and for each issue include a
+brief summary of the problem, the relevant line numbers / triggering
+conditions, etc.. Each issue you flag will become an issue for a
+developer to fix so include the correct level of detail that a
+developer could address it.
+
 
 
 ==
 
-We've implemented a large refactoring change in the current code base. The changes are in the tracked but uncommitted files.
+We've implemented a large refactoring change in the current code
+base. The changes are in the tracked but uncommitted files.
 
 Review these changes and check for:
 
-1. Functionally identical - the task here was to refactor to increase readability and ease of
-  maintenance - no functionality should change. Is this the case for these changes?
+1. Functionally identical - the task here was to refactor to increase
+  readability and ease of maintenance - no functionality should
+  change. Is this the case for these changes?
  
-  2. No interaction with legacy code paths - the legacy code paths enabled by various --legacy
-  parameters and guarded by various conditional checks of those settings should not have changed
-  functionally in any way as a result of these changes. Is that the case for these changes?
+2. No interaction with legacy code paths - the legacy code paths
+  enabled by various --legacy parameters and guarded by various
+  conditional checks of those settings should not have changed
+  functionally in any way as a result of these changes. Is that the
+  case for these changes?
 
 
 ==
 
-Great - our team has applied many of the fixes. We are ready for another round of code reviews.
+We are ready for another round of code reviews.
 
+I have attached the latest requirements / design docs ihn the docs.md
+file, and updated project code in the .cpp files.
 
-
-I have attached the latest requirements / design docs ihn the docs.md file, and updated project code in the .cpp files.
-
-
-
-In addition the the checks requested below, perform a standard battery of C/C++ static analysis checks such as those in the style of the ones offered by Coverity, Black Duck, Clockwork, etc. (e.g. use after free, inconsistent access of potentially null pointer after checks, and so on).
+In addition the the checks requested below, perform a standard battery
+of C/C++ static analysis checks such as those in the style of the ones
+offered by Coverity, Black Duck, Clockwork, etc. (e.g. use after free,
+inconsistent access of potentially null pointer after checks, and so
+on).
 
 We're going to conduct a code review for a portion of a codebase that
 simulates a simple 2d toroidal starship exploration and combat game
@@ -45,11 +121,10 @@ PhysicsModel()
 PhysicsModel() in turn calls the Drift() method on each thing in the
 world, and then resolves collisions via CollisionEvaluation()
 
-Things in the word are polymorphic types derived from CThing and are one of:
+Things in the word are polymorphic types derived from CThing and are
+one of:
 
-CAsteroids
-CShips
-CStations
+CAsteroids CShips CStations
 
 Or generic things (GENTHING) which are used to implement short lived
 laser beams.
@@ -70,17 +145,18 @@ Review this code for:
 
 1. Correctness in the physics model - watch for:
 
-* Errors in implementation of supposedly perfectly elastic or inelastic collisions
-* Dangerous floating point equality comparisons
+* Errors in implementation of supposedly perfectly elastic or
+* inelastic collisions Dangerous floating point equality comparisons
 * Dead/logically unreachable code which may indicate a logic error
 
 
 2. Correctness of the collision system - watch for:
 
-* Unintended race conditions
-* Ways a duplicate collision could be registered between the same two items twice on the same turn
-* Access to current/live Ship stats via GetXyZ() methods off the SHip object when it should be using cached or snapshotted states
-* Systemic biases that predictably favor one team over the other
+* Unintended race conditions Ways a duplicate collision could be
+* registered between the same two items twice on the same turn Access
+* to current/live Ship stats via GetXyZ() methods off the SHip object
+* when it should be using cached or snapshotted states Systemic biases
+* that predictably favor one team over the other
 
 3. General errors like: Sign errors, inqueality wrong direction
 errors, extensive computations whose values are never used, etc.
@@ -96,15 +172,15 @@ conditions, etc.. Each issue you flag will become an issue for a
 developer to fix so include the correct level of detail that a
 developer could address it.
 
-====
 
+====
 
 
 We're going to conduct a code review for a portion of a codebase that
 simulates a simple 2d toroidal starship exploration and combat game
 which is the basis for a coding contest.
 
-I have attached the latest requirements / design docs ihn the docs.md
+I have attached the latest requirements / design docs in the docs.md
 file, and updated project code in the .cpp files.
 
 The code path we care about begins in:
@@ -115,11 +191,10 @@ PhysicsModel()
 PhysicsModel() in turn calls the Drift() method on each thing in the
 world, and then resolves collisions via CollisionEvaluation()
 
-Things in the word are polymorphic types derived from CThing and are one of:
+Things in the word are polymorphic types derived from CThing and are
+one of:
 
-CAsteroids
-CShips
-CStations
+CAsteroids CShips CStations
 
 Or generic things (GENTHING) which are used to implement short lived
 laser beams.
@@ -138,13 +213,15 @@ BY DEFAULT.
 
 Now review the system for architectural concerns:
 
-* redundant / duplicative code that should be factored into its own module
+* redundant / duplicative code that should be factored into its own
+  module
 
 * confused ownership semantics of state between interacting objects
 
 * Areas where simplification could achieve the same result
 
-* Overly complex methods which could be broken up at logical boundaries
+* Overly complex methods which could be broken up at logical
+  boundaries
 
 * Readability and maintainability concerns
 
@@ -157,19 +234,12 @@ Now review the system for architectural concerns:
 
 Contest results:
 
-Game 1-5 as team #2:
-1: 80  | 120 | Win by ~93
-2: 120 | 80 | Win by 160
-3: 160 | 160 | Win by 120
-4: 80  | 160 | Win by ~55
-5: 160 | 97.777 (tie some vinyl destroyed)
+Game 1-5 as team #2: 1: 80 | 120 | Win by ~93 2: 120 | 80 | Win by 160
+3: 160 | 160 | Win by 120 4: 80 | 160 | Win by ~55 5: 160 | 97.777
+(tie some vinyl destroyed)
 
-Game 6-10 as team #1:
-6: 120 | 120
-7: 80  | 80
-8: 120 | 120
-9: 120 | 93.333
-10: 120 | 40
+Game 6-10 as team #1: 6: 120 | 120 7: 80 | 80 8: 120 | 120 9: 120 |
+93.333 10: 120 | 40
 
 7-3 | 5-4-1
 
@@ -189,12 +259,11 @@ Re-enabled with --legacy-velocity-limits:
   * Velocity Clamping Error - The velocity clamping approach did
     asymetrical things depending on the exect headings and thrust -
     and could even accelerate ships above the limit! Now velocity is
-    clamped to 30 by:
-    a. Compute the total velocity vector given by current_v + thrust
-    b. Truncate the vector to the region inside our "velocity circle"
-       whose radius is the game world's max speed.
-    b. Charge an additional fuel penalty equal to the amount of
-       thrust this truncation effectively gives to the ship "for free."
+    clamped to 30 by: a. Compute the total velocity vector given by
+    current_v + thrust b. Truncate the vector to the region inside our
+    "velocity circle" whose radius is the game world's max speed.
+    b. Charge an additional fuel penalty equal to the amount of thrust
+    this truncation effectively gives to the ship "for free."
 
   * Turn Clamping - The original game engine allowed any value to the
     SetOrder for turns, and would charge fuel even though for example
@@ -225,10 +294,11 @@ Re-enabled with --legacy-velocity-limits:
 
 Re-enabled with --legacy-asteroid-eat-damage:
 
-  * Eatable Asteroid Collision Handling - The original simulation dealt
-    damage to the ship when colliding with an asteroid regardless of
-    whether the asteroid was "eaten" by the ship. Now the default
-    behavior is eaten asteroids deal no damage to the ship.
+  * Eatable Asteroid Collision Handling - The original simulation
+    dealt damage to the ship when colliding with an asteroid
+    regardless of whether the asteroid was "eaten" by the ship. Now
+    the default behavior is eaten asteroids deal no damage to the
+    ship.
 
 Re-enabled with --legacy-collision-detection:
 
@@ -337,7 +407,8 @@ Not re-enableable:
 
 ==================================
 
-========================== ENGINE TODO ============================================
+========================== ENGINE TODO
+============================================
 
 A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it
 possible thinking this through there are other such races, like what
@@ -345,56 +416,87 @@ if a ship gets hit by 2 asteroids in one turn, does the engine
 correctly handle managing total cargo area in the ship under multiple
 collisions?
 
-???????????? LASER TARGETING BUG ?????????????????????????
-  Q. Is there a bug in LaserTarget?
-     * We check if we are IsFacing, but we compare distance with DistTo which uses toroidal aware distance, and may not be the distance in the direction we're facing.
-     * Also, the interface here seems confusing - if mindist > dlaspwr then we're not actually going to hit anything - we are just aiming at something too far away - so when that happens do we want to know that, or do we want to get that we're not aiming at anything.
-  * AS PHRASED TO GTP-T HIGH: Is there a subtle bug in CShip::LaserTarget whereby both IsFacing and DistTo use toroid aware geometry, and so will report that a Ship is facing a target only if it is facing it along the shortest path to the target?
-  E.g. if a ship is at (-400, 0) and is oriented with theta = 0 (facing rightward), and an asteroid is at (400, 0), won’t LaserTarget return false for that ship?
+???????????? LASER TARGETING BUG ?????????????????????????  Q. Is
+  there a bug in LaserTarget?  * We check if we are IsFacing, but we
+  compare distance with DistTo which uses toroidal aware distance, and
+  may not be the distance in the direction we're facing.  * Also, the
+  interface here seems confusing - if mindist > dlaspwr then we're not
+  actually going to hit anything - we are just aiming at something too
+  far away - so when that happens do we want to know that, or do we
+  want to get that we're not aiming at anything.  * AS PHRASED TO
+  GTP-T HIGH: Is there a subtle bug in CShip::LaserTarget whereby both
+  IsFacing and DistTo use toroid aware geometry, and so will report
+  that a Ship is facing a target only if it is facing it along the
+  shortest path to the target?  E.g. if a ship is at (-400, 0) and is
+  oriented with theta = 0 (facing rightward), and an asteroid is at
+  (400, 0), won’t LaserTarget return false for that ship?
 
-Now - it just so happens in our implementation that the maximum laser distance is 512 units, so in practice this might not matter much - however the logic for LaserTarget considers the case where a laser can’t reach the target and reports that yes, it is facing that target when it believes IsFacing is true - so at the least this seems inconsistent.
-===END GTP-5 QUERY===
+Now - it just so happens in our implementation that the maximum laser
+distance is 512 units, so in practice this might not matter much -
+however the logic for LaserTarget considers the case where a laser
+can’t reach the target and reports that yes, it is facing that target
+when it believes IsFacing is true - so at the least this seems
+inconsistent.  ===END GTP-5 QUERY===
 
-=== GTP ANSWER ===
-Short answer: Yes, that subtlety is real.
+=== GTP ANSWER === Short answer: Yes, that subtlety is real.
 
 What happens
 
-- Toroid-shortest facing: CThing::IsFacing uses the shortest-wrap vector (CCoord::AngleTo/VectTo). So a ship at (-400, 0) facing θ=0
-with a target at (400, 0) is deemed “not facing” (shortest vector is left, x = −224), and LaserTarget will ignore it. If the ship
-faces θ=π, IsFacing returns true and the target can be selected.
-- Range mismatch: CShip::LaserTarget picks the nearest facing target even if it’s out of range; it only clamps dLaserDist for UI. It
-does not null the target when mindist > laser power.
-- Flawed range check later: World::LaserModel then “validates” range using DistTo(ship, LasPos), but LasPos was constructed as ship +
-(L, orient). DistTo there is the shortest toroidal distance and will be ≤ L by construction, so the range check almost never rejects.
-If the true shortest distance to the target D > L, the code still proceeds and computes laser “mass” as 30*(L − D), which can be
-negative.
+- Toroid-shortest facing: CThing::IsFacing uses the shortest-wrap
+vector (CCoord::AngleTo/VectTo). So a ship at (-400, 0) facing θ=0
+with a target at (400, 0) is deemed “not facing” (shortest vector is
+left, x = −224), and LaserTarget will ignore it. If the ship faces
+θ=π, IsFacing returns true and the target can be selected.  - Range
+mismatch: CShip::LaserTarget picks the nearest facing target even if
+it’s out of range; it only clamps dLaserDist for UI. It does not null
+the target when mindist > laser power.  - Flawed range check later:
+World::LaserModel then “validates” range using DistTo(ship, LasPos),
+but LasPos was constructed as ship + (L, orient). DistTo there is the
+shortest toroidal distance and will be ≤ L by construction, so the
+range check almost never rejects.  If the true shortest distance to
+the target D > L, the code still proceeds and computes laser “mass” as
+30*(L − D), which can be negative.
 
 Impact
 
-- Your example (800 along the long way) is unreachable anyway because max laser length is clamped to 512, so ignoring it is
-consistent with range. But the inconsistency remains: LaserTarget says “facing” based on shortest-path alignment, not on whether the
-forward ray can reach the target; and out‑of‑range targets can slip through to LaserModel, producing negative laser mass.
-- Side effect: Stations subtract cargo by mass/1000. A negative mass would increase station cargo. That’s a real bug path when
-mindist > L but IsFacing is true.
+- Your example (800 along the long way) is unreachable anyway because
+max laser length is clamped to 512, so ignoring it is consistent with
+range. But the inconsistency remains: LaserTarget says “facing” based
+on shortest-path alignment, not on whether the forward ray can reach
+the target; and out‑of‑range targets can slip through to LaserModel,
+producing negative laser mass.  - Side effect: Stations subtract cargo
+by mass/1000. A negative mass would increase station cargo. That’s a
+real bug path when mindist > L but IsFacing is true.
 
 Minimal fixes (pick one)
 
-- Enforce range in target selection: In CShip::LaserTarget, skip targets with DistTo > current laser power (retain dLaserDist for
-UI).
-- Correct the range check: In CWorld::LaserModel, replace the DistTo(ship, LasPos) check with an along-ray test. Compute dir =
-unit(GetOrient()); for candidate target center c (consider 9 toroidal images c + (iW, jH)), project r = (c − ship) onto dir: t =
-dot(r, dir), d_perp = |cross(r, dir)|. Require 0 ≤ t ≤ L and d_perp ≤ target.size; pick the smallest t. If none hit, treat as out
-of range.
+- Enforce range in target selection: In CShip::LaserTarget, skip
+targets with DistTo > current laser power (retain dLaserDist for UI).
+- Correct the range check: In CWorld::LaserModel, replace the
+DistTo(ship, LasPos) check with an along-ray test. Compute dir =
+unit(GetOrient()); for candidate target center c (consider 9 toroidal
+images c + (iW, jH)), project r = (c − ship) onto dir: t = dot(r,
+dir), d_perp = |cross(r, dir)|. Require 0 ≤ t ≤ L and d_perp ≤
+target.size; pick the smallest t. If none hit, treat as out of range.
 
-If you’d like, I can patch LaserTarget to filter by range (simple, low risk), or implement the proper ray-cast (robust and consistent
-with wrap-around).
+If you’d like, I can patch LaserTarget to filter by range (simple, low
+risk), or implement the proper ray-cast (robust and consistent with
+wrap-around).
 
-Q8. Question 8: LaserTarget and Toroidal Geometry
-Your interpretation is correct. CShip::LaserTarget relies on IsFacing, which uses CCoord subtraction to find the shortest path vector across the torus.
-In your example (Ship at -400 facing East, Target at 400), the shortest path is West. IsFacing returns FALSE. The ship cannot target the "long way around."
-This is consistent in practice because the laser range is capped at 512 units (half the world size).
-Subtle Bug (The Antipode): There is an edge case bug when the target is exactly halfway across the world (distance 512). At this point, there are multiple equally valid shortest paths (e.g., East and West). CCoord normalization arbitrarily chooses one. If the ship is facing the target along one shortest path, but CCoord normalization chooses the opposite path, IsFacing will return FALSE, preventing the laser from firing despite correct alignment. 
+Q8. Question 8: LaserTarget and Toroidal Geometry Your interpretation
+is correct. CShip::LaserTarget relies on IsFacing, which uses CCoord
+subtraction to find the shortest path vector across the torus.  In
+your example (Ship at -400 facing East, Target at 400), the shortest
+path is West. IsFacing returns FALSE. The ship cannot target the "long
+way around."  This is consistent in practice because the laser range
+is capped at 512 units (half the world size).  Subtle Bug (The
+Antipode): There is an edge case bug when the target is exactly
+halfway across the world (distance 512). At this point, there are
+multiple equally valid shortest paths (e.g., East and West). CCoord
+normalization arbitrarily chooses one. If the ship is facing the
+target along one shortest path, but CCoord normalization chooses the
+opposite path, IsFacing will return FALSE, preventing the laser from
+firing despite correct alignment.
 
 
 ????????????????? LASER BUG ???????????????????
@@ -412,9 +514,9 @@ Subtle Bug (The Antipode): There is an edge case bug when the target is exactly 
 
 * Configure number and size of initial asteroids.
 
-1. Add comments throughout on orders:
-  * Thrust, Turn, Jettison are mutually exclusive
-  * Fire lasers and raise shields be done in any combination with one of the above.
+1. Add comments throughout on orders: * Thrust, Turn, Jettison are
+mutually exclusive * Fire lasers and raise shields be done in any
+combination with one of the above.
 
 ??????????????? Find the questions I asked here ?????????????????
 
@@ -428,8 +530,9 @@ type example.
 
 Add a rule that you can't set jettison orders while docked / you get
 back a zero in planning - since you can't jettison while docked why
-set the order.
-  * NOTE: before changing this consider the implications on subtuns - maybe you can issue a jettison order and then blast off or land or something.
+set the order.  * NOTE: before changing this consider the implications
+on subtuns - maybe you can issue a jettison order and then blast off
+or land or something.
 
 ====
 
@@ -472,9 +575,17 @@ Q. What is CWorld::SetTeam for? It seems like it's stripping out ships
 and stations of the other team? And then adding in the ones for the
 new team? Why bother with all this?
 
-####################### END ENGINE TODO ##########################################
+####################### END ENGINE TODO
+                        ##########################################
 
-========================== Groonew TODO ============================================
+========================== Groonew TODO
+============================================
+
+In endgame - don't max up shields before colliding with big uranium -
+just take the hit to preserve more uranium in the world.
+
+After reducing enemy base to 0 and killing all enemy ships do a little
+acrobatic manouvers.
 
 Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.

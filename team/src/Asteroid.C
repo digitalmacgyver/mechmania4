@@ -91,6 +91,7 @@ CollisionState CAsteroid::MakeCollisionState() const {
 
 // Deterministic collision engine - apply asteroid-specific commands
 void CAsteroid::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const CollisionContext& ctx) {
+  (void)ctx;
   // This method handles asteroid-specific command types
   // Base class already handled kKillSelf, kSetVelocity, kSetPosition
 
