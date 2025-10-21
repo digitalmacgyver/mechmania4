@@ -190,6 +190,8 @@ double CShip::IntegrateTurnOrder(double turnamt, double dt, double turn_phase) {
 
     double maxfuel = GetAmount(S_FUEL);
     if (fuelcons > maxfuel && !IsDocked()) {
+      // Fuel clamp intentionally scales rotation linearly even though true kinetic cost is quadratic.
+      // This keeps order scaling intuitive for teams despite deviating from real-world physics drag.
       double scale = (fuelcons > 0.0) ? (maxfuel / fuelcons) : 0.0;
       omega_result *= scale;
       fuelcons = maxfuel;

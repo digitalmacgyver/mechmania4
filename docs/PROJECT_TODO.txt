@@ -3,6 +3,33 @@
 
 ===
 
+
+==
+
+We've implemented a large refactoring change in the current code base. The changes are in the tracked but uncommitted files.
+
+Review these changes and check for:
+
+1. Functionally identical - the task here was to refactor to increase readability and ease of
+  maintenance - no functionality should change. Is this the case for these changes?
+ 
+  2. No interaction with legacy code paths - the legacy code paths enabled by various --legacy
+  parameters and guarded by various conditional checks of those settings should not have changed
+  functionally in any way as a result of these changes. Is that the case for these changes?
+
+
+==
+
+Great - our team has applied many of the fixes. We are ready for another round of code reviews.
+
+
+
+I have attached the latest requirements / design docs ihn the docs.md file, and updated project code in the .cpp files.
+
+
+
+In addition the the checks requested below, perform a standard battery of C/C++ static analysis checks such as those in the style of the ones offered by Coverity, Black Duck, Clockwork, etc. (e.g. use after free, inconsistent access of potentially null pointer after checks, and so on).
+
 We're going to conduct a code review for a portion of a codebase that
 simulates a simple 2d toroidal starship exploration and combat game
 which is the basis for a coding contest.
@@ -68,6 +95,28 @@ brief summary of the problem, the relevant line numbers / triggering
 conditions, etc.. Each issue you flag will become an issue for a
 developer to fix so include the correct level of detail that a
 developer could address it.
+
+====
+Great - we've got our engineers working on those fixes.
+
+
+
+Now review the system for architectural concerns:
+
+* redundant / duplicative code that should be factored into its own module
+
+* confused ownership semantics of state between interacting objects
+
+* Areas where simplification could achieve the same result
+
+* Overly complex methods which could be broken up at logical boundaries
+
+* Readability and maintainability concerns
+
+* Weird side effects / enforce the principle of least astonisment
+
+
+
 
 ====
 
