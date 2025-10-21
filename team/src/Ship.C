@@ -98,6 +98,37 @@ bool AsteroidFitsSnapshot(const CollisionState* ship_state,
   return false;
 }
 
+double ComputeRelativeSpeedAlongNormal(const CollisionState* self_state,
+                                       const CollisionState* other_state,
+                                       double fallback_angle) {
+  if (self_state == NULL || other_state == NULL) {
+    return 0.0;
+  }
+
+  CCoord normal = self_state->position - other_state->position;
+  double normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
+
+  if (normal_mag_sq < g_fp_error_epsilon) {
+    normal.fX = cos(fallback_angle);
+    normal.fY = sin(fallback_angle);
+    normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
+  }
+
+  if (normal_mag_sq < g_fp_error_epsilon) {
+    return 0.0;
+  }
+
+  double normal_mag = sqrt(normal_mag_sq);
+  double nx = normal.fX / normal_mag;
+  double ny = normal.fY / normal_mag;
+
+  CTraj relative_velocity = other_state->velocity - self_state->velocity;
+  CCoord rel_cart = relative_velocity.ConvertToCoord();
+  double v_rel_normal = rel_cart.fX * nx + rel_cart.fY * ny;
+
+  return fabs(v_rel_normal);
+}
+
 }  // namespace
 
 void CShip::ProcessShieldOrder(double shieldamt) {
@@ -571,9 +602,10 @@ CollisionOutcome CShip::HandleAsteroidCollision(const CollisionContext& ctx,
   if (ctx.use_new_physics) {
     double m1 = self_state->mass;
     double m2 = other_state->mass;
-    CTraj v_rel = other_state->velocity - self_state->velocity;
     double reduced_mass = (m1 * m2) / (m1 + m2);
-    damage = (2.0 * reduced_mass * v_rel.rho) / g_laser_damage_mass_divisor;
+    double v_rel_normal = ComputeRelativeSpeedAlongNormal(self_state, other_state,
+                                                          ctx.random_separation_angle);
+    damage = (2.0 * reduced_mass * v_rel_normal) / g_laser_damage_mass_divisor;
   } else {
     CTraj rel_momentum = (other_state->velocity - self_state->velocity) * other_state->mass;
     damage = rel_momentum.rho / g_laser_damage_mass_divisor;
@@ -621,9 +653,10 @@ CollisionOutcome CShip::HandleShipCollision(const CollisionContext& ctx,
   if (ctx.use_new_physics) {
     double m1 = self_state->mass;
     double m2 = other_state->mass;
-    CTraj v_rel = other_state->velocity - self_state->velocity;
     double reduced_mass = (m1 * m2) / (m1 + m2);
-    damage = (2.0 * reduced_mass * v_rel.rho) / g_laser_damage_mass_divisor;
+    double v_rel_normal = ComputeRelativeSpeedAlongNormal(self_state, other_state,
+                                                          ctx.random_separation_angle);
+    damage = (2.0 * reduced_mass * v_rel_normal) / g_laser_damage_mass_divisor;
   } else {
     CTraj rel_momentum = (other_state->velocity - self_state->velocity) * other_state->mass;
     damage = rel_momentum.rho / g_laser_damage_mass_divisor;
@@ -674,35 +707,21 @@ CollisionOutcome CShip::HandleShipCollision(const CollisionContext& ctx,
     outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
 
     double separation_dist = self_state->size + g_ship_collision_bump;
-    double separation_angle;
     const char* separation_mode = nullptr;
 
-    double pos_diff_x = self_state->position.fX - other_state->position.fX;
-    double pos_diff_y = self_state->position.fY - other_state->position.fY;
-    double pos_distance_sq = pos_diff_x * pos_diff_x + pos_diff_y * pos_diff_y;
-
-    if (pos_distance_sq > g_fp_error_epsilon) {
-      separation_angle = other_state->position.AngleTo(self_state->position);
+    CTraj normal_dir = elastic.collision_normal;
+    if (normal_dir.rho <= g_fp_error_epsilon) {
+      // Fallback if elastic computation couldn't provide a normal
+      double fallback_angle = self_state->position.AngleTo(other_state->position);
+      normal_dir = CTraj(1.0, fallback_angle);
       separation_mode = "GEOMETRIC";
     } else {
-      double base_angle = ctx.random_separation_angle;
-      CThing* obj1 = self_state->thing;
-      CThing* obj2 = other_state->thing;
-      unsigned int idx1 = obj1->GetWorldIndex();
-      unsigned int idx2 = obj2->GetWorldIndex();
-      if (idx1 > idx2 || (idx1 == idx2 && obj1 > obj2)) {
-        std::swap(obj1, obj2);
-      }
-      if (self_state->thing == obj1) {
-        separation_angle = base_angle;
-      } else {
-        separation_angle = base_angle + PI;
-        if (separation_angle > PI) {
-          separation_angle -= 2.0 * PI;
-        }
-      }
-      separation_mode = "RANDOM";
+      separation_mode = elastic.used_random_normal ? "RANDOM" : "GEOMETRIC";
     }
+
+    // Move self away from other: opposite the normal (which points self -> other)
+    CTraj separation_axis(1.0, normal_dir.theta + PI);
+    double separation_angle = separation_axis.theta;
 
     CTraj separation_vec(separation_dist, separation_angle);
     CCoord bump_pos = self_state->position;
@@ -794,9 +813,15 @@ double CShip::SetCapacity(ShipStat st, double val) {
     tot -= g_ship_total_stat_capacity;
     if (st == S_CARGO) {
       adStatMax[(unsigned int)S_FUEL] -= tot;
+      if (adStatMax[(unsigned int)S_FUEL] < 0.0) {
+        adStatMax[(unsigned int)S_FUEL] = 0.0;
+      }
     }
     if (st == S_FUEL) {
       adStatMax[(unsigned int)S_CARGO] -= tot;
+      if (adStatMax[(unsigned int)S_CARGO] < 0.0) {
+        adStatMax[(unsigned int)S_CARGO] = 0.0;
+      }
     }
   }
 
@@ -2417,10 +2442,9 @@ void CShip::HandleElasticShipCollision(CThing* pOtherShip) {
   CCoord vel1 = GetVelocity().ConvertToCoord();
   CCoord vel2 = pOtherShip->GetVelocity().ConvertToCoord();
 
-  // Calculate position difference vector (x1 - x2)
-  CCoord dx;
-  dx.fX = pos1.fX - pos2.fX;
-  dx.fY = pos1.fY - pos2.fY;
+  // Calculate position difference vector (x1 - x2) using toroidal geometry
+  CTraj delta_pos_traj = pos2.VectTo(pos1);
+  CCoord dx = delta_pos_traj.ConvertToCoord();
 
   // Calculate velocity difference vector (v1 - v2)
   CCoord dv;
@@ -2545,7 +2569,7 @@ void CShip::HandleElasticShipCollision(CThing* pOtherShip) {
 
   // Normal case: ships at different positions
   if (g_pParser && g_pParser->verbose) {
-    double dist = sqrt(dx_squared);
+    double dist = delta_pos_traj.rho;
     printf("[ELASTIC] %s <-> %s: NORMAL (dist=%.3f)\n",
            GetName(), pOtherShip->GetName(), dist);
     printf("[ELASTIC]   Before: pos1=(%.1f,%.1f) vel1=(%.2f,%.2f) m1=%.1f\n",
@@ -2641,10 +2665,9 @@ double CShip::CalculateCollisionMomentumChange(const CThing* pOtherThing) const 
     CCoord pos1 = GetPos();
     CCoord pos2 = pOtherThing->GetPos();
 
-    // Calculate position difference vector (collision normal direction)
-    CCoord dx;
-    dx.fX = pos1.fX - pos2.fX;
-    dx.fY = pos1.fY - pos2.fY;
+    // Calculate position difference vector (collision normal direction) using toroidal geometry
+    CTraj delta_pos = pos2.VectTo(pos1);
+    CCoord dx = delta_pos.ConvertToCoord();
 
     double dx_squared = dx.fX * dx.fX + dx.fY * dx.fY;
 
@@ -2670,7 +2693,7 @@ double CShip::CalculateCollisionMomentumChange(const CThing* pOtherThing) const 
     double dot_v_dx = v_rel.fX * dx.fX + v_rel.fY * dx.fY;
 
     // Relative velocity along collision normal: v_rel_normal = dot / |dx|
-    double dx_mag = sqrt(dx_squared);
+    double dx_mag = delta_pos.rho;
     double v_rel_normal = fabs(dot_v_dx) / dx_mag;
 
     // Momentum change magnitude for elastic collision

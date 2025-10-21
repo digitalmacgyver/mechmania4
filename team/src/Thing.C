@@ -85,22 +85,27 @@ const char* CThing::GetName() const { return Name; }
 // Incoming data
 
 void CThing::SetName(const char* strsrc) {
-  bool bGotZero = false;
-
-  for (unsigned int i = 0; i < maxnamelen - 1; ++i) {
-    if (bGotZero == true) {
+  if (strsrc == NULL) {
+    for (unsigned int i = 0; i < maxnamelen; ++i) {
       Name[i] = 0;
     }
-    Name[i] = strsrc[i];
-    if (Name[i] == '\n') {
-      Name[i] = ' ';
-    }
-    if (Name[i] == 0) {
-      bGotZero = true;
-    }
+    return;
   }
 
-  Name[maxnamelen - 1] = 0;
+  unsigned int i = 0;
+  for (; i < maxnamelen - 1 && strsrc[i] != '\0'; ++i) {
+    char ch = strsrc[i];
+    if (ch == '\n') {
+      ch = ' ';
+    }
+    Name[i] = ch;
+  }
+
+  // Null-terminate and clear any remaining bytes.
+  Name[i++] = 0;
+  for (; i < maxnamelen; ++i) {
+    Name[i] = 0;
+  }
 }
 
 void CThing::KillThing() { DeadFlag = true; }
@@ -186,8 +191,7 @@ bool CThing::CollideOld(CThing* pOthThing, CWorld* pWorld) {
     if (!skip_logging) {
       CCoord pos1 = GetPos();
       CCoord pos2 = pOthThing->GetPos();
-      double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
-                         (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
+      double dist = pos1.DistTo(pos2);
       double combined_size = GetSize() + pOthThing->GetSize();
       double overlap = combined_size - dist;
 
@@ -261,8 +265,7 @@ bool CThing::CollideNew(CThing* pOthThing, CWorld* pWorld) {
     if (!skip_logging) {
       CCoord pos1 = GetPos();
       CCoord pos2 = pOthThing->GetPos();
-      double dist = sqrt((pos1.fX - pos2.fX) * (pos1.fX - pos2.fX) +
-                         (pos1.fY - pos2.fY) * (pos1.fY - pos2.fY));
+      double dist = pos1.DistTo(pos2);
       double combined_size = GetSize() + pOthThing->GetSize();
       double overlap = combined_size - dist;
 

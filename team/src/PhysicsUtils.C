@@ -13,10 +13,12 @@ ElasticCollisionResult CalculateElastic2DCollision(double m1, const CTraj& v1, c
                                                    double m2, const CTraj& v2, const CCoord& p2,
                                                    double random_angle, bool has_random) {
   ElasticCollisionResult result;
+  result.used_random_normal = false;
 
   if (m1 < 0.001 || m2 < 0.001) {
     result.v1_final = v1;
     result.v2_final = v2;
+    result.collision_normal = CTraj(0.0, 0.0);
     return result;
   }
 
@@ -31,10 +33,12 @@ ElasticCollisionResult CalculateElastic2DCollision(double m1, const CTraj& v1, c
       normal.fX = std::cos(random_angle);
       normal.fY = std::sin(random_angle);
       normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
+      result.used_random_normal = true;
     } else {
       normal.fX = 1.0;
       normal.fY = 0.0;
       normal_mag_sq = 1.0;
+      result.used_random_normal = true;
     }
   }
 
@@ -69,6 +73,8 @@ ElasticCollisionResult CalculateElastic2DCollision(double m1, const CTraj& v1, c
 
   result.v1_final = CTraj(v1_final_cart);
   result.v2_final = CTraj(v2_final_cart);
+  result.collision_normal = CTraj(n);
+  result.collision_normal.Normalize();
 
   return result;
 }

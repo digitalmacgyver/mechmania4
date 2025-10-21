@@ -61,9 +61,9 @@ Ships in docked state cannot be hit by anything. They can only take damage again
 **Step-by-step calculation:**
 1. Ship A mass = 70 tons, velocity = +10 units/second (east)
 2. Ship B mass = 70 tons, velocity = -10 units/second (west)
-3. Relative velocity = 10 - (-10) = 20 units/second
-4. For elastic collision between equal masses: |Δp| = m × v_rel = 70 × 20 = 1400
-   - (General formula: |Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel, which simplifies to m × v_rel when m₁ = m₂)
+3. Relative velocity along the collision normal (`v_rel_normal`) = 10 - (-10) = 20 units/second (head-on)
+4. For elastic collision between equal masses: |Δp| = m × v_rel_normal = 70 × 20 = 1400
+   - (General formula: |Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal, which simplifies to m × v_rel_normal when m₁ = m₂)
 5. Damage formula: damage = |Δp| / g_laser_damage_mass_divisor = 1400 / 1000 = **1.4**
 6. Shield loss for each ship = **1.4 shield units depleted**
 
@@ -87,8 +87,8 @@ Ships in docked state cannot be hit by anything. They can only take damage again
 2. Ship free cargo capacity = 10 tons
 3. Since 14 tons > 10 tons, the asteroid does NOT fit
 4. Collision type: **Elastic** (both bounce)
-5. Damage formula: |Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel
-6. Assuming relative velocity = 15 units/second:
+5. Damage formula: |Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal
+6. Assuming the normal component of relative velocity (`v_rel_normal`) = 15 units/second (nearly head-on):
    - |Δp| = (2 × 50 × 14 / (50 + 14)) × 15
    - |Δp| = (1400 / 64) × 15
    - |Δp| = 21.875 × 15 = 328.125

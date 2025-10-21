@@ -71,6 +71,9 @@ CWorld::~CWorld() {
     if (pTTmp == NULL) {
       continue;
     }
+    // Ownership note: CWorld only creates and owns asteroids. Ships and stations are
+    // allocated by their CTeam and freed when the team is destroyed, so we must not
+    // delete them here to avoid double frees.
     if (pTTmp->GetKind() == ASTEROID) {
       delete pTTmp;
     }
@@ -93,6 +96,8 @@ CWorld* CWorld::CreateCopy() {
   acsz = SerialPack(buf, sz);
   if (acsz != sz) {
     printf("ERROR: World assignment\n");
+    delete[] buf;
+    delete pWld;
     return NULL;
   }
 
@@ -733,6 +738,7 @@ void CWorld::CreateAsteroids(AsteroidKind mat, unsigned int numast, double mass)
 
   for (i = 0; i < numast; ++i) {
     pAst = new CAsteroid(mass, mat);
+    // Asteroids are created and owned by CWorld; see destructor for cleanup rules.
     AddThingToWorld(pAst);
   }
 }
@@ -772,6 +778,7 @@ CTeam* CWorld::SetTeam(unsigned int n, CTeam* pTm) {
   apTeams[n] = pTm;
   pTm->SetWorldIndex(n);
   pTm->SetWorld(this);
+  // Ships/stations remain owned by their CTeam; CWorld only hosts them in the simulation.
   AddThingToWorld(pTm->GetStation());
   for (numsh = 0; numsh < pTm->GetShipCount(); ++numsh) {
     AddThingToWorld(pTm->GetShip(numsh));

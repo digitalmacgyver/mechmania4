@@ -648,12 +648,9 @@ void CAsteroid::CreateFragmentsNew(CThing* pOthThing, CWorld* pWorld,
     CCoord vel_ast = Vel.ConvertToCoord();
     CCoord vel_ship = pOthThing->GetVelocity().ConvertToCoord();
 
-    // Calculate position difference (x_ast - x_ship)
-    CCoord dx;
-    dx.fX = pos_ast.fX - pos_ship.fX;
-    dx.fY = pos_ast.fY - pos_ship.fY;
-
-    // Calculate squared distance |x_ast - x_ship|²
+    // Calculate position difference (x_ast - x_ship) using toroidal geometry
+    CTraj delta_pos = pos_ship.VectTo(pos_ast);
+    CCoord dx = delta_pos.ConvertToCoord();
     double dx_squared = dx.fX * dx.fX + dx.fY * dx.fY;
 
     if (dx_squared > g_fp_error_epsilon) {

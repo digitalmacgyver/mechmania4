@@ -12,8 +12,10 @@
 namespace PhysicsUtils {
 
 struct ElasticCollisionResult {
-  CTraj v1_final;  // Final velocity of object 1
-  CTraj v2_final;  // Final velocity of object 2
+  CTraj v1_final;         // Final velocity of object 1
+  CTraj v2_final;         // Final velocity of object 2
+  CTraj collision_normal; // Unit vector from object 1 toward object 2
+  bool used_random_normal;
 };
 
 // Calculate perfectly elastic collision outcome between two moving circles.
