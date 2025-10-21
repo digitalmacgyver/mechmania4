@@ -592,9 +592,7 @@ CollisionOutcome CShip::HandleAsteroidCollision(const CollisionContext& ctx,
     } else if (material == URANIUM) {
       outcome.AddCommand(CollisionCommand::AdjustFuel(self_state->thing, other_state->mass));
     }
-
-    outcome.AddCommand(CollisionCommand::RecordEatenBy(other_state->thing, self_state->thing));
-    outcome.AddCommand(CollisionCommand::Kill(other_state->thing));
+    // Asteroid owns its own kill/record commands; see CAsteroid::GenerateCollisionCommands.
     return outcome;
   }
 
