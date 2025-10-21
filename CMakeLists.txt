@@ -334,6 +334,7 @@ add_executable(test_toroidal_coordinates
     ${SRC_DIR}/Coord.C
     ${SRC_DIR}/Traj.C
     ${SRC_DIR}/Sendable.C
+    ${SRC_DIR}/GameConstants.C
 )
 target_include_directories(test_toroidal_coordinates PRIVATE ${SRC_DIR})
 target_link_libraries(test_toroidal_coordinates m)  # Link math library

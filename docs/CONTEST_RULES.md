@@ -185,7 +185,7 @@ After the final sub-step, **laser orders fire** once for the turn. A full breakd
 - The momentum change depends on the collision type:
   - **Elastic collisions** (ship-ship, ship-large asteroid): `|Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal`
   - **Inelastic collisions** (ship-small asteroid): `|Δp| = (m₁ × m₂ / (m₁ + m₂)) × v_rel`
-
+- `v_rel_normal` is measured along the geometric line-of-centers. If both centres coincide, the engine uses a shared random heading for the impulse direction.
 - Ships weigh their 40-ton hull plus carried fuel and vinyl (0–60 tons combined), while naturally spawned asteroids range from roughly 3 to 40 tons. With velocity capped at `g_game_max_speed` (30 units/s), typical collisions cause 1000-3000 damage (1-3 shield units depleted) per ship.
 
 ### Laser Targets by Object Type

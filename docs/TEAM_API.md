@@ -502,7 +502,7 @@ where `|Δp|` is the magnitude of momentum change experienced by each object, an
 - **Both objects take equal damage** (Newton's 3rd Law: equal and opposite momentum changes)
 - **Elastic collisions** (ship-ship, ship-large asteroid): `|Δp| = (2 × m₁ × m₂ / (m₁ + m₂)) × v_rel_normal`
 - **Inelastic collisions** (ship-small asteroid): `|Δp| = (m₁ × m₂ / (m₁ + m₂)) × v_rel`
-- `v_rel_normal` is the relative velocity component along the collision line (depends on impact angle)
+- `v_rel_normal` is measured along the geometric line-of-centers. When both centres coincide, the engine falls back to the shared random heading assigned to that collision.
 
 **Mass ranges:**
 - Ships: 40–100 tons (40 ton hull + 0–60 tons fuel/cargo)

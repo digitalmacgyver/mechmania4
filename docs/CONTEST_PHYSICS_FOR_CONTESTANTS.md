@@ -13,9 +13,9 @@ All collisions are handled pairwise using idealised Newtonian mechanics plus a f
 
 | Participants | Physics Model | Energy Outcome | Notes |
 | --- | --- | --- | --- |
-| Ship ↔ Ship | Perfectly elastic along the collision normal. | Kinetic energy conserved. | Normal is the relative intercept line. If relative velocity is zero, the line of centres is used. If positions and velocities coincide, a shared random heading is chosen for both ships. |
+| Ship ↔ Ship | Perfectly elastic along the collision normal. | Kinetic energy conserved. | Normal is the line of centres. If the centres coincide, both ships reuse the shared random heading generated for the collision. |
 | Ship ↔ Small Asteroid (fits) | Perfectly inelastic. | Kinetic energy not conserved. | Asteroid mass is absorbed into fuel (uranium) or cargo (vinyl). |
-| Ship ↔ Large Asteroid (does not fit) | Perfectly elastic. | Kinetic energy conserved. | Asteroid breaks up (see below). |
+| Ship ↔ Large Asteroid (does not fit) | Perfectly elastic. | Kinetic energy conserved. | Asteroid breaks up (see below). Collision normal is the line of centres. |
 | Ship ↔ Station | Docking (no physics impulse). | — | Ship teleports to station centre, velocity zeroed, and becomes docked. All vinyl cargo is transferred from ship to station (increases the owning team's score). |
 | Station ↔ Asteroid/Ship | Elastic reflection for asteroids; docking for ships. | Energy conserved for asteroid bounces. | Stations never move, but asteroids striking them bounce off. Ships that collide with their own station dock instead of bouncing. |
 | Laser ↔ Ship | Treated as a perfectly inelastic mass-on-impact. | Energy decreases (beam dissipates). | Damage equals remaining beam energy divided by 1000. Target absorbs momentum along beam direction. |

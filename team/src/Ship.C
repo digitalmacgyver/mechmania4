@@ -13,6 +13,8 @@
 #include "Team.h"
 #include "World.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
+#include <algorithm>         // For std::swap
+#include <cmath>             // For cos/sin fallback normals
 #include <functional>        // For std::function (recursive lambda)
 
 extern CParser* g_pParser;
@@ -196,6 +198,7 @@ CollisionState CShip::MakeCollisionState() const {
 
   // Populate ship-specific fields
   state.is_docked = bDockFlag;
+  state.was_docked = bWasDocked;
   state.ship_shield = GetAmount(S_SHIELD);
   state.ship_cargo = GetAmount(S_CARGO);
   state.ship_fuel = GetAmount(S_FUEL);
@@ -460,23 +463,23 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
         new_vel.rho = g_game_max_speed;
       }
 
-      outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+    outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
 
-      // Add asteroid mass to ship's cargo/fuel
-      AsteroidKind material = other_state->asteroid_material;
-      if (material == VINYL) {
+    // Add asteroid mass to ship's cargo/fuel
+    AsteroidKind material = other_state->asteroid_material;
+    if (material == VINYL) {
         outcome.AddCommand(CollisionCommand::AdjustCargo(self_state->thing, other_state->mass));
       } else if (material == URANIUM) {
         outcome.AddCommand(CollisionCommand::AdjustFuel(self_state->thing, other_state->mass));
       }
 
-      // Record that ship ate this asteroid
-      outcome.AddCommand(CollisionCommand::RecordEatenBy(other_state->thing, self_state->thing));
+    // Record that ship ate this asteroid
+    outcome.AddCommand(CollisionCommand::RecordEatenBy(other_state->thing, self_state->thing));
 
-      // Kill the eaten asteroid (it's now part of ship's cargo/fuel)
-      outcome.AddCommand(CollisionCommand::Kill(other_state->thing));
+    // Kill the eaten asteroid (it's now part of ship's cargo/fuel)
+    outcome.AddCommand(CollisionCommand::Kill(other_state->thing));
 
-    } else {
+  } else {
       // LARGE ASTEROID: Collision damage
 
       // Calculate damage
@@ -510,7 +513,8 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
         // Perfectly elastic collision - conserves momentum and energy
         ElasticCollisionResult elastic = CalculateElastic2DCollision(
             self_state->mass, self_state->velocity, self_state->position,
-            other_state->mass, other_state->velocity, other_state->position);
+            other_state->mass, other_state->velocity, other_state->position,
+            ctx.random_separation_angle, true);
 
         CTraj new_vel = elastic.v1_final;
         if (new_vel.rho > g_game_max_speed) {
@@ -598,7 +602,8 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       // New physics: Perfectly elastic collision - conserves momentum and energy
       ElasticCollisionResult elastic = CalculateElastic2DCollision(
           self_state->mass, self_state->velocity, self_state->position,
-          other_state->mass, other_state->velocity, other_state->position);
+          other_state->mass, other_state->velocity, other_state->position,
+          ctx.random_separation_angle, true);
 
       CTraj new_vel = elastic.v1_final;
       if (new_vel.rho > g_game_max_speed) {
@@ -608,10 +613,9 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
 
       // Position: Apply separation bump to prevent ships from clustering
-      // We need to determine the separation direction using a priority system:
-      // 1st preference: Use relative velocity direction (intercept-based)
-      // 2nd preference: Use geometric center-to-center direction
-      // 3rd preference: Use random direction (when ships at same pos with same vel)
+      // Separation direction priority:
+      // 1) Geometric line-of-centers
+      // 2) Shared random heading when positions coincide
 
       // Each ship moves its own radius + safety margin in opposite directions
       // Total separation = (r1 + margin) + (r2 + margin) = r1 + r2 + 2*margin
@@ -620,56 +624,38 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
       double separation_angle;
       const char* separation_mode = nullptr;
 
-      // Check relative velocity magnitude
-      // Calculate other ship's velocity relative to self (direction other appears to approach in self's frame)
-      CTraj v_other_relative_to_self = other_state->velocity - self_state->velocity;
+      double pos_diff_x = self_state->position.fX - other_state->position.fX;
+      double pos_diff_y = self_state->position.fY - other_state->position.fY;
+      double pos_distance_sq = pos_diff_x * pos_diff_x + pos_diff_y * pos_diff_y;
 
-      if (v_other_relative_to_self.rho > g_fp_error_epsilon) {
-        // CASE 1 (First preference): Ships have different velocities
-        // Use intercept direction: other ship's approach direction in self's reference frame
-        // When other hits me from direction θ, I get pushed (and back up) in direction θ
-        separation_angle = v_other_relative_to_self.theta;
-        separation_mode = "INTERCEPT";
+      if (pos_distance_sq > g_fp_error_epsilon) {
+        // Primary case: use geometric line-of-centers
+        separation_angle = other_state->position.AngleTo(self_state->position);
+        separation_mode = "GEOMETRIC";
       } else {
-        // Ships have same (or nearly same) velocity - check position
-        double pos_diff_x = self_state->position.fX - other_state->position.fX;
-        double pos_diff_y = self_state->position.fY - other_state->position.fY;
-        double pos_distance_sq = pos_diff_x * pos_diff_x + pos_diff_y * pos_diff_y;
+        // Positions coincide: use shared random heading supplied by context.
+        double base_angle = ctx.random_separation_angle;
 
-        if (pos_distance_sq > g_fp_error_epsilon) {
-          // CASE 2 (Second preference): Ships at different positions
-          // Use geometric center-to-center separation
-          separation_angle = other_state->position.AngleTo(self_state->position);
-          separation_mode = "GEOMETRIC";
-        } else {
-          // CASE 3 (Third preference): Ships at same position with same velocity
-          // Use random separation angle to break symmetry
-          // The random angle is provided by the collision context (same for both ships in pair)
-          // We need to ensure opposite directions: one ship gets θ, the other gets θ + π
-
-          double base_angle = ctx.random_separation_angle;
-
-          // Canonicalize the pair to determine which ship gets which angle
-          CThing* obj1 = self_state->thing;
-          CThing* obj2 = other_state->thing;
-          if (obj1 > obj2) {
-            CThing* temp = obj1;
-            obj1 = obj2;
-            obj2 = temp;
-          }
-
-          // If this ship is obj1, use base_angle; if obj2, use opposite angle
-          if (self_state->thing == obj1) {
-            separation_angle = base_angle;
-          } else {
-            separation_angle = base_angle + PI;  // Opposite direction
-            // Normalize to [-π, π)
-            if (separation_angle > PI) {
-              separation_angle -= 2.0 * PI;
-            }
-          }
-          separation_mode = "RANDOM";
+        // Canonicalize the pair (use world indices for determinism) to decide angle assignment
+        CThing* obj1 = self_state->thing;
+        CThing* obj2 = other_state->thing;
+        unsigned int idx1 = obj1->GetWorldIndex();
+        unsigned int idx2 = obj2->GetWorldIndex();
+        if (idx1 > idx2 || (idx1 == idx2 && obj1 > obj2)) {
+          std::swap(obj1, obj2);
         }
+
+        // If this ship is obj1, use base_angle; if obj2, use opposite angle
+        if (self_state->thing == obj1) {
+          separation_angle = base_angle;
+        } else {
+          separation_angle = base_angle + PI;  // Opposite direction
+          // Normalize to [-π, π)
+          if (separation_angle > PI) {
+            separation_angle -= 2.0 * PI;
+          }
+        }
+        separation_mode = "RANDOM";
       }
 
       CTraj separation_vec(separation_dist, separation_angle);
@@ -735,7 +721,8 @@ CollisionOutcome CShip::GenerateCollisionCommands(const CollisionContext& ctx) {
 // Uses proper 2D elastic collision physics with normal/tangential decomposition
 CShip::ElasticCollisionResult CShip::CalculateElastic2DCollision(
     double m1, const CTraj& v1, const CCoord& p1,
-    double m2, const CTraj& v2, const CCoord& p2) const {
+    double m2, const CTraj& v2, const CCoord& p2,
+    double random_angle, bool has_random) {
 
   ElasticCollisionResult result;
 
@@ -760,33 +747,23 @@ CShip::ElasticCollisionResult CShip::CalculateElastic2DCollision(
   //
   // This is the physically correct approach for 2D elastic collisions.
 
-  // Step 1: Calculate collision normal vector (from object 1 to object 2)
-  CCoord normal;
-  normal.fX = p2.fX - p1.fX;
-  normal.fY = p2.fY - p1.fY;
-
+  // Step 1: Determine collision normal using line-of-centers priority.
+  // Line-of-centers is always preferred; if positions coincide, fall back to a
+  // deterministic random heading supplied by the collision context.
+  CCoord normal = p2 - p1;
   double normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
 
-  // Handle edge case: objects at same position
-  // Use relative velocity direction as collision normal (intercept-based fallback)
   if (normal_mag_sq < g_fp_error_epsilon) {
-    CCoord v_rel;
-    v_rel.fX = v1_cart.fX - v2_cart.fX;
-    v_rel.fY = v1_cart.fY - v2_cart.fY;
-
-    double v_rel_mag_sq = v_rel.fX * v_rel.fX + v_rel.fY * v_rel.fY;
-
-    // If both position AND velocity are same, collision normal is undefined
-    // Physically, no momentum transfer occurs (velocities unchanged)
-    // Separation still needed but handled separately by caller
-    if (v_rel_mag_sq < g_fp_error_epsilon) {
-      result.v1_final = v1;
-      result.v2_final = v2;
-      return result;
+    if (has_random) {
+      normal.fX = std::cos(random_angle);
+      normal.fY = std::sin(random_angle);
+      normal_mag_sq = normal.fX * normal.fX + normal.fY * normal.fY;
+    } else {
+      // As a final guard, choose a canonical axis to prevent divide-by-zero.
+      normal.fX = 1.0;
+      normal.fY = 0.0;
+      normal_mag_sq = 1.0;
     }
-
-    normal = v_rel;
-    normal_mag_sq = v_rel_mag_sq;
   }
 
   double normal_mag = sqrt(normal_mag_sq);

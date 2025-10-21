@@ -328,6 +328,7 @@ CollisionState CThing::MakeCollisionState() const {
   // Default values for derived-class-specific state
   // (Derived classes should override this method if they have additional state)
   state.is_docked = false;
+  state.was_docked = false;
   state.ship_shield = 0.0;
   state.ship_cargo = 0.0;
   state.ship_fuel = 0.0;

@@ -49,6 +49,7 @@ struct CollisionState {
 
   // Ship-specific state (valid only when kind == SHIP)
   bool is_docked;
+  bool was_docked;
   double ship_shield;
   double ship_cargo;
   double ship_fuel;

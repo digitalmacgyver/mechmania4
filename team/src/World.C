@@ -28,7 +28,9 @@
 //////////////////////////////////////////////////
 // Construction/Destruction
 
-CWorld::CWorld(unsigned int nTm) {
+CWorld::CWorld(unsigned int nTm)
+    : collision_rng_(0x4D4D3434u),  // "MM44" in hex for deterministic seed
+      ship_collision_angle_dist_(-PI, PI) {
   unsigned int i;
   numTeams = nTm;
 
@@ -80,6 +82,8 @@ CWorld::~CWorld() {
 CWorld* CWorld::CreateCopy() {
   CWorld* pWld;
   pWld = new CWorld(numTeams);
+  pWld->collision_rng_ = collision_rng_;
+  pWld->ship_collision_angle_dist_ = ship_collision_angle_dist_;
 
   unsigned int acsz, sz = GetSerialSize();
   char* buf = new char[sz];
@@ -887,8 +891,9 @@ unsigned int CWorld::CollisionEvaluationNew() {
     }
   }
 
-  // Maintain a mutable copy of snapshots that we update as collision commands are emitted.
-  // This lets later collisions observe resource changes (fuel/cargo/shield) computed earlier.
+  // Maintain a mutable copy of snapshots for deterministic sequential resolution.
+  // Collisions are processed deepest-first so conservation laws hold after each step,
+  // and subsequent pairs see the velocity/mass/resource changes already applied.
   std::map<CThing*, CollisionState> current_states = snapshots;
 
   // Build list of team-controlled objects for collision detection
@@ -959,6 +964,18 @@ unsigned int CWorld::CollisionEvaluationNew() {
       ThingKind kind1 = world_object->GetKind();
       ThingKind kind2 = team_object->GetKind();
 
+      // Fetch immutable snapshots for both objects (used for dock filtering and logging)
+      const CollisionState* world_snapshot = nullptr;
+      const CollisionState* team_snapshot = nullptr;
+      auto world_snapshot_it = snapshots.find(world_object);
+      if (world_snapshot_it != snapshots.end()) {
+        world_snapshot = &world_snapshot_it->second;
+      }
+      auto team_snapshot_it = snapshots.find(team_object);
+      if (team_snapshot_it != snapshots.end()) {
+        team_snapshot = &team_snapshot_it->second;
+      }
+
       // Rule 1: Skip asteroid-asteroid collisions
       if (kind1 == ASTEROID && kind2 == ASTEROID) {
         continue;
@@ -995,20 +1012,22 @@ unsigned int CWorld::CollisionEvaluationNew() {
       // Exception: Docked ships CAN collide with their own station (undocking mechanics)
       // Ships that dock THIS TURN need their ship-station collision processed first.
       // Use WasDocked() to distinguish: IsDocked() && WasDocked() = was already docked
-      if (kind1 == SHIP && kind2 != STATION) {
-        CShip* ship = (CShip*)world_object;
-        if (ship->IsDocked() && ship->WasDocked()) {
+      if (kind1 == SHIP && kind2 != STATION && world_snapshot != nullptr) {
+        const CollisionState& ship_state = *world_snapshot;
+        if (ship_state.is_docked && ship_state.was_docked) {
           if (g_pParser && g_pParser->verbose) {
-            printf("[DEBUG] Skipping collision for already-docked ship: %s (not with station)\n", ship->GetName());
+            printf("[DEBUG] Skipping collision for already-docked ship: %s (not with station)\n",
+                   world_object->GetName());
           }
           continue;  // Already-docked ship doesn't collide with non-stations
         }
       }
-      if (kind2 == SHIP && kind1 != STATION) {
-        CShip* ship = (CShip*)team_object;
-        if (ship->IsDocked() && ship->WasDocked()) {
+      if (kind2 == SHIP && kind1 != STATION && team_snapshot != nullptr) {
+        const CollisionState& ship_state = *team_snapshot;
+        if (ship_state.is_docked && ship_state.was_docked) {
           if (g_pParser && g_pParser->verbose) {
-            printf("[DEBUG] Skipping collision for already-docked ship: %s (not with station)\n", ship->GetName());
+            printf("[DEBUG] Skipping collision for already-docked ship: %s (not with station)\n",
+                   team_object->GetName());
           }
           continue;  // Already-docked ship doesn't collide with non-stations
         }
@@ -1042,11 +1061,14 @@ unsigned int CWorld::CollisionEvaluationNew() {
           // Check for "ship just docked" case for special logging
           const char* docking_status = "";
           if ((kind1 == SHIP && kind2 == STATION) || (kind1 == STATION && kind2 == SHIP)) {
-            CShip* ship = (kind1 == SHIP) ? (CShip*)world_object : (CShip*)team_object;
-            if (ship->IsDocked() && !ship->WasDocked()) {
-              docking_status = " [SHIP-JUST-DOCKED]";
-            } else if (ship->IsDocked() && ship->WasDocked()) {
-              docking_status = " [SHIP-ALREADY-DOCKED]";
+            const CollisionState* ship_snapshot =
+                (kind1 == SHIP) ? world_snapshot : team_snapshot;
+            if (ship_snapshot != nullptr) {
+              if (ship_snapshot->is_docked && !ship_snapshot->was_docked) {
+                docking_status = " [SHIP-JUST-DOCKED]";
+              } else if (ship_snapshot->is_docked && ship_snapshot->was_docked) {
+                docking_status = " [SHIP-ALREADY-DOCKED]";
+              }
             }
           }
 
@@ -1086,9 +1108,6 @@ unsigned int CWorld::CollisionEvaluationNew() {
             });
 
   // Second pass: Randomize within equal-overlap groups
-  std::random_device rd_sort;
-  std::mt19937 rng_sort(rd_sort());
-
   size_t group_start = 0;
   while (group_start < collisions.size()) {
     // Find the end of this group (all collisions with same overlap within epsilon)
@@ -1104,7 +1123,7 @@ unsigned int CWorld::CollisionEvaluationNew() {
     if (group_end - group_start > 1) {
       std::shuffle(collisions.begin() + group_start,
                    collisions.begin() + group_end,
-                   rng_sort);
+                   collision_rng_);
     }
 
     group_start = group_end;
@@ -1143,12 +1162,12 @@ unsigned int CWorld::CollisionEvaluationNew() {
   bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
   bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
 
-  // Random number generator for ship-ship same-position collisions
-  std::random_device rd_angle;
-  std::mt19937 rng_angle(rd_angle());
-  std::uniform_real_distribution<double> angle_dist(-PI, PI);
+  // ship_collision_angle_dist_ draws from collision_rng_ seeded in constructor.
 
   auto apply_command_to_state = [&](const CollisionCommand& cmd) {
+    // current_states is the running simulation state for this frame. By folding each
+    // command into it we preserve conservation physics across the ordered collision list
+    // while still keeping the original snapshots immutable for logging/spawns.
     if (cmd.target == NULL) {
       return;
     }
@@ -1314,7 +1333,7 @@ unsigned int CWorld::CollisionEvaluationNew() {
 
     // Generate random separation angle for this collision pair
     // (used only for ship-ship collisions at same position with same velocity)
-    double random_angle = angle_dist(rng_angle);
+    double random_angle = ship_collision_angle_dist_(collision_rng_);
 
     // Build contexts for both directions (both get same random angle)
     CollisionContext ctx1(this, &current_states[obj1], &current_states[obj2], 1.0,

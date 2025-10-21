@@ -39,13 +39,15 @@ Snapshots are stored in both an immutable map (`snapshots`) and a mutable workin
 
 ### 3.3 Ordering and randomisation
 - Collision list sorted descending by overlap depth. **Rationale:** Deeper overlap correlates with which collision would have occurred first in reality - objects that have penetrated further likely collided earlier in continuous time.
-- Groups whose overlap difference is < `0.001` are shuffled using a RNG seeded per evaluation, ensuring no deterministic bias when distances tie.
+- Groups whose overlap difference is < `0.001` are shuffled using the world's deterministic collision RNG (seeded once at startup). This keeps tie resolution fair while preserving reproducibility.
 
 ### 3.4 Command generation
 For each collision pair:
 1. Skip pair if either object is already dead or marked for kill.
 2. Apply docking guards: once a ship queues `kSetDocked`, further non-station collisions are ignored.
-3. Build two `CollisionContext` instances (A→B and B→A) using the **current** snapshots from `current_states`. For resolving collision dynamics, the line of interaction is usually the relative velocity direction (intercept line), or the line of centers when relative velocity is zero. When both relative velocity and positions coincide, both contexts share a pre-generated random angle as a tie-breaker to ensure a deterministic collision normal.
+3. Build two `CollisionContext` instances (A→B and B→A) using the **current** snapshots from `current_states`. Collision normals for perfectly elastic exchanges now default to the geometric line-of-centers; only when both centres coincide do we fall back to the shared random heading stored in the context.  
+   - The `current_states` map is intentionally mutable. Collisions are processed deepest-first, and each command folds its effects back into `current_states`. This preserves conservation laws (momentum, mass, fuel) across the ordered sequence while preventing the legacy double-count bugs (e.g., multi-fragment asteroids, double-eaten resources). The original immutable `snapshots` remain available for logging and spawn creation.
+   - Ship snapshots include both `is_docked` (current turn state) and `was_docked` (previous turn). The detection filter relies exclusively on these immutable flags, ensuring consistent handling of already-docked ships without peeking at live game objects.
 4. Each object’s `GenerateCollisionCommands` fills a `CollisionOutcome`.
 5. Commands are appended to `all_commands`, and each command is mirrored into `current_states` via `apply_command_to_state`.
 6. Spawn requests are queued for after command execution.
@@ -72,7 +74,7 @@ Commands are applied in priority order. Non-metadata commands targeting dead obj
 - Departure thrust triggers the launch teleport: distance = `station_radius + ship_radius + ship_radius / 2`.
 
 ### 4.2 Ship ↔ Ship
-- Elastic collision along the separation axis. If relative velocity has non-zero normal component, that direction defines the normal; otherwise use line of centres; if both zero, use shared random angle from context.
+- Elastic collision along the separation axis. The normal is the line-of-centers; if both centres overlap (degenerate case), both ships use the shared random heading from context.
 - Separation impulse: each ship is moved along ±normal by `(ship_radius + g_ship_collision_bump)` to clear overlap. `g_ship_collision_bump` defaults to 3.
 - Damage: equal for both ships, proportional to momentum change divided by `g_laser_damage_mass_divisor`.
 

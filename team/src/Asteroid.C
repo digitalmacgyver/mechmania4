@@ -232,9 +232,9 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
         // Step 4: Create fragments with spread + base velocity for momentum conservation
         // IMPORTANT: Fragment speeds are set to |v_rel| for gameplay reasons (not physics).
         // This means kinetic energy is NOT conserved - faster lasers create faster debris.
-        // However, momentum IS conserved because we add cm_vel to all fragments.
+        // Momentum is conserved because the spread vectors sum to zero before we add cm_vel.
         for (int i = 0; i < 3; i++) {
-          double spread_angle = intercept_direction + (i - 1) * (PI / 3.0);  // -60°, 0°, +60° spread
+          double spread_angle = intercept_direction + i * (2.0 * PI / 3.0);  // 0°, 120°, 240° spread
           CTraj v_spread(spread_speed, spread_angle);
           CTraj v_final = v_spread + cm_vel;  // Add base velocity for momentum conservation
 
@@ -318,10 +318,10 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
         //
         // Step 1: Calculate what the asteroid's velocity would be after elastic collision
         // (Ship calculates its own velocity change separately)
-        CShip* pShip = (CShip*)other_state->thing;
-        CShip::ElasticCollisionResult elastic = pShip->CalculateElastic2DCollision(
+        CShip::ElasticCollisionResult elastic = CShip::CalculateElastic2DCollision(
             other_state->mass, other_state->velocity, other_state->position,  // Ship (object 1)
-            self_state->mass, self_state->velocity, self_state->position);    // Asteroid (object 2)
+            self_state->mass, self_state->velocity, self_state->position,
+            ctx.random_separation_angle, true);    // Asteroid (object 2)
 
         CTraj vr2 = elastic.v2_final;  // Asteroid's post-collision velocity
 
@@ -340,9 +340,9 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
         // Step 4: Create fragments with spread + base velocity for momentum conservation
         // IMPORTANT: Fragment speeds are set to |v_rel| for gameplay reasons (not physics).
         // This means kinetic energy is NOT conserved - faster collisions create faster debris.
-        // However, momentum IS conserved because we add vr2 to all fragments.
+        // Momentum is conserved because the spread vectors sum to zero before we add vr2.
         for (int i = 0; i < 3; i++) {
-          double spread_angle = intercept_direction + (i - 1) * (PI / 3.0);  // -60°, 0°, +60°
+          double spread_angle = intercept_direction + i * (2.0 * PI / 3.0);  // 0°, 120°, 240°
           CTraj v_spread(spread_speed, spread_angle);
           CTraj v_final = v_spread + vr2;  // Add base velocity for momentum conservation
 

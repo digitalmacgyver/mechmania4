@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "Coord.h"
+#include "GameConstants.h"
 #include "Traj.h"
 
 //////////////////////////////////////////////////
@@ -231,13 +232,8 @@ CCoord& CCoord::operator/=(const double scale) {
 }
 
 bool CCoord::operator==(const CCoord& OthCrd) const {
-  if (fX != OthCrd.fX) {
-    return false;
-  }
-  if (fY != OthCrd.fY) {
-    return false;
-  }
-  return true;
+  return (fabs(fX - OthCrd.fX) < g_fp_error_epsilon) &&
+         (fabs(fY - OthCrd.fY) < g_fp_error_epsilon);
 }
 
 bool CCoord::operator!=(const CCoord& OthCrd) const {

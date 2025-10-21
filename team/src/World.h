@@ -16,6 +16,8 @@
 #ifndef _WORLD_H_DSDFJSFLJKSEGFKLESF
 #define _WORLD_H_DSDFJSFLJKSEGFKLESF
 
+#include <random>
+
 #include "Asteroid.h"
 #include "MessageResult.h"
 #include "Sendable.h"
@@ -80,6 +82,9 @@ class CWorld : public CSendable {
   static const int maxAnnouncerTextLen = 2048;
   char AnnouncerText[maxAnnouncerTextLen];
 
+  // Deterministic collision RNG controls
+  void SeedCollisionRng(unsigned int seed) { collision_rng_.seed(seed); }
+
  protected:
   CThing* apThings[MAX_THINGS];
   unsigned int aUNextInd[MAX_THINGS];
@@ -100,6 +105,8 @@ class CWorld : public CSendable {
   unsigned int numTeams;
   CTeam** apTeams;
   unsigned int currentTurn;  // Track current turn number for logging
+  std::mt19937 collision_rng_;
+  std::uniform_real_distribution<double> ship_collision_angle_dist_;
 };
 
 #endif  // ! _WORLD_H_DSDFJSFLJKSEGFKLESF

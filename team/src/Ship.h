@@ -103,9 +103,10 @@ class CShip : public CThing {
     CTraj v1_final;  // Final velocity of object 1
     CTraj v2_final;  // Final velocity of object 2
   };
-  ElasticCollisionResult CalculateElastic2DCollision(
+  static ElasticCollisionResult CalculateElastic2DCollision(
       double m1, const CTraj& v1, const CCoord& p1,
-      double m2, const CTraj& v2, const CCoord& p2) const;
+      double m2, const CTraj& v2, const CCoord& p2,
+      double random_angle = 0.0, bool has_random = false);
 
  private:
   // Velocity processing implementations

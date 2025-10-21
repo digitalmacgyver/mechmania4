@@ -62,8 +62,9 @@
 ## 7. Implementation Notes
 - Orders live in `CShip::adOrders`. Values persist until consumed during `Drift`.
 - Thrust/turn decisions rely on `g_pParser->UseNewFeature("velocity-limits")` to select new vs legacy logic; defaults enable the modern code paths.
-- Random launch logging and collision ties use `std::random_device` seeded per evaluation. No team-owned RNGs influence physics.
+- Random launch logging and collision ties draw from the world RNG seeded once at startup (`0x4D4D3434` by default). No team-owned RNGs influence physics, keeping runs reproducible.
 - When extending navigation, ensure new orders respect the sub-step schedule and interact correctly with the velocity governor.
+- Perfectly elastic collision normals (ship ↔ ship, ship ↔ non-fit asteroids) now use the geometric line-of-centers. When both centres coincide the engine falls back to the shared random heading stored in the collision context.
 
 ### 7.1 Initial Ship Orientation Fix
 

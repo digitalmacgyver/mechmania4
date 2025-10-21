@@ -23,6 +23,7 @@ CollisionState::CollisionState()
       team(NULL),
       is_alive(false),
       is_docked(false),
+      was_docked(false),
       ship_shield(0.0),
       ship_cargo(0.0),
       ship_fuel(0.0),
