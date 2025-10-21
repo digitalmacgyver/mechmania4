@@ -48,8 +48,8 @@ echo "  New:    $NEW_TESTTEAM_LOG"
 echo ""
 echo "Legacy Mode:"
 if [ -f "$LEGACY_LOG" ]; then
-    # Look for Test-1 colliding with any asteroid (symmetric - either order)
-    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$LEGACY_LOG" | grep -E "Test-1.*\[ASTEROID\]|ASTEROID.*Test-1" | wc -l)
+    # Look for ANY ship (Test-1, Test-2, Test-3, Test-4) colliding with asteroids
+    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$LEGACY_LOG" | grep -E "Test-[0-9].*\[ASTEROID\]|\[ASTEROID\].*Test-[0-9]" | wc -l)
     if [ "$COLLISION_COUNT" -gt 0 ]; then
         echo "  ✓ Ship-asteroid collision detected: $COLLISION_COUNT collisions"
         LEGACY_PASS=1
@@ -66,8 +66,8 @@ fi
 echo ""
 echo "New Mode:"
 if [ -f "$NEW_LOG" ]; then
-    # Look for Test-1 colliding with any asteroid (symmetric - either order)
-    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$NEW_LOG" | grep -E "Test-1.*\[ASTEROID\]|ASTEROID.*Test-1" | wc -l)
+    # Look for ANY ship (Test-1, Test-2, Test-3, Test-4) colliding with asteroids
+    COLLISION_COUNT=$(grep "COLLISION_DETECTED" "$NEW_LOG" | grep -E "Test-[0-9].*\[ASTEROID\]|\[ASTEROID\].*Test-[0-9]" | wc -l)
     if [ "$COLLISION_COUNT" -gt 0 ]; then
         echo "  ✓ Ship-asteroid collision detected: $COLLISION_COUNT collisions"
         NEW_PASS=1

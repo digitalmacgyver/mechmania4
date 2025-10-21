@@ -123,6 +123,25 @@ class CShip : public CThing {
   };
   ThrustCost CalcThrustCost(double thrustamt, CTraj v, double orient, double mass, double fuel_avail, bool is_docked, bool launched_this_turn) const;
 
+  // Drift helpers
+  void ProcessShieldOrder(double shieldamt);
+  double IntegrateTurnOrder(double turnamt, double dt, double turn_phase);
+  void IntegrateThrustOrder(double thrustamt, double dt);
+
+  // Collision helpers
+  CollisionOutcome HandleStationCollision(const CollisionContext& ctx,
+                                          const CollisionState* self_state,
+                                          const CollisionState* other_state) const;
+  CollisionOutcome HandleLaserCollision(const CollisionContext& ctx,
+                                        const CollisionState* self_state,
+                                        const CollisionState* other_state) const;
+  CollisionOutcome HandleAsteroidCollision(const CollisionContext& ctx,
+                                           const CollisionState* self_state,
+                                           const CollisionState* other_state) const;
+  CollisionOutcome HandleShipCollision(const CollisionContext& ctx,
+                                       const CollisionState* self_state,
+                                       const CollisionState* other_state) const;
+
 };
 
 #endif  // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF

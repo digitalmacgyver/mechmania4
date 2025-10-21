@@ -16,8 +16,14 @@
 #ifndef _WORLD_H_DSDFJSFLJKSEGFKLESF
 #define _WORLD_H_DSDFJSFLJKSEGFKLESF
 
+#include <cmath>
+#include <map>
 #include <random>
+#include <set>
+#include <utility>
+#include <vector>
 
+#include "CollisionTypes.h"
 #include "Asteroid.h"
 #include "MessageResult.h"
 #include "Sendable.h"
@@ -29,6 +35,12 @@
 const unsigned int BAD_INDEX = ((unsigned int)-1);
 
 class CTeam;
+
+struct CollisionPair {
+  CThing* object1;
+  CThing* object2;
+  double overlap_distance;
+};
 
 class CWorld : public CSendable {
  public:
@@ -61,6 +73,28 @@ class CWorld : public CSendable {
 
   void ApplyCommandToSnapshot(const CollisionCommand& cmd,
                               std::map<CThing*, CollisionState>& states);
+  void CollectCollisionSnapshots(std::map<CThing*, CollisionState>& snapshots,
+                                 std::map<CThing*, CollisionState>& current_states) const;
+  void CollectTeamObjects(CThing** team_objects, unsigned int& num_team_objects) const;
+  std::vector<CollisionPair> DetectCollisionPairs(
+      const std::map<CThing*, CollisionState>& snapshots,
+      CThing** team_objects,
+      unsigned int num_team_objects);
+  void SortAndShuffleCollisions(std::vector<CollisionPair>& collisions);
+  void GenerateCollisionOutputs(
+      const std::vector<CollisionPair>& collisions,
+      std::map<CThing*, CollisionState>& current_states,
+      std::vector<CollisionCommand>& all_commands,
+      std::vector<SpawnRequest>& all_spawns,
+      bool use_new_physics,
+      bool disable_eat_damage,
+      bool use_docking_fix);
+  void ApplyCollisionResults(const std::vector<CollisionPair>& collisions,
+                             const std::vector<CollisionCommand>& all_commands,
+                             const std::vector<SpawnRequest>& all_spawns,
+                             bool use_new_physics,
+                             bool disable_eat_damage,
+                             bool use_docking_fix);
 
   CThing* GetThing(unsigned int index) const;      // returns NULL on failure
   unsigned int GetNextIndex(unsigned int curindex) const;  // returns (unsigned int)-1 if at end of list

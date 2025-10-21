@@ -253,36 +253,6 @@ Not re-enableable:
 
 ==================================
 
-========================== GAME PHYSICS AND CONSTANTS QUICK REFERENCE ====================
-
-Asteroid radius: 3+1.6*sqrt(mass)
-Ship radius: 12
-Station radius:
-
-Maxspeed = 30
-Game world is 2-D toroid with x, y are in [-512,512)
-Items have an orientation, which is in [-PI, PI) with 0 to the right / eastward.
-
-Asteroid mass:
- * >= minmass = 3.0
- * Typically either 40 (our games creation size), or 40/3 (after first break) or 40/9 (after second break). Other sizes are possible due to ships jettisoning different amounts
-
-Ship mass:
- * Empty mass = 40
- * Total mass = 40 + fuel tons on board + vinyl tons on board
-
-Items take damage by colliding with masses:
-Ships colliding with laser: Remaining laser mass / 1000 damage
-Ships colliding with ship or asteroid: Magnitude of relative velocity between ship and the other thing * mass of the other thing / 1000
-
-Lasers are modeled as colliding masses for damage purposes.
-  * Max beam length: 512
-  * Beam fuel cost: 1 ton of fuel per 50 units of length
-  * Beam collision mass: 30 * (L - D) where L is the total beam length, and D is the distance along the beam before collision
-    * (internally this is handled by replacing beam strikes with temporary beam objects that originate 1 unit away from the center of the target along the mean line)
-
-################# END GAME PHYSICS AND CONSTANTS QUICK REFERENCE ######################
-
 ========================== ENGINE TODO ============================================
 
 A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it
@@ -421,6 +391,9 @@ new team? Why bother with all this?
 ####################### END ENGINE TODO ##########################################
 
 ========================== Groonew TODO ============================================
+
+Add fun announcer quotes - commence primary ignition, let's blow this
+thing and go home, etc.
 
 Groogroo stuff:
 
@@ -969,3 +942,34 @@ These are similar to ship to ship calculations where:
   stores of the Station by X, to a minimum of 0.
 
 ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+
+========================== GAME PHYSICS AND CONSTANTS QUICK REFERENCE ====================
+
+Asteroid radius: 3+1.6*sqrt(mass)
+Ship radius: 12
+Station radius:
+
+Maxspeed = 30
+Game world is 2-D toroid with x, y are in [-512,512)
+Items have an orientation, which is in [-PI, PI) with 0 to the right / eastward.
+
+Asteroid mass:
+ * >= minmass = 3.0
+ * Typically either 40 (our games creation size), or 40/3 (after first break) or 40/9 (after second break). Other sizes are possible due to ships jettisoning different amounts
+
+Ship mass:
+ * Empty mass = 40
+ * Total mass = 40 + fuel tons on board + vinyl tons on board
+
+Items take damage by colliding with masses:
+Ships colliding with laser: Remaining laser mass / 1000 damage
+Ships colliding with ship or asteroid: Magnitude of relative velocity between ship and the other thing * mass of the other thing / 1000
+
+Lasers are modeled as colliding masses for damage purposes.
+  * Max beam length: 512
+  * Beam fuel cost: 1 ton of fuel per 50 units of length
+  * Beam collision mass: 30 * (L - D) where L is the total beam length, and D is the distance along the beam before collision
+    * (internally this is handled by replacing beam strikes with temporary beam objects that originate 1 unit away from the center of the target along the mean line)
+
+################# END GAME PHYSICS AND CONSTANTS QUICK REFERENCE ######################
+
