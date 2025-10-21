@@ -61,6 +61,8 @@ coord_files=(
   "${REPO_ROOT}/team/src/Coord.C"
   "${REPO_ROOT}/team/src/Traj.h"
   "${REPO_ROOT}/team/src/Traj.C"
+  "${REPO_ROOT}/team/src/PhysicsUtils.h"
+  "${REPO_ROOT}/team/src/PhysicsUtils.C"
 )
 concat_files "${OUTPUT_DIR}/CoordsCombined.cpp" "${coord_files[@]}"
 
