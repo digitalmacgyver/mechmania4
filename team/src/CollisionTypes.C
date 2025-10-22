@@ -204,12 +204,14 @@ CollisionContext::CollisionContext()
       use_new_physics(false),
       disable_eat_damage(false),
       use_docking_fix(false),
-      random_separation_angle(0.0) {
+      random_separation_angle(0.0),
+      random_separation_forward(false) {
 }
 
 CollisionContext::CollisionContext(CWorld* w, const CollisionState* self,
                                    const CollisionState* other, double dt,
-                                   bool physics, bool eat_dmg, bool dock, double random_angle)
+                                   bool physics, bool eat_dmg, bool dock,
+                                   double random_angle, bool random_forward)
     : world(w),
       self_state(self),
       other_state(other),
@@ -217,7 +219,8 @@ CollisionContext::CollisionContext(CWorld* w, const CollisionState* self,
       use_new_physics(physics),
       disable_eat_damage(eat_dmg),
       use_docking_fix(dock),
-      random_separation_angle(random_angle) {
+      random_separation_angle(random_angle),
+      random_separation_forward(random_forward) {
 }
 
 // ============================================================================

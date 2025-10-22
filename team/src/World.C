@@ -1085,6 +1085,7 @@ void CWorld::GenerateCollisionOutputs(
     bool use_docking_fix) {
   std::set<CThing*> pending_kills;
   std::set<CThing*> pending_docks;
+  std::uniform_int_distribution<int> coin_flip(0, 1);
 
   for (const CollisionPair& pair : collisions) {
     CThing* obj1 = pair.object1;
@@ -1124,11 +1125,14 @@ void CWorld::GenerateCollisionOutputs(
     }
 
     double random_angle = ship_collision_angle_dist_(collision_rng_);
+    bool random_forward = (coin_flip(collision_rng_) != 0);
 
     CollisionContext ctx1(this, &state1, &state2, 1.0,
-                          use_new_physics, disable_eat_damage, use_docking_fix, random_angle);
+                          use_new_physics, disable_eat_damage, use_docking_fix,
+                          random_angle, random_forward);
     CollisionContext ctx2(this, &state2, &state1, 1.0,
-                          use_new_physics, disable_eat_damage, use_docking_fix, random_angle);
+                          use_new_physics, disable_eat_damage, use_docking_fix,
+                          random_angle, !random_forward);
 
     CollisionOutcome out1 = state1.thing->GenerateCollisionCommands(ctx1);
     CollisionOutcome out2 = state2.thing->GenerateCollisionCommands(ctx2);

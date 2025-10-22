@@ -714,13 +714,38 @@ CollisionOutcome CShip::HandleShipCollision(const CollisionContext& ctx,
       double fallback_angle = self_state->position.AngleTo(other_state->position);
       normal_dir = CTraj(1.0, fallback_angle);
       separation_mode = "GEOMETRIC";
-    } else {
-      separation_mode = elastic.used_random_normal ? "RANDOM" : "GEOMETRIC";
     }
 
-    // Move self away from other: opposite the normal (which points self -> other)
-    CTraj separation_axis(1.0, normal_dir.theta + PI);
-    double separation_angle = separation_axis.theta;
+    double separation_angle;
+    if (elastic.used_random_normal) {
+      // Ships share a randomized axis; use per-collision coin flip to pick direction.
+      bool self_forward = ctx.random_separation_forward;
+      if (ctx.world == nullptr) {
+        // Fallback for legacy entry points that may not populate the flag.
+        CThing* self_thing = self_state->thing;
+        CThing* other_thing = other_state->thing;
+        unsigned int self_index = self_thing ? self_thing->GetWorldIndex() : 0;
+        unsigned int other_index = other_thing ? other_thing->GetWorldIndex() : 0;
+        if (self_index != other_index) {
+          self_forward = (self_index < other_index);
+        } else {
+          self_forward = (self_thing < other_thing);
+        }
+      }
+      double base_angle = normal_dir.theta;
+      if (!self_forward) {
+        base_angle += PI;
+      }
+      separation_angle = base_angle;
+      separation_mode = "RANDOM";
+    } else {
+      // Move self away from other: opposite the normal (which points self -> other)
+      CTraj separation_axis(1.0, normal_dir.theta + PI);
+      separation_angle = separation_axis.theta;
+      if (separation_mode == nullptr) {
+        separation_mode = "GEOMETRIC";
+      }
+    }
 
     CTraj separation_vec(separation_dist, separation_angle);
     CCoord bump_pos = self_state->position;

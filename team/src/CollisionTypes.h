@@ -191,11 +191,13 @@ struct CollisionContext {
   // Used only when ships have same velocity AND same position
   // Both ships in a collision pair receive the same random angle
   double random_separation_angle;     // Uniform random in [-π, π)
+  bool random_separation_forward;     // When true, move along random angle; else use angle + π
 
   // Constructor
   CollisionContext();
   CollisionContext(CWorld* w, const CollisionState* self, const CollisionState* other,
-                   double dt, bool physics, bool eat_dmg, bool dock, double random_angle = 0.0);
+                   double dt, bool physics, bool eat_dmg, bool dock,
+                   double random_angle = 0.0, bool random_forward = false);
 };
 
 // ============================================================================

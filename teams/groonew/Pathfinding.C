@@ -100,12 +100,15 @@ namespace Pathfinding {
       }
 
       // Iterate over everything till we find the soonest collision with our ship.
-      for (unsigned int thing_i = worldp->UFirstIndex;
-        thing_i <= worldp->ULastIndex;
-        thing_i = worldp->GetNextIndex(thing_i)) {
-        CThing* athing = worldp->GetThing(thing_i);
-        if (athing == NULL || !(athing->IsAlive())) {
-          continue;  // Skip dead objects
+      for (unsigned int idx = worldp->UFirstIndex; 
+        idx != BAD_INDEX; 
+        idx = worldp->GetNextIndex(idx)) {
+    
+        CThing* athing = worldp->GetThing(idx);
+    
+        // Always check both null and alive
+        if (!athing || !athing->IsAlive()) {
+          continue;
         }
         if (athing->GetKind() == GENTHING) {
           continue;  // Skip generic things (laser beams, etc.)
@@ -139,6 +142,7 @@ namespace Pathfinding {
         CTraj ship_vel = ship->GetVelocity();
         CTraj obj_vel = min_collision_thing->GetVelocity();
   
+        /* For now skip this as it's very noisy but we might want it again later.
         printf("[FirstCollision] Ship '%s' -> %s '%s' in %.2fs\n",
           ship->GetName(), object_type, min_collision_thing->GetName(), min_collision_time);
         printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
@@ -147,6 +151,7 @@ namespace Pathfinding {
         printf("  Object: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
           min_collision_thing->GetPos().fX, min_collision_thing->GetPos().fY,
           obj_vel.rho, obj_vel.theta);
+        */
       }
 
       return min_collision_thing;
@@ -178,6 +183,7 @@ namespace Pathfinding {
       // Vectors at t1 (after 1 turn drift)
       CTraj intercept_vec_t1;   // Required velocity to reach destination in 'time - 1'.
       CTraj thrust_vec_t1;      // Required change in velocity at t1.
+      bool t1_vectors_valid;
 
       CThing* first_collision_thing;
       double first_collision_time;
@@ -221,9 +227,11 @@ namespace Pathfinding {
       // TODO: This condition is really trying to represent "we have at least 2
       // game turns to intercept - because we wish to issue 2 orders to arrive on
       // an intercept course."
+      bool t1_vectors_valid = false;
       if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
         ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
         ctx.thrust_vec_t1 = ctx.intercept_vec_t1 - ctx.ship_vel_t0; // Note - ship_vel hasn't changed since T0
+        t1_vectors_valid = true;
       }
 
       ctx.calculator_ship = calculator_ship;
@@ -301,9 +309,10 @@ namespace Pathfinding {
 
         // Get target velocity
         CTraj target_vel = ctx.thing->GetVelocity();
-
+        // DEBUG: sometimes we turn this off... For now skip this as it's very noisy but we might want it again later.
         printf("[Pathfinding] Case %s: %s %.3f (fuel=%.1f) (tti=%.1f)\n",
                case_label, order_name, mag, fj.fuel_used, fj.time_to_intercept);
+        /* Shush
         printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f) orient=%.2f\n",
                ctx.ship_pos_t0.fX, ctx.ship_pos_t0.fY,
                ctx.ship_vel_t0.rho, ctx.ship_vel_t0.theta,
@@ -312,6 +321,8 @@ namespace Pathfinding {
                ctx.thing->GetPos().fX, ctx.thing->GetPos().fY,
                target_vel.rho, target_vel.theta,
                ctx.destination.fX, ctx.destination.fY);
+        */
+               
       }
 
       return fj;
@@ -397,6 +408,7 @@ namespace Pathfinding {
     FuelTraj TryTurnToAlign(const PathfindingContext& ctx) {
       const CTraj& intercept_vec_t1 = ctx.intercept_vec_t1;
       const CTraj& thrust_vec_t1 = ctx.thrust_vec_t1;
+      bool t1_vectors_valid = ctx.t1_vectors_valid;
       CShip* ship = ctx.ship;
       double ship_orient_t0 = ctx.ship_orient_t0;
 
@@ -405,10 +417,11 @@ namespace Pathfinding {
       // O_TURN (should reduce to Case 1b next game turn)
       //
       bool t1_dist_ok = (
-        ctx.time > g_game_turn_duration 
-        && (g_game_max_speed > (intercept_vec_t1.rho / (ctx.time - g_game_turn_duration)))
+        t1_vectors_valid 
+        &&(ctx.time > g_game_turn_duration)
+        && (g_game_max_speed >= intercept_vec_t1.rho)
       );
-      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.theta, thrust_vec_t1.rho));
+      bool t1_thrust_ok = (t1_vectors_valid && !is_speeding(ship, thrust_vec_t1.theta, thrust_vec_t1.rho));
       if (t1_dist_ok && t1_thrust_ok) {
         // Even through we can thrust forward and backward, prefer to be facing our
         // target so we can shoot it if we want to.
@@ -436,6 +449,7 @@ namespace Pathfinding {
       double time = ctx.time;
       const CTraj& intercept_vec_t1 = ctx.intercept_vec_t1;
       const CTraj& thrust_vec_t1 = ctx.thrust_vec_t1;
+      bool t1_vectors_valid = ctx.t1_vectors_valid;
       double ship_orient_t0 = ctx.ship_orient_t0;
 
       // TODO: Case 2b is not always optimal - it may be better to do some
@@ -452,10 +466,11 @@ namespace Pathfinding {
       // where the parallel to dimension is high.
 
       bool t1_dist_ok = (
-        time > g_game_turn_duration 
-        && (g_game_max_speed > (intercept_vec_t1.rho / (time - g_game_turn_duration)))
+        t1_vectors_valid
+        && (ctx.time > g_game_turn_duration)
+        && (g_game_max_speed >= intercept_vec_t1.rho)
       );
-      bool t1_thrust_ok = (!is_speeding(ship, thrust_vec_t1.theta, thrust_vec_t1.rho));
+      bool t1_thrust_ok = (t1_vectors_valid && !is_speeding(ship, thrust_vec_t1.theta, thrust_vec_t1.rho));
 
       if (t1_dist_ok && t1_thrust_ok) {
         
@@ -532,7 +547,7 @@ namespace Pathfinding {
       // move away from the target in this approach!
 
       double denominator = sin(ship_orient_t0 - dest_vec_t0.theta);
-      if (denominator != 0.0) {
+      if (fabs(denominator) > g_fp_error_epsilon) {
         // TODO - What if ship_vel_t0.rho is zero - as it will be when we're
         // docked? Analyze the cases - hopefully if we're docked or at zero
         // velcoity and facing the right way we catch that up above in case 1.
@@ -591,6 +606,11 @@ namespace Pathfinding {
             double time_to_intercept = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
             if (thrust_reaches_target && (time_to_intercept > g_game_turn_duration)) {
               time_to_intercept = g_game_turn_duration;
+            }
+            if (thrust_and_drift && (!thrust_reaches_target && !thrusted_through)) {
+              // If we don't thrust right into it, then we'll have spent this durn doing
+              // the thrust operations to get us into position for the t1 math above.
+              time_to_intercept += g_game_turn_duration;
             }
             result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k, fuel_used, num_orders,
               time_to_intercept, fuel_total, "2ai");
@@ -822,7 +842,7 @@ namespace Pathfinding {
       FuelTraj case_2b = TryTurnThenThrust(ctx);
 
       bool has_best_case = false;
-      FuelTraj best_case;
+      FuelTraj best_case = FAILURE_TRAJ;
 
       auto consider = [&](const FuelTraj& candidate) {
         if (!candidate.path_found) {

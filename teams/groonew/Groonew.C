@@ -182,19 +182,20 @@ void Groonew::PopulateMagicBag() {
     }
 
     // Iterate through all objects in the world
-    for (unsigned int thing_i = worldp->UFirstIndex;
-         thing_i <= worldp->ULastIndex;
-         thing_i = worldp->GetNextIndex(thing_i)) {
-      CThing* athing = worldp->GetThing(thing_i);
-
-      if (athing == NULL || !(athing->IsAlive())) {
-        continue;  // Skip dead objects
+    for (unsigned int idx = pmyWorld->UFirstIndex; 
+      idx != BAD_INDEX; 
+      idx = pmyWorld->GetNextIndex(idx)) {
+  
+      CThing* athing = pmyWorld->GetThing(idx);
+  
+      // Always check both null and alive
+      if (!athing || !athing->IsAlive()) {
+        continue;
       }
 
       if (athing->GetKind() == GENTHING) {
         continue;  // Skip generic things (laser beams, etc.)
       }
-
 
       // Track global resource availability
       if (first_iteration) {
@@ -496,11 +497,13 @@ void Groonew::AssignShipOrders() {
 
     double cur_fuel = pShip->GetAmount(S_FUEL);
     double cur_cargo = pShip->GetAmount(S_CARGO);
+    double max_fuel = pShip->GetCapacity(S_FUEL);
+    double max_cargo = pShip->GetCapacity(S_CARGO);
 
     // Determine preferred asteroid type based on current state
     AsteroidKind prefered_asteroid = VINYL;
-    bool uranium_available = (uranium_left > 0.0);
-    bool vinyl_available = (vinyl_left > 0.0);
+    bool uranium_available = (uranium_left > (0.0 + g_fp_error_epsilon));
+    bool vinyl_available = (vinyl_left > (0.0 + g_fp_error_epsilon));
 
     // Prioritize fuel if low and available; otherwise prefer vinyl if
     // available.
@@ -510,18 +513,22 @@ void Groonew::AssignShipOrders() {
       prefered_asteroid = URANIUM;
     }
 
-    // TODO: In the future once we've gathered all the vinyl maybe we'll start
-    // shooting things.
-    bool commence_primary_ignition = false;
+    // E.g. if we don't have enough room for 1 more medium size asteroid.
+    bool cargo_nearly_full = ((max_cargo - cur_cargo) < ((40.0 / 3.0) + g_fp_error_epsilon));
+    bool has_cargo = (cur_cargo > g_fp_error_epsilon);
 
     ShipWants wants = NOTHING;
-    // Corrected integer division (2*40/3) to floating point division
-    // (2.0*40.0/3.0)
-    if ((pShip->GetAmount(S_CARGO) >=
-         (2.0 * 40.0 / 3.0 - g_fp_error_epsilon)) ||
-        (!vinyl_available && pShip->GetAmount(S_CARGO) > 0.01)) {
-      // Return to base if we've got at least 2 medium sized asteroids in cargo,
-      // or if there's no vinyl available and we've got any cargo.
+
+    // TODO: As it is in the case where: we have a little vinyl, there is
+    // vinyl left in the world, we're low on fuel, and there's no fuel
+    // left in the world - we try to continue harvesting vinyl. Perhaps 
+    // we should head home instead. (NOTE: In practical gameplay this never
+    // happens - vinyl is collected before uranium typically.)
+    if (cargo_nearly_full || (!vinyl_available && has_cargo)) {
+      // Return to base if our cargo is nearly full, or if there's no
+      // vinyl available and we've got any cargo.
+      // TODO: Maybe we should offer priority here to getting Uranium
+      // if we're low on fuel?
       wants = HOME;
     } else if (prefered_asteroid == VINYL && vinyl_available) {
       wants = POINTS;
@@ -541,9 +548,7 @@ void Groonew::AssignShipOrders() {
     if (wants == HOME) {
       // We're heading home; clear any remembered resource target.
       last_turn_targets_.erase(pShip);
-      if (g_pParser && g_pParser->verbose) {
-        printf("\t→ Returning to base (cargo=%.1f)\n", cur_cargo);
-      }
+
       // Find path home (This logic is okay as the station is unique)
       // Start j at 1 turn out, as pathfinding often requires time > 0.
       for (unsigned int j = 1; j < 50; ++j) {
@@ -555,12 +560,16 @@ void Groonew::AssignShipOrders() {
           if (ft.order_kind != O_SHIELD) {
             pShip->SetOrder(ft.order_kind, ft.order_mag);
           }
+
+          if (g_pParser && g_pParser->verbose) {
+            printf("\t→ Returning to base (cargo=%.1f) (tti=%d) (Order=%d %.1f)\n", cur_cargo, j, ft.order_kind, ft.order_mag);
+          }
           // Either we set the order above, or we didn't need an order this turn
           // to achieve our goal.
           break;
         }
         if (g_pParser && g_pParser->verbose) {
-          printf("\t→ Returning to base (cargo=%.1f) (tti=%d)\n", cur_cargo, j);
+          printf("\t→ No path found to base for tti=%d\n", j);
         }
       }
     } else if (wants == POINTS || wants == FUEL) {
@@ -660,7 +669,7 @@ void Groonew::AssignShipOrders() {
 
       // Check if enemy base has vinyl (for end-game determination)
       double enemy_base_vinyl = 0.0;
-      for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
+      for (unsigned int idx = pmyWorld->UFirstIndex; idx != BAD_INDEX;
            idx = pmyWorld->GetNextIndex(idx)) {
         CThing* thing = pmyWorld->GetThing(idx);
         if (thing == NULL || !thing->IsAlive()) continue;
@@ -676,7 +685,7 @@ void Groonew::AssignShipOrders() {
       }
 
       // Scan world for enemy targets
-      for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
+      for (unsigned int idx = pmyWorld->UFirstIndex; idx != BAD_INDEX;
            idx = pmyWorld->GetNextIndex(idx)) {
         CThing* thing = pmyWorld->GetThing(idx);
         if (thing == NULL || !thing->IsAlive()) continue;
@@ -938,7 +947,7 @@ void Groonew::AssignShipOrders() {
           CShip* nearest_enemy = NULL;
           double nearest_distance = SHOOTING_DISTANCE + 1.0;
 
-          for (unsigned int idx = pmyWorld->UFirstIndex; idx != (unsigned int)-1;
+          for (unsigned int idx = pmyWorld->UFirstIndex; idx != BAD_INDEX;
                idx = pmyWorld->GetNextIndex(idx)) {
             CThing* thing = pmyWorld->GetThing(idx);
             if (thing == NULL || !thing->IsAlive() || thing->GetKind() != SHIP) continue;

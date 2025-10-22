@@ -2,7 +2,6 @@
 # project. Please ignore.
 
 ===
- 
 
 === GrooReview ===
 
@@ -72,8 +71,6 @@ brief summary of the problem, the relevant line numbers / triggering
 conditions, etc.. Each issue you flag will become an issue for a
 developer to fix so include the correct level of detail that a
 developer could address it.
-
-
 
 ==
 
@@ -226,9 +223,6 @@ Now review the system for architectural concerns:
 * Readability and maintainability concerns
 
 * Weird side effects / enforce the principle of least astonisment
-
-
-
 
 ====
 
@@ -407,29 +401,29 @@ Not re-enableable:
 
 ==================================
 
-========================== ENGINE TODO
-============================================
+========================== ENGINE TODO ================================
 
-A BIG CONCERN: Hang on - don't we have a bigger problem here? Isn't it
-possible thinking this through there are other such races, like what
-if a ship gets hit by 2 asteroids in one turn, does the engine
-correctly handle managing total cargo area in the ship under multiple
-collisions?
 
-???????????? LASER TARGETING BUG ?????????????????????????  Q. Is
-  there a bug in LaserTarget?  * We check if we are IsFacing, but we
-  compare distance with DistTo which uses toroidal aware distance, and
-  may not be the distance in the direction we're facing.  * Also, the
-  interface here seems confusing - if mindist > dlaspwr then we're not
-  actually going to hit anything - we are just aiming at something too
-  far away - so when that happens do we want to know that, or do we
-  want to get that we're not aiming at anything.  * AS PHRASED TO
-  GTP-T HIGH: Is there a subtle bug in CShip::LaserTarget whereby both
-  IsFacing and DistTo use toroid aware geometry, and so will report
-  that a Ship is facing a target only if it is facing it along the
-  shortest path to the target?  E.g. if a ship is at (-400, 0) and is
-  oriented with theta = 0 (facing rightward), and an asteroid is at
-  (400, 0), won’t LaserTarget return false for that ship?
+???????????? LASER TARGETING BUG ?????????????????????????
+
+Q. Is there a bug in LaserTarget?
+
+* We check if we are IsFacing, but we compare distance with DistTo
+  which uses toroidal aware distance, and may not be the distance in
+  the direction we're facing.
+
+* Also, the interface here seems confusing - if mindist > dlaspwr then
+  we're not actually going to hit anything - we are just aiming at
+  something too far away - so when that happens do we want to know
+  that, or do we want to get that we're not aiming at anything.
+
+* AS PHRASED TO GTP-T HIGH: Is there a subtle bug in
+  CShip::LaserTarget whereby both IsFacing and DistTo use toroid aware
+  geometry, and so will report that a Ship is facing a target only if
+  it is facing it along the shortest path to the target?  E.g. if a
+  ship is at (-400, 0) and is oriented with theta = 0 (facing
+  rightward), and an asteroid is at (400, 0), won’t LaserTarget return
+  false for that ship?
 
 Now - it just so happens in our implementation that the maximum laser
 distance is 512 units, so in practice this might not matter much -
@@ -498,7 +492,6 @@ target along one shortest path, but CCoord normalization chooses the
 opposite path, IsFacing will return FALSE, preventing the laser from
 firing despite correct alignment.
 
-
 ????????????????? LASER BUG ???????????????????
 
 * Game option to prevent docking at enemy bases (set at start time of
@@ -513,10 +506,6 @@ firing despite correct alignment.
   small due to break, no break.
 
 * Configure number and size of initial asteroids.
-
-1. Add comments throughout on orders: * Thrust, Turn, Jettison are
-mutually exclusive * Fire lasers and raise shields be done in any
-combination with one of the above.
 
 ??????????????? Find the questions I asked here ?????????????????
 
@@ -535,10 +524,6 @@ on subtuns - maybe you can issue a jettison order and then blast off
 or land or something.
 
 ====
-
-Q. Is there a race condition / issue where an asteroid that can't fit
-can be blown up multiple times by ships that collide with it on the
-same turn?
 
 Q. Question 6: What does the default mode of the switch statement on
 (ord) in SetOrder do? It looks like maybe it allows you to pass in
@@ -563,47 +548,42 @@ based on orders, repeat.
 Q. (Can you issue orders on other teams ships?  that the server will
 do)?
 
-Q. The logic around adding new things to the world based on MAX_THINGS
-is wrong/broken I think. It ends up not mattering because we are at
-nowhere near the world limits for the simulation, but for instrance on
-line 198 we check and bail if numNewThings>=MAX_THINGS; maybe this is
-a sentinel value check with numNewTHings being interpreted as a UINT
-with value -1 or something? ACTUALLY - MAYBE THIS IS OK - ITS JUST
-WEIRDLY CONTROLLED WITH A numNewThings COUNTER?!?
-
 Q. What is CWorld::SetTeam for? It seems like it's stripping out ships
 and stations of the other team? And then adding in the ones for the
 new team? Why bother with all this?
 
-####################### END ENGINE TODO
-                        ##########################################
+####################### END ENGINE TODO #############################
 
-========================== Groonew TODO
-============================================
+========================== Groonew TODO =============================
 
-In endgame - don't max up shields before colliding with big uranium -
-just take the hit to preserve more uranium in the world.
-
-After reducing enemy base to 0 and killing all enemy ships do a little
-acrobatic manouvers.
-
-Add fun announcer quotes - commence primary ignition, let's blow this
-thing and go home, Asteroids to not concern the empire, etc.
-
-Groogroo stuff:
-
-If we're done with everything else, and there's still uranium, harvest
-it.
+NOTE: We had a weird bug of "lazy" ships that weren't flying home. I
+moved around some debugging logic but don't think I changed anything
+and I went away. Maybe it was FP math on remaining resources leading
+to incorrect guesses about remaining vinyl and uranium. Keep an eye
+out for if it comes back. (I did change comparisons on is_vinyl /
+is_uranium to want more than fp epsillon.
 
 Need better shooting logic - we shoot ourselves a lot or get bumped off:
 * Revisit the assumption that we shoot early in the turn
 * Check where we'll be in a turn
 * Check if any dam thing is colliding with us first and abort
 
-We are also pretty bad at shooting ships - look at how Chromefunk does
-htis - it's actually much btter - we might be trying to get too close,
-or maybe we need to get onto an intercept pursuit angle and not come
-at them obliquely or something.
+How does our n_turns_vector / n_turns thing actually work?, e.g. If
+we're moving to the right at 1 unit/sec and we want to be at -5 in
+5 seconds, then we need to change our velocity to -1 this turn, or
+-6/5 next turn, a change of -2 or -11/5, not a change of -5 (or -6) /
+5?
+
+Does it ever make sense to shoot a asteroid to break it up (other than
+perhaps action econmy of getting to smaller chunks a tick earlier?)
+how much fuel does it take to break it up, versus how much shield do
+you lose and how much fuel to restore shield?
+
+* Improve Groonew collision detection in determine_orders - we predict
+  where thing X will be in N turns, but we could also check if thing X
+  is going to collide with something before N turns, and if so not
+  bother trying to intercept it at a place it won't likely to be in
+  those turns.
 
 3. Double check our base launch logic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles
@@ -611,36 +591,29 @@ is_docked and fuel costs while docked.
   * See if we're pervasively crashing into one another on first launch
     - toy with approaches like turn 1: orient twards middle in fan,
     turn 2 max launch, turn 3+ normal control.
-  
-===
-
-
-
 
 Handle undocking logic: When we undock we are teleported 48 units
 along our launch direction before drift.
 
+Add fun announcer quotes - commence primary ignition, let's blow this
+thing and go home, Asteroids to not concern the empire, etc.
+
+We are also pretty bad at shooting ships - look at how Chromefunk does
+htis - it's actually much btter - we might be trying to get too close,
+or maybe we need to get onto an intercept pursuit angle and not come
+at them obliquely or something.
+
+In endgame - don't max up shields before colliding with big uranium -
+just take the hit to preserve more uranium in the world.
+
+If we're done with everything else, and there's still uranium, harvest
+it.
+
+After reducing enemy base to 0 and killing all enemy ships do a little
+acrobatic manouvers.
+
 FOR EVOAI - Give it groogroo as a base, and then have the evoai
 compete against groonew? Once Groonew is conistently beating groogroo!
-
-0. Consider optimizing initial base launch so we don't all bonk into
-each other. Consider initial facing and if it matters which base
-you're in. Maybe first 2 turns are always to rotate the ships to cover
-an arc towards the center and blast off with max v.
-
-Does it ever make sense to shoot a asteroid to break it up (other than
-perhaps action econmy of getting to smaller chunks a tick earlier?)
-how much fuel does it take to break it up, versus how much shield do
-you lose and how much fuel to restore shield?
-
-How does our n_turns_vector / n_turns thing actually work?, e.g. If
-we're moving to the right at 1 unit/sec and we want to be at -5 in
-
-5 seconds, then we need to change our velocity to -1 this turn, or
--6/5 next turn, a change of -2 or -11/5, not a change of -5 (or -6) /
-5?
-
-How do collisions and carried over momentum work?
 
 TOROIDTOROIDTOROID
   Q. General nagivation / logic quersions - what happens near edges -
@@ -673,9 +646,6 @@ Minor fix: * The 5 1/5th turns thing is going to cause some trouble
 too but that should be a fine detail and our gross 1 turn planning
 should hold up well-ish.
 
-NOTE: This is not the engine, this is the Ship.C deciding what order
-to send to the server for physics resolution!
-
 **************** GROONEW PERFECT NAV ************************************
 
 * See extensive todos and "Steps" in the documentation of determine
@@ -687,12 +657,6 @@ late game.
 
 * Perfect navigation in Groogroo/MattMatt:
   * Phase 2 - fixes related to 0.2 micro tics between game turns.
-  * Handle undocking - the undocking procedure I think gives us a kick
-    in position, so our model for where we'll be on turn 1 after
-    undocking is wrong with our thurst.
-  * Handle negative thrusting and lesser rotations. At least for now
-    we don't care what direction we are facing so we should check if
-    it's faster to rotate less and then negative thrust.
 
 1. Navigation enhancements: Shortest distance doesn't necessarily mean
 fastest time to intercept, and/or cheapest cost. Consider the case
@@ -725,12 +689,6 @@ a much reduced cost.
       order.
   1. DEEP THINK ON OPTIMAL PATHING IN 2D:
      https://docs.google.com/document/d/1_AvkE_JgxQ920-TOI9HCcrU0C_781qOoa-mtjaHXHnM/edit?tab=t.0
-
-* Improve Groonew collision detection in determine_orders - we predict
-  where thing X will be in N turns, but we could also check if thing X
-  is going to collide with something before N turns, and if so not
-  bother trying to intercept it at a place it won't likely to be in
-  those turns.
 
 * Improve Groonew collision handling. As it is it iterates over the
   world and locks orders and maybe breaks if it detects certain

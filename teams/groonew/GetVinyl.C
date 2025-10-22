@@ -49,7 +49,7 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
     return targets;
   }
 
-  for (unsigned int idx = world->UFirstIndex; idx != (unsigned int)-1;
+  for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
        idx = world->GetNextIndex(idx)) {
     CThing* thing = world->GetThing(idx);
     if (thing == NULL || thing == ship || !(thing->IsAlive())) {
@@ -197,12 +197,19 @@ void GetVinyl::Decide() {
   //
   // We can shoot or manage shields every turn.
   if (!pShip->IsDocked()) {
-    for (unsigned int thing_i = pmyWorld->UFirstIndex; thing_i <= pmyWorld->ULastIndex;
-         thing_i = pmyWorld->GetNextIndex(thing_i)) {
-      CThing *athing = pmyWorld->GetThing(thing_i);
+    for (unsigned int idx = pmyWorld->UFirstIndex; 
+        idx != BAD_INDEX; 
+        idx = pmyWorld->GetNextIndex(idx)) {
+    
+      CThing* athing = pmyWorld->GetThing(idx);
+    
+      // Always check both null and alive
+      if (!athing || !athing->IsAlive()) {
+        continue;
+      }
 
-      // Skip dead things,generic things, and things in the past, and ourself.
-      if (athing == NULL || !(athing->IsAlive()) || athing == pShip) {
+      // Skip ourself.
+      if (athing == pShip) {
         continue;
       }
 
@@ -234,9 +241,9 @@ void GetVinyl::Decide() {
     if (emergency_orders.exclusive_order != O_ALL_ORDERS) {
       if (emergency_orders.exclusive_order == O_JETTISON) {
         pShip->SetJettison(VINYL, emergency_orders.exclusive_order_amount);
-      }
-    } else {
+      } else {
         pShip->SetOrder((OrderKind)emergency_orders.exclusive_order, emergency_orders.exclusive_order_amount);
+      }
     }
 
     if (emergency_orders.shield_order_amount > 0.0) {
@@ -379,9 +386,22 @@ void GetVinyl::Decide() {
   if (pShip->GetOrder(O_SHIELD) == 0.0) {
     // PHASE 3: SHIELD MAINTENANCE
     // Calculate total fuel that will be used this turn
-    double fuel_used = pShip->GetOrder(O_SHIELD) + pShip->GetOrder(O_LASER) +
-                       pShip->GetOrder(O_THRUST) + pShip->GetOrder(O_TURN) +
-                       pShip->GetOrder(O_JETTISON);
+
+    double fuel_used = 0.0;
+
+    if (pShip->GetOrder(O_SHIELD) > 0.0 + g_fp_error_epsilon) {
+      fuel_used += pShip->SetOrder(O_SHIELD, pShip->GetOrder(O_SHIELD));    
+    }
+    if (pShip->GetOrder(O_LASER) > 0.0 + g_fp_error_epsilon) {
+      fuel_used += pShip->SetOrder(O_LASER, pShip->GetOrder(O_LASER));
+    }
+    if (fabs(pShip->GetOrder(O_THRUST)) > 0.0 + g_fp_error_epsilon) {
+      fuel_used += pShip->SetOrder(O_THRUST, pShip->GetOrder(O_THRUST));
+    }
+    if (fabs(pShip->GetOrder(O_TURN)) > 0.0 + g_fp_error_epsilon) {
+      fuel_used += pShip->SetOrder(O_TURN, pShip->GetOrder(O_TURN));
+    }
+
     cur_fuel -= fuel_used;
 
     // Maintain minimum shield buffer of 11 units
