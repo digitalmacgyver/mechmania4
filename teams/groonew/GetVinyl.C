@@ -30,6 +30,43 @@ double NormalizeAngle(double angle) {
   return angle;
 }
 
+// Predict whether `shooter` will have a clear shot at `target` after `num_turns`
+// turns. Optional `predicted_distance` is treated as an output parameter and
+// is overwritten with the distance between the predicted positions when the
+// function returns true.
+bool FutureLineOfFire(const CShip* shooter,
+                      const CThing* target,
+                      double* predicted_distance = NULL,
+                      unsigned int num_turns = 1) {
+  if (shooter == NULL || target == NULL) {
+    return false;
+  }
+
+  double lookahead_time = g_game_turn_duration * static_cast<double>(num_turns);
+
+  CCoord future_shooter_pos = shooter->PredictPosition(lookahead_time);
+  CCoord future_target_pos = target->PredictPosition(lookahead_time);
+
+  double distance = future_shooter_pos.DistTo(future_target_pos);
+  CTraj desired_path = future_shooter_pos.VectTo(future_target_pos);
+
+  double future_orient = shooter->GetOrient() + shooter->GetOrder(O_TURN);
+  future_orient = NormalizeAngle(future_orient);
+  CTraj actual_path(distance, future_orient);
+
+  double misalignment = desired_path.ConvertToCoord()
+                            .DistTo(actual_path.ConvertToCoord());
+  double tolerance = target->GetSize() * 0.5;
+  if (misalignment > tolerance) {
+    return false;
+  }
+
+  if (predicted_distance != NULL) {
+    *predicted_distance = distance;
+  }
+  return true;
+}
+
 struct FacingTargets {
   CStation* station = NULL;
   double station_dist = std::numeric_limits<double>::max();
@@ -70,16 +107,15 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
     if (thing_team->GetTeamNumber() == team->GetTeamNumber()) {
       continue;
     }
-
-    if (!ship->IsFacing(*thing)) {
+    double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
+    if (!FutureLineOfFire(ship, thing, &future_distance)) {
       continue;
     }
 
-    double dist = ship->GetPos().DistTo(thing->GetPos());
     if (kind == STATION) {
-      if (dist < targets.station_dist) {
+      if (future_distance < targets.station_dist) {
         targets.station = static_cast<CStation*>(thing);
-        targets.station_dist = dist;
+        targets.station_dist = future_distance;
       }
     } else {
       // Skip docked enemy ships - they're safe at their base
@@ -88,9 +124,9 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
         continue;
       }
 
-      if (dist < targets.ship_dist) {
+      if (future_distance < targets.ship_dist) {
         targets.ship = enemy_ship;
-        targets.ship_dist = dist;
+        targets.ship_dist = future_distance;
       }
     }
   }
@@ -208,17 +244,28 @@ bool TryShipPotshot(const LaserResources& laser,
 
   double beam_length = laser.max_beam_length;
   BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
 
-  if (enemy_shield <= 6.0) {
+  if (good_efficiency) {
     LogPotshotDecision(shooter,
                        enemy_ship,
                        eval,
-                       "skip (already vulnerable)");
-    return false;
+                       "fire (efficient damage)");
+    shooter->SetOrder(O_LASER, beam_length);
+    return true;
   }
 
-  double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
-  if (max_damage < min_damage_to_cross) {
+  if (enemy_shield > 6.0) {
+    double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
+    if (max_damage >= min_damage_to_cross) {
+      LogPotshotDecision(shooter,
+                         enemy_ship,
+                         eval,
+                         "fire (force dock)");
+      shooter->SetOrder(O_LASER, beam_length);
+      return true;
+    }
+
     LogPotshotDecision(shooter,
                        enemy_ship,
                        eval,
@@ -226,21 +273,11 @@ bool TryShipPotshot(const LaserResources& laser,
     return false;
   }
 
-  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
-  if (!good_efficiency) {
-    LogPotshotDecision(shooter,
-                       enemy_ship,
-                       eval,
-                       "skip (poor efficiency)");
-    return false;
-  }
-
   LogPotshotDecision(shooter,
                      enemy_ship,
                      eval,
-                     "fire (force dock)");
-  shooter->SetOrder(O_LASER, beam_length);
-  return true;
+                     "skip (already vulnerable)");
+  return false;
 }
 
 void ApplyEmergencyOrders(CShip* ship, const EmergencyOrders& orders) {
@@ -517,17 +554,13 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
       // DEBUG - We should check if we're going to turn before shooting so we don't waste
       // bullets - but for now leave this as is and see how it works.
       if (enemy_cargo && laser_allowed) {
-        // Check if we'll hit it.
-        if (pShip->IsFacing(*athing)) {
-          CTraj laser_dist = pShip->GetPos().VectTo(athing->GetPos());
+        double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
+        if (FutureLineOfFire(pShip, athing, &future_distance)) {
+          double max_useful_beam_length =
+              future_distance + (enemy_cargo_amount * 1000.0 / 30.0);
 
-          // We can't set a beam length more than min(512, fuel_allows*50)
-          
-          // We'll destroy an amount of cargo roughly equal to:
-          // 30*(beam length - laser_dist.rho) / 1000
-          double max_useful_beam_length = laser_dist.rho + (enemy_cargo_amount * 1000.0 / 30.0);
-
-          double laser_order = min(512.0, fuel_allowed * g_laser_range_per_fuel_unit);
+          double laser_order = min(512.0,
+                                   fuel_allowed * g_laser_range_per_fuel_unit);
           laser_order = min(laser_order, max_useful_beam_length);
           emergency_orders.laser_order_amount = laser_order;
           laser_allowed = false;
@@ -562,19 +595,18 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
           if (g_pParser && g_pParser->verbose) {
             printf("\t→ CONSIDERING-LASER ALLOWED Shooting %.1f uranium\n", asteroid_mass);
           }
-          if (pShip->IsFacing(*athing)) {
+          double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
+          if (FutureLineOfFire(pShip, athing, &future_distance)) {
             if (g_pParser && g_pParser->verbose) {
               printf("\t→ CONSIDERING-LASER ALLOWED-FACING Shooting %.1f uranium\n", asteroid_mass);
             }
-            CTraj laser_dist = pShip->GetPos().VectTo(athing->GetPos());
 
-            // We can't set a beam length more than min(512, fuel_allows*50)
-          
-            // We need 30*(beam length - laser_dist.rho) to be > 1000.0.
+            // We need 30*(beam length - distance) to be > 1000.0.
             // We'll make it ~= 1060.0.
-            double desired_beam_length = laser_dist.rho + (1060.0 / 30.0);
+            double desired_beam_length = future_distance + (1060.0 / 30.0);
 
-            if ((desired_beam_length <= 512.0) && ((fuel_allowed * g_laser_range_per_fuel_unit) >= desired_beam_length)) {
+            if ((desired_beam_length <= 512.0) &&
+                ((fuel_allowed * g_laser_range_per_fuel_unit) >= desired_beam_length)) {
               emergency_orders.laser_order_amount = desired_beam_length;
               laser_allowed = false;
               if (g_pParser && g_pParser->verbose) {

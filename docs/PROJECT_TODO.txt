@@ -11,7 +11,10 @@ Should this damage per unit user our function?
     110 +      g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor;
 
 
-Error in units, laser_damage is 30*remaining beam length, but depleted vinyl (or ship shields) is laser_damge / 1000.0. Max damage is nearly always going to exceed station vinyl (which will be 200 or less).
+
+Some questions came up in code review of these changes:
+
+Is this having an Error in units, laser_damage is 30*remaining beam length, but depleted vinyl (or ship shields) is laser_damge / 1000.0. Max damage is nearly always going to exceed station vinyl (which will be 200 or less).
 
     143 +  if (max_damage >= station_vinyl) {
     144 +    double beam_length =
@@ -22,6 +25,8 @@ Error in units, laser_damage is 30*remaining beam length, but depleted vinyl (or
     149 +                       eval,
     150 +                       "fire (destroy all vinyl)");
 
+
+Some questions came up in code review of these changes:
 
 Why do we call BeamEvaluation but then unconditi0onally set the
 O_LASER order regardless of it's return value?
@@ -34,6 +39,102 @@ O_LASER order regardless of it's return value?
     151 +    shooter->SetOrder(O_LASER, beam_length);
     152 +    return true;
     153 +  }
+
+
+Some questions came up in code review of these changes:
+
+This block has numerous problems:
+1. It is confusing to have two variables called beam_length in such close scopes - and suggests some more refactoring is necesary.
+2. There is lots of repeated code within a few lines of each other.
+3. Refactor this - suggestion - pull beam length, BeamEvaluation, and good efficiency up to the top (and assign beam_length = laser.max_beam_length there. then put the rest of the code in if (max_damage..) { blahblha } else { blah blah } block, and overwrite beam_length to the shorter value in the first branch.
+
+
+    143 +  if (max_damage >= station_vinyl) {
+    144 +    double beam_length =
+    145 +        distance_to_target + (station_vinyl / laser.damage_per_unit);
+    146 +    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    147 +    LogPotshotDecision(shooter,
+    148 +                       enemy_station,
+    149 +                       eval,
+    150 +                       "fire (destroy all vinyl)");
+    151 +    shooter->SetOrder(O_LASER, beam_length);
+    152 +    return true;
+    153 +  }
+    154 +
+    155 +  double beam_length = laser.max_beam_length;
+    156 +  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    157 +  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
+    158 +
+    159 +  if (good_efficiency) {
+    160 +    LogPotshotDecision(shooter,
+    161 +                       enemy_station,
+    162 +                       eval,
+    163 +                       "fire (partial damage)");
+    164 +    shooter->SetOrder(O_LASER, beam_length);
+    165 +    return true;
+    166 +  }
+
+Some questions came up in code review of these changes:
+
+Refactor this to have many fewer nested branches:
+
+    210 +  if (enemy_shield > 6.0) {
+    211 +    double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
+    212 +    bool can_cross_threshold = (max_damage >= min_damage_to_cross);
+    213 +    if (can_cross_threshold) {
+    214 +      bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
+    215 +      if (good_efficiency) {
+    216 +        LogPotshotDecision(shooter,
+    217 +                           enemy_ship,
+    218 +                           eval,
+    219 +                           "fire (force dock)");
+    220 +        shooter->SetOrder(O_LASER, beam_length);
+    221 +        return true;
+    222 +      }
+    223 +
+    224 +      LogPotshotDecision(shooter,
+    225 +                         enemy_ship,
+    226 +                         eval,
+    227 +                         "skip (poor efficiency)");
+    228 +      return false;
+    229 +    }
+    230 +
+    231 +    LogPotshotDecision(shooter,
+    232 +                       enemy_ship,
+    233 +                       eval,
+    234 +                       "skip (insufficient damage)");
+    235 +    return false;
+    236 +  }
+    237 +
+    238 +  LogPotshotDecision(shooter,
+    239 +                     enemy_ship,
+    240 +                     eval,
+    241 +                     "skip (already vulnerable)");
+    242 +  return false;
+    243 +}
+
+
+    // We consider where we and they will be in 1 turn, and then if
+    // a beam the length of the distance between us on the heading
+    // of our orientation next turn would hit them.
+    //
+    // TODO: This is imperfect from the physics side, and also 
+    // has a major shortcoming of not checking if there is anything
+    // between us (like a friendly ship!) but it's better than what
+    // we were doing before.
+    CCoord future_pos = ship->PredictPosition(g_game_turn_duration);
+    CCoord future_thing_pos = thing->PredictPosition(g_game_turn_duration);
+    CTraj desired_beam_path = future_pos.VectTo(future_thing_pos);
+
+    double future_orient = ship->GetOrient() + ship->GetOrder(O_TURN);
+    CTraj actual_beam_path = CTraj(desired_beam_path.rho, future_orient);
+    // If our beam is more than 1/2 a ship radius away we imagine we
+    // can't hit them (which isn't 100% right but is good enough for now.)
+    if (desired_beam_path.ConvertToCoord().DistTo(actual_beam_path.ConvertToCoord()) > (g_ship_spawn_size / 2.0)) {
+      continue;
+    }
+
+    double dist = future_pos.DistTo(future_thing_pos);
 
 
 === GrooReview ===

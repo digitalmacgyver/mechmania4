@@ -40,6 +40,7 @@ Feature change log:
 2025-10-13: Fixed numerous bugs in pathfinding (incorrect max_speed calculations, don't try drift intercepts that occur after another collision, etc.)
 2025-10-13: Fleshed out opportunistic / emergency orders: taking potshots and enemy ships and stations, breaking apart asteroids we're about to collide with.
 2025-10-13: Basic / barely functional endgame logic of switching goals from gathering vinyl to destorying enemy vinyl reserves and then ships; lowering shield and fuel retention standards as game conditions evolve.
+2025-10-22: Implemented 1 turn lookahead in positions for potshot and collision lasers.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
