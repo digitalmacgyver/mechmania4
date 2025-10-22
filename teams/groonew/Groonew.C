@@ -15,6 +15,7 @@
 #include "GameConstants.h"
 #include "GetVinyl.h"
 #include "Groonew.h"
+#include "LaserUtils.h"
 #include "ParserModern.h"
 #include "Pathfinding.h"
 
@@ -885,14 +886,20 @@ void Groonew::AssignShipOrders() {
             bool good_efficiency = (beam_length >= 3.0 * distance);
 
             if (good_efficiency) {
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ Firing laser at enemy station (beam=%.1f, dist=%.1f)\n",
-                       beam_length, distance);
-              }
+              groonew::laser::BeamEvaluation eval =
+                  groonew::laser::EvaluateBeam(beam_length, distance);
+              groonew::laser::LogPotshotDecision(pShip,
+                                                 enemy_station,
+                                                 eval,
+                                                 "fire (maintain pressure)");
               pShip->SetOrder(O_LASER, beam_length);
-            } else if (g_pParser && g_pParser->verbose) {
-              printf("\t→ Holding fire (poor efficiency: beam=%.1f, dist=%.1f)\n",
-                     beam_length, distance);
+            } else {
+              groonew::laser::BeamEvaluation eval =
+                  groonew::laser::EvaluateBeam(beam_length, distance);
+              groonew::laser::LogPotshotDecision(pShip,
+                                                 enemy_station,
+                                                 eval,
+                                                 "skip (poor efficiency)");
             }
           }
         } else {
@@ -989,15 +996,14 @@ void Groonew::AssignShipOrders() {
                 bool good_efficiency = (beam_length >= 3.0 * nearest_distance);
 
                 if (end_game || good_efficiency) {
-                  if (g_pParser && g_pParser->verbose) {
-                    if (end_game) {
-                      printf("\t→ Firing laser FULL BLAST [END-GAME] (beam=%.1f, dist=%.1f)\n",
-                             beam_length, nearest_distance);
-                    } else {
-                      printf("\t→ Firing laser (beam=%.1f, dist=%.1f)\n",
-                             beam_length, nearest_distance);
-                    }
-                  }
+                  const char* reason = end_game ? "fire (end-game full blast)"
+                                                : "fire (efficient)";
+                  groonew::laser::BeamEvaluation eval =
+                      groonew::laser::EvaluateBeam(beam_length, nearest_distance);
+                  groonew::laser::LogPotshotDecision(pShip,
+                                                     nearest_enemy,
+                                                     eval,
+                                                     reason);
                   pShip->SetOrder(O_LASER, beam_length);
                 }
               }
@@ -1066,10 +1072,12 @@ void Groonew::AssignShipOrders() {
                     double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
                     bool good_efficiency = (beam_length >= 3.0 * distance);
                     if (good_efficiency) {
-                      if (g_pParser && g_pParser->verbose) {
-                        printf("\t→ Opportunistic shot during pursuit (beam=%.1f, dist=%.1f)\n",
-                               beam_length, distance);
-                      }
+                      groonew::laser::BeamEvaluation eval =
+                          groonew::laser::EvaluateBeam(beam_length, distance);
+                      groonew::laser::LogPotshotDecision(pShip,
+                                                         best_target,
+                                                         eval,
+                                                         "fire (pursuit opportunist)");
                       pShip->SetOrder(O_LASER, beam_length);
                     }
                   }
@@ -1100,10 +1108,12 @@ void Groonew::AssignShipOrders() {
                 bool good_efficiency = (beam_length >= 3.0 * distance);
 
                 if (good_efficiency) {
-                  if (g_pParser && g_pParser->verbose) {
-                    printf("\t→ Opportunistic shot during intercept (beam=%.1f, dist=%.1f)\n",
-                           beam_length, distance);
-                  }
+                  groonew::laser::BeamEvaluation eval =
+                      groonew::laser::EvaluateBeam(beam_length, distance);
+                  groonew::laser::LogPotshotDecision(pShip,
+                                                     best_target,
+                                                     eval,
+                                                     "fire (intercept opportunist)");
                   pShip->SetOrder(O_LASER, beam_length);
                 }
               }
