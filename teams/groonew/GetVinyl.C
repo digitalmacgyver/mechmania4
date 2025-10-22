@@ -30,6 +30,8 @@ double NormalizeAngle(double angle) {
   return angle;
 }
 
+using groonew::laser::LaserResources;
+
 // Predict whether `shooter` will have a clear shot at `target` after `num_turns`
 // turns. Optional `predicted_distance` is treated as an output parameter and
 // is overwritten with the distance between the predicted positions when the
@@ -132,26 +134,6 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
   }
 
   return targets;
-}
-
-struct LaserResources {
-  double available_fuel = 0.0;
-  double max_beam_length = 0.0;
-  double damage_per_unit = 0.0;
-};
-
-LaserResources ComputeLaserResources(const CShip* ship, double fuel_reserve) {
-  LaserResources resources;
-  resources.damage_per_unit = groonew::laser::DamagePerExtraUnit();
-  resources.available_fuel = ship->GetAmount(S_FUEL) - fuel_reserve;
-  if (resources.available_fuel > g_fp_error_epsilon) {
-    resources.max_beam_length = std::min(
-        512.0, resources.available_fuel * g_laser_range_per_fuel_unit);
-  } else {
-    resources.available_fuel = 0.0;
-    resources.max_beam_length = 0.0;
-  }
-  return resources;
 }
 
 bool TryStationPotshot(const LaserResources& laser,
@@ -339,7 +321,7 @@ void GetVinyl::Decide() {
   }
   // We don't issue orders that would deplete this below 5
   // so we have enough to get home / get more fuel.
-  double fuel_reserve = 5.0;
+  double fuel_reserve = groonew::constants::FUEL_RESERVE;
 
   // The stuff we're going to collide with in the next 1, 2, or 3 turns.
   std::vector<CThing *> t1_collisions;
@@ -400,7 +382,8 @@ void GetVinyl::Decide() {
 
   // TODO: Take potshots at enemy ships and stations.
   if (pShip->GetOrder(O_LASER) == 0.0) {
-    LaserResources laser = ComputeLaserResources(pShip, fuel_reserve);
+    LaserResources laser =
+        groonew::laser::ComputeLaserResources(pShip, fuel_reserve);
     if (laser.max_beam_length > g_fp_error_epsilon) {
       FacingTargets facing_targets = FindEnemyFacingTargets(pShip);
 
@@ -487,7 +470,8 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
       }
     }
 
-    double fuel_allowed = pShip->GetAmount(S_FUEL) - 5.0;
+    double fuel_allowed =
+        pShip->GetAmount(S_FUEL) - groonew::constants::FUEL_RESERVE;
     if (fuel_allowed < 0.0) {
       fuel_allowed = 0.0;
     }

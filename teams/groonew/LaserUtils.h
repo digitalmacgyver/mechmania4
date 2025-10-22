@@ -30,6 +30,27 @@ inline double DamagePerExtraUnit() {
   return g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor;
 }
 
+struct LaserResources {
+  double available_fuel = 0.0;
+  double max_beam_length = 0.0;
+  double damage_per_unit = 0.0;
+};
+
+inline LaserResources ComputeLaserResources(const CShip* ship,
+                                            double fuel_reserve) {
+  LaserResources resources;
+  resources.damage_per_unit = DamagePerExtraUnit();
+  resources.available_fuel = ship->GetAmount(S_FUEL) - fuel_reserve;
+  if (resources.available_fuel > g_fp_error_epsilon) {
+    resources.max_beam_length = std::min(
+        512.0, resources.available_fuel * g_laser_range_per_fuel_unit);
+  } else {
+    resources.available_fuel = 0.0;
+    resources.max_beam_length = 0.0;
+  }
+  return resources;
+}
+
 inline double ComputeLaserDamage(double beam_length, double target_distance) {
   double extra_length = beam_length - target_distance;
   if (extra_length <= g_fp_error_epsilon) {

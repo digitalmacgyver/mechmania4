@@ -289,6 +289,751 @@ void Groonew::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
   pShip->SetOrder((best_e.fueltraj).order_kind, (best_e.fueltraj).order_mag);
 }
 
+// Structure to hold potential targets considered during violence mode.
+struct Groonew::ViolenceTarget {
+  CThing* thing = NULL;
+  int priority_class = 0;  // 1=station with vinyl, 2=ship with vinyl, 3=other ship
+  double sort_key1 = 0.0;  // For stations: 0, For ships: cargo (desc) or shields (asc)
+  double sort_key2 = 0.0;  // For ships with cargo: shields, For others: fuel
+  double sort_key3 = 0.0;  // For ships with cargo: fuel, For others: 0
+};
+
+struct Groonew::ViolenceContext {
+  CShip* ship = NULL;
+  unsigned int shipnum = 0;
+  CTeam* team = NULL;
+  CWorld* world = NULL;
+  double current_fuel = 0.0;
+  double available_fuel = 0.0;
+  double max_beam_length = 0.0;
+  double enemy_base_vinyl = 0.0;
+  PathInfo best_path;
+  double emergency_fuel_reserve = groonew::constants::FINAL_FUEL_RESERVE;
+  bool uranium_available = false;
+};
+
+
+ShipWants Groonew::DetermineShipWants(CShip* ship,
+                                      double cur_fuel,
+                                      double cur_cargo,
+                                      double max_fuel,
+                                      double max_cargo,
+                                      bool uranium_available,
+                                      bool vinyl_available) const {
+  (void)ship;
+  (void)max_fuel;
+  AsteroidKind preferred = VINYL;
+  // Prioritize fuel if low and available; otherwise prefer vinyl if available.
+  if (cur_fuel <= groonew::constants::FUEL_RESERVE && uranium_available) {
+    preferred = URANIUM;
+  } else if (!vinyl_available && uranium_available) {
+    preferred = URANIUM;
+  }
+
+  // E.g. if we don't have enough room for 1 more medium size asteroid.
+  bool cargo_nearly_full =
+      ((max_cargo - cur_cargo) < ((40.0 / 3.0) + g_fp_error_epsilon));
+  bool has_cargo = (cur_cargo > g_fp_error_epsilon);
+
+  // TODO: As it is in the case where: we have a little vinyl, there is vinyl
+  // left in the world, we're low on fuel, and there's no fuel left in the
+  // world - we try to continue harvesting vinyl. Perhaps we should head home
+  // instead. (NOTE: In practical gameplay this never happens - vinyl is
+  // collected before uranium typically.) Maybe we should offer priority here
+  // to getting Uranium if we're low on fuel?
+  if (cargo_nearly_full || (!vinyl_available && has_cargo)) {
+    // Return to base if our cargo is nearly full, or if there's no vinyl
+    // available and we've got any cargo.
+    return HOME;
+  }
+  if (preferred == VINYL && vinyl_available) {
+    return POINTS;
+  }
+  if (preferred == URANIUM && uranium_available && vinyl_available) {
+    // While there's still vinyl we just get vinyl and fuel if we need it.
+    return FUEL;
+  }
+  if (preferred == URANIUM && uranium_available && cur_fuel <= 6.6) {
+    // If there's still uranium but no vinyl, and we're low on fuel, stock up
+    // for battle.
+    return FUEL;
+  }
+  // Those who can't create will destroy.
+  return VIOLENCE;
+}
+
+void Groonew::HandleGoHome(CShip* ship, double cur_cargo) {
+  if (ship == NULL) {
+    return;
+  }
+
+  // We're heading home; clear any remembered resource target.
+  last_turn_targets_.erase(ship);
+
+  // Find path home (This logic is okay as the station is unique)
+  // Start j at 1 turn out, as pathfinding often requires time > 0.
+  for (unsigned int j = 1; j < 50; ++j) {
+    FuelTraj ft =
+        Pathfinding::DetermineOrders(ship, GetStation(), j, calculator_ship);
+    if (ft.path_found) {
+      if (ft.order_kind != O_SHIELD) {
+        ship->SetOrder(ft.order_kind, ft.order_mag);
+      }
+      // DEBUG - fix this - this is a hack we're using right now when we want
+      // to drift, we set the order to O_SHIELD with mag 0.
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ Returning to base (cargo=%.1f) (tti=%d) (Order=%d %.1f)\n",
+               cur_cargo,
+               j,
+               ft.order_kind,
+               ft.order_mag);
+      }
+      // Either we set the order above, or we didn't need an order this turn
+      // to achieve our goal.
+      break;
+    }
+    if (g_pParser && g_pParser->verbose) {
+      printf("\t→ No path found to base for tti=%d\n", j);
+    }
+  }
+}
+
+void Groonew::EvaluateResourceUtilities(
+    CShip* ship, ShipWants wants, unsigned int shipnum,
+    std::vector<CShip*>* ships_seeking_resources,
+    std::map<CShip*, unsigned int>* ship_ptr_to_shipnum) {
+  if (ship == NULL || mb == NULL) {
+    return;
+  }
+
+  ships_seeking_resources->push_back(ship);
+  (*ship_ptr_to_shipnum)[ship] = shipnum;
+
+  // Calculate utilities for all potential targets in the MagicBag.
+  auto& ship_paths = mb->getShipPaths(shipnum);
+  for (auto& pair : ship_paths) {
+    PathInfo& path_info = pair.second;
+    path_info.utility = 0.0;
+    if (path_info.dest != NULL && path_info.dest->GetKind() == ASTEROID) {
+      // We must ensure we only calculate utility for the correct type of asteroid.
+      AsteroidKind material =
+          static_cast<CAsteroid*>(path_info.dest)->GetMaterial();
+      bool favor_previous_target = false;
+      auto remembered = last_turn_targets_.find(ship);
+      if (remembered != last_turn_targets_.end() &&
+          remembered->second == path_info.dest) {
+        favor_previous_target = true;
+      }
+
+      // Check if the asteroid material matches what the ship wants.
+      if ((wants == POINTS && material == VINYL) ||
+          (wants == FUEL && material == URANIUM)) {
+        path_info.utility =
+            CalculateUtility(ship, wants, path_info, favor_previous_target);
+      }  // Not the desired material -> utility remains 0
+    }
+  }
+}
+
+Groonew::ViolenceContext Groonew::BuildViolenceContext(CShip* ship,
+                                                       unsigned int shipnum) const {
+  ViolenceContext ctx;
+  ctx.ship = ship;
+  ctx.shipnum = shipnum;
+  ctx.team = (ship != NULL) ? ship->GetTeam() : NULL;
+  ctx.world = (ctx.team != NULL) ? ctx.team->GetWorld() : NULL;
+  ctx.current_fuel = (ship != NULL) ? ship->GetAmount(S_FUEL) : 0.0;
+  ctx.uranium_available = (uranium_left > g_fp_error_epsilon);
+
+  if (ship != NULL) {
+    // No fuel reserve if: (1) turn >= GAME_NEARLY_OVER, OR (2) no uranium left in world
+    ctx.emergency_fuel_reserve =
+        ((ctx.world != NULL &&
+          ctx.world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER) ||
+         uranium_left <= g_fp_error_epsilon)
+            ? groonew::constants::FINAL_FUEL_RESERVE
+            : groonew::constants::FUEL_RESERVE;
+    groonew::laser::LaserResources resources =
+        groonew::laser::ComputeLaserResources(ship,
+                                              ctx.emergency_fuel_reserve);
+    ctx.available_fuel = resources.available_fuel;
+    ctx.max_beam_length = resources.max_beam_length;
+  }
+
+  if (ctx.world != NULL && ctx.team != NULL) {
+    // Check if enemy base has vinyl (for end-game determination)
+    for (unsigned int idx = ctx.world->UFirstIndex; idx != BAD_INDEX;
+         idx = ctx.world->GetNextIndex(idx)) {
+      CThing* thing = ctx.world->GetThing(idx);
+      if (thing == NULL || !thing->IsAlive()) {
+        continue;
+      }
+      if (thing->GetKind() != STATION) {
+        continue;
+      }
+      CTeam* thing_team = thing->GetTeam();
+      if (thing_team == NULL) {
+        continue;
+      }
+      if (thing_team->GetTeamNumber() == ctx.team->GetTeamNumber()) {
+        continue;
+      }
+      ctx.enemy_base_vinyl =
+          static_cast<CStation*>(thing)->GetVinylStore();
+      break;  // Only one enemy station
+    }
+  }
+
+  return ctx;
+}
+
+Groonew::ViolenceTarget Groonew::PickViolenceTarget(
+    ViolenceContext* ctx) const {
+  ViolenceTarget best;
+  if (ctx == NULL || ctx->ship == NULL || mb == NULL) {
+    return best;
+  }
+
+  CTeam* team = ctx->team;
+  CWorld* world = ctx->world;
+  if (team == NULL || world == NULL) {
+    return best;
+  }
+
+  std::vector<ViolenceTarget> targets;
+  // Scan world for enemy targets
+  for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
+       idx = world->GetNextIndex(idx)) {
+    CThing* thing = world->GetThing(idx);
+    if (thing == NULL || !thing->IsAlive()) {
+      continue;
+    }
+
+    ThingKind kind = thing->GetKind();
+    if (kind != STATION && kind != SHIP) {
+      continue;
+    }
+
+    CTeam* thing_team = thing->GetTeam();
+    if (thing_team == NULL ||
+        thing_team->GetTeamNumber() == team->GetTeamNumber()) {
+      continue;
+    }
+
+    ViolenceTarget target;
+    target.thing = thing;
+
+    if (kind == STATION) {
+      double vinyl = static_cast<CStation*>(thing)->GetVinylStore();
+      if (vinyl > g_fp_error_epsilon) {
+        target.priority_class = 1;
+      } else {
+        continue;
+      }
+    } else {
+      CShip* enemy = static_cast<CShip*>(thing);
+      if (enemy->IsDocked()) {
+        continue;  // Skip docked enemy ships - they're safe at their base
+      }
+
+      double cargo = enemy->GetAmount(S_CARGO);
+      double shields = enemy->GetAmount(S_SHIELD);
+      double fuel = enemy->GetAmount(S_FUEL);
+
+      if (cargo > g_fp_error_epsilon) {
+        // Second priority: ships with vinyl
+        // Sort by: most vinyl (desc), least shields (asc), least fuel (asc)
+        target.priority_class = 2;
+        target.sort_key1 = -cargo;  // Negate for descending
+        target.sort_key2 = shields;  // Ascending
+        target.sort_key3 = fuel;     // Ascending
+      } else {
+        // Third priority: other enemy ships
+        // Sort by: least shields (asc), least fuel (asc)
+        target.priority_class = 3;
+        target.sort_key1 = shields;
+        target.sort_key2 = fuel;
+        target.sort_key3 = 0.0;
+      }
+    }
+
+    targets.push_back(target);
+  }
+
+  // Sort targets by priority
+  std::sort(targets.begin(), targets.end(),
+            [](const ViolenceTarget& a, const ViolenceTarget& b) {
+              if (a.priority_class != b.priority_class) {
+                return a.priority_class < b.priority_class;
+              }
+              if (fabs(a.sort_key1 - b.sort_key1) > g_fp_error_epsilon) {
+                return a.sort_key1 < b.sort_key1;
+              }
+              if (fabs(a.sort_key2 - b.sort_key2) > g_fp_error_epsilon) {
+                return a.sort_key2 < b.sort_key2;
+              }
+              return a.sort_key3 < b.sort_key3;
+            });
+
+  // Find best target we can path to
+  auto& ship_paths = mb->getShipPaths(ctx->shipnum);
+  for (const auto& target : targets) {
+    // Check if we have a path to this target in MagicBag
+    auto it = ship_paths.find(target.thing);
+    if (it != ship_paths.end()) {
+      best = target;
+      ctx->best_path = it->second;
+      return best;
+    }
+  }
+
+  return best;
+}
+
+void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
+                                            const ViolenceTarget& target) const {
+  if (ctx.ship == NULL || target.thing == NULL) {
+    return;
+  }
+
+  CShip* ship = ctx.ship;
+  CStation* enemy_station = static_cast<CStation*>(target.thing);
+  double distance = ship->GetPos().DistTo(enemy_station->GetPos());
+
+  bool docked_at_enemy = (ship->IsDocked() &&
+                          distance < g_ship_default_docking_distance + 5.0);
+
+  // Phase-based station attack: navigate → exit dock → maintain firing position
+  if (docked_at_enemy) {
+    const double exit_angles[4] = {PI / 2.0, 0.0, -PI / 2.0, -PI};
+    double target_exit_angle = exit_angles[ctx.shipnum % 4];
+
+    double current_orient = ship->GetOrient();
+    double angle_diff = target_exit_angle - current_orient;
+    while (angle_diff > PI) angle_diff -= PI2;
+    while (angle_diff < -PI) angle_diff += PI2;
+
+    if (fabs(angle_diff) > 0.1) {
+      // PHASE 2: Exit dock with staggered angles to avoid collisions
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ PHASE 2a: Turning to exit angle %.2f (current=%.2f, diff=%.2f)\n",
+               target_exit_angle,
+               current_orient,
+               angle_diff);
+      }
+      ship->SetOrder(O_TURN, angle_diff);
+    } else {
+      // Assign each ship a unique exit angle based on shipnum
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ PHASE 2b: Exiting dock at angle %.2f (dist=%.1f)\n",
+               target_exit_angle,
+               distance);
+      }
+      ship->SetOrder(O_THRUST, -1.0);
+    }
+    return;
+  }
+
+  if (distance < 100.0) {
+    bool facing = ship->IsFacing(*enemy_station);
+    CTraj velocity = ship->GetVelocity();
+
+    if (facing) {
+      // PHASE 3: Maintain firing position within 100 units
+      // Case 3a: Facing station - maintain position and prepare to shoot
+      double angle_to_station = ship->GetPos().AngleTo(enemy_station->GetPos());
+      double radial_velocity =
+          velocity.rho * cos(velocity.theta - angle_to_station);
+
+      if (radial_velocity > 0.5) {
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ PHASE 3a: Countering drift away (radial_vel=%.2f, dist=%.1f)\n",
+                 radial_velocity,
+                 distance);
+        }
+        ship->SetOrder(O_THRUST, 1.0);
+      } else {
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ PHASE 3a: Holding firing position (radial_vel=%.2f, dist=%.1f)\n",
+                 radial_velocity,
+                 distance);
+        }
+        // No thrust order - let natural drift continue
+      }
+    } else if (velocity.rho < 1.0) {
+      // Case 3b: Not facing but velocity low - turn to face
+      double angle_to_station = ship->GetPos().AngleTo(enemy_station->GetPos());
+      double current_orient = ship->GetOrient();
+      double angle_diff = angle_to_station - current_orient;
+      while (angle_diff > PI) angle_diff -= PI2;
+      while (angle_diff < -PI) angle_diff += PI2;
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ PHASE 3b: Turning to face station (angle_diff=%.2f, vel=%.2f, dist=%.1f)\n",
+               angle_diff,
+               velocity.rho,
+               distance);
+      }
+      ship->SetOrder(O_TURN, angle_diff);
+    } else {
+      // Case 3c: Lost target lock (high velocity, not facing) - return to Phase 1
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ PHASE 3c: Lost lock (vel=%.2f, facing=%d, dist=%.1f) - returning to Phase 1\n",
+               velocity.rho,
+               facing,
+               distance);
+        printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+               ctx.best_path.fueltraj.time_to_intercept,
+               (ctx.best_path.fueltraj.order_kind == O_THRUST)
+                   ? "thrust"
+                   : (ctx.best_path.fueltraj.order_kind == O_TURN)
+                         ? "turn"
+                         : "other/none",
+               ctx.best_path.fueltraj.order_mag);
+      }
+      // Use MagicBag navigation to re-acquire target
+      ship->SetOrder(ctx.best_path.fueltraj.order_kind,
+                     ctx.best_path.fueltraj.order_mag);
+    }
+  } else {
+    if (g_pParser && g_pParser->verbose) {
+      printf("\t→ PHASE 1: Navigating to enemy station (dist=%.1f)\n",
+             distance);
+      printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+             ctx.best_path.fueltraj.time_to_intercept,
+             (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+             : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
+                                                             : "other/none",
+             ctx.best_path.fueltraj.order_mag);
+    }
+    // Use MagicBag navigation to re-acquire target
+    ship->SetOrder(ctx.best_path.fueltraj.order_kind,
+                   ctx.best_path.fueltraj.order_mag);
+  }
+
+  // Shooting logic - attempt to fire if within range and facing
+  if (distance < 100.0 && ship->IsFacing(*enemy_station) &&
+      ctx.available_fuel > g_fp_error_epsilon) {
+    double beam_length =
+        std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+    bool good_efficiency = (beam_length >= 3.0 * distance);
+
+    groonew::laser::BeamEvaluation eval =
+        groonew::laser::EvaluateBeam(beam_length, distance);
+    const char* reason =
+        good_efficiency ? "fire (maintain pressure)" : "skip (poor efficiency)";
+    groonew::laser::LogPotshotDecision(ship, enemy_station, eval, reason);
+    if (good_efficiency) {
+      ship->SetOrder(O_LASER, beam_length);
+    }
+  }
+}
+
+void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
+                                         const ViolenceTarget& target) const {
+  if (ctx.ship == NULL || target.thing == NULL) {
+    return;
+  }
+
+  CShip* ship = ctx.ship;
+  CThing* thing = target.thing;
+  CWorld* world = ctx.world;
+  CTeam* team = ctx.team;
+
+  if (thing->GetKind() == SHIP) {
+    CShip* enemy_ship = static_cast<CShip*>(thing);
+
+    // RAMMING SPEED MODE: When enabled and enemy base has no vinyl,
+    // ram enemy ships instead of shooting them
+    if (ramming_speed && ctx.enemy_base_vinyl <= g_fp_error_epsilon) {
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ [RAMMING SPEED] Engaging '%s' for collision attack\n",
+               enemy_ship->GetName());
+      }
+
+      double current_shields = ship->GetAmount(S_SHIELD);
+      double shield_target =
+          (world != NULL &&
+           world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER)
+              ? 0.0
+              : 13.0;
+      if (current_shields < shield_target && ctx.current_fuel > 1.0) {
+        double shield_boost =
+            std::min(shield_target - current_shields, ctx.current_fuel);
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ [RAMMING SPEED] Boosting shields %.1f->%.1f (target=%.1f)\n",
+                 current_shields,
+                 current_shields + shield_boost,
+                 shield_target);
+        }
+        ship->SetOrder(O_SHIELD, shield_boost);
+      }
+
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ [RAMMING SPEED] Ramming course to '%s' (dist=%.1f)\n",
+               enemy_ship->GetName(),
+               ship->GetPos().DistTo(enemy_ship->GetPos()));
+        printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\tshields=%.1f\n",
+               ctx.best_path.fueltraj.time_to_intercept,
+               (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+               : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
+                                                               : "other/none",
+               ctx.best_path.fueltraj.order_mag,
+               current_shields);
+      }
+
+      // Use MagicBag pathfinding to ram the enemy
+      ship->SetOrder(ctx.best_path.fueltraj.order_kind,
+                     ctx.best_path.fueltraj.order_mag);
+      return;
+    }
+  }
+
+  const double SHOOTING_DISTANCE =
+      groonew::constants::MAX_SHIP_ENGAGEMENT_DIST;
+  CShip* nearest_enemy = NULL;
+  double nearest_distance =
+      groonew::constants::MAX_SHIP_ENGAGEMENT_DIST + 1.0;
+
+  // Ship-to-ship combat: Choose between ramming or shooting
+  if (world != NULL && team != NULL) {
+    // Scan for NON-DOCKED enemy ships within shooting distance
+    // Re-evaluated every turn - no mode locking
+    for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
+         idx = world->GetNextIndex(idx)) {
+      CThing* thing_iter = world->GetThing(idx);
+      if (thing_iter == NULL || !thing_iter->IsAlive() ||
+          thing_iter->GetKind() != SHIP) {
+        continue;
+      }
+
+      CTeam* thing_team = thing_iter->GetTeam();
+      if (thing_team == NULL ||
+          thing_team->GetTeamNumber() == team->GetTeamNumber()) {
+        continue;
+      }
+
+      CShip* enemy_ship = static_cast<CShip*>(thing_iter);
+      if (enemy_ship->IsDocked()) {
+        continue;
+      }
+
+      double distance = ship->GetPos().DistTo(enemy_ship->GetPos());
+      if (distance < nearest_distance) {
+        nearest_enemy = enemy_ship;
+        nearest_distance = distance;
+      }
+    }
+  }
+
+  if (nearest_enemy != NULL &&
+      nearest_distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+    // PHASE 2: Within shooting distance of a non-docked enemy
+    bool facing = ship->IsFacing(*nearest_enemy);
+    if (facing) {
+      // Case 2a: Facing the enemy - shoot them
+      if (g_pParser && g_pParser->verbose) {
+        printf("\t→ PHASE 2a: Engaging enemy ship '%s' at close range (dist=%.1f)\n",
+               nearest_enemy->GetName(),
+               nearest_distance);
+      }
+
+      if (ctx.available_fuel > g_fp_error_epsilon &&
+          nearest_distance < ctx.max_beam_length) {
+        // End-game condition: no resources left and enemy base empty
+        double beam_length =
+            std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        bool end_game = (uranium_left <= g_fp_error_epsilon &&
+                         vinyl_left <= g_fp_error_epsilon &&
+                         ctx.enemy_base_vinyl <= g_fp_error_epsilon);
+        bool good_efficiency = (beam_length >= 3.0 * nearest_distance);
+
+        if (end_game || good_efficiency) {
+          const char* reason = end_game ? "fire (end-game full blast)"
+                                        : "fire (efficient)";
+          groonew::laser::BeamEvaluation eval =
+              groonew::laser::EvaluateBeam(beam_length, nearest_distance);
+          groonew::laser::LogPotshotDecision(ship, nearest_enemy, eval, reason);
+          ship->SetOrder(O_LASER, beam_length);
+        }
+      }
+    } else {
+      // Case 2b: Not facing - evaluate if we should turn or pursue
+      double lookahead_time = g_game_turn_duration;
+      CCoord enemy_pos_t0 = nearest_enemy->GetPos();
+      CCoord enemy_pos_t1 = nearest_enemy->PredictPosition(lookahead_time);
+      CCoord our_pos_t0 = ship->GetPos();
+      CCoord our_pos_t1 = ship->PredictPosition(lookahead_time);
+
+      double predicted_distance_t1 = our_pos_t1.DistTo(enemy_pos_t1);
+
+      if (predicted_distance_t1 <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+        // Case 2b1: Still in range next turn - turn to face predicted position
+        double angle_to_target_t1 = our_pos_t1.AngleTo(enemy_pos_t1);
+        double current_orient = ship->GetOrient();
+        double angle_diff = angle_to_target_t1 - current_orient;
+        while (angle_diff > PI) angle_diff -= PI2;
+        while (angle_diff < -PI) angle_diff += PI2;
+
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ PHASE 2b1: Turning to face enemy ship '%s' (angle_diff=%.2f)\n",
+                 nearest_enemy->GetName(),
+                 angle_diff);
+          printf("\t  Current dist=%.1f, Predicted dist=%.1f\n", nearest_distance,
+                 predicted_distance_t1);
+          printf("\t  Enemy: (%.1f,%.1f) -> (%.1f,%.1f)\n",
+                 enemy_pos_t0.fX,
+                 enemy_pos_t0.fY,
+                 enemy_pos_t1.fX,
+                 enemy_pos_t1.fY);
+          printf("\t  Us: (%.1f,%.1f) -> (%.1f,%.1f)\n",
+                 our_pos_t0.fX,
+                 our_pos_t0.fY,
+                 our_pos_t1.fX,
+                 our_pos_t1.fY);
+        }
+
+        ship->SetOrder(O_TURN, angle_diff);
+      } else {
+        // Case 2b2: Will be out of range - resume Phase 1 pursuit
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ PHASE 2b2: Enemy moving out of range, resuming pursuit\n");
+          printf("\t  Current dist=%.1f, Predicted dist=%.1f (> %.1f)\n",
+                 nearest_distance,
+                 predicted_distance_t1,
+                 groonew::constants::MAX_SHIP_ENGAGEMENT_DIST);
+          printf("\t  Switching to MagicBag pursuit of '%s'\n",
+                 target.thing->GetName());
+          printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+                 ctx.best_path.fueltraj.time_to_intercept,
+                 (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+                 : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
+                                                                 : "other/none",
+                 ctx.best_path.fueltraj.order_mag);
+        }
+
+        ship->SetOrder(ctx.best_path.fueltraj.order_kind,
+                       ctx.best_path.fueltraj.order_mag);
+
+        // Opportunistic shooting during pursuit
+        if (ship->IsFacing(*target.thing) &&
+            ctx.available_fuel > g_fp_error_epsilon) {
+          double distance = ship->GetPos().DistTo(target.thing->GetPos());
+          if (distance < ctx.max_beam_length) {
+            double beam_length = std::min(
+                512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+            bool good_efficiency = (beam_length >= 3.0 * distance);
+            if (good_efficiency) {
+              groonew::laser::BeamEvaluation eval =
+                  groonew::laser::EvaluateBeam(beam_length, distance);
+              groonew::laser::LogPotshotDecision(ship,
+                                                 target.thing,
+                                                 eval,
+                                                 "fire (pursuit opportunist)");
+              ship->SetOrder(O_LASER, beam_length);
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // PHASE 1: No enemies within shooting distance - navigate to intercept
+    if (g_pParser && g_pParser->verbose) {
+      printf("\t→ PHASE 1: Navigating to intercept enemy ship '%s' (dist=%.1f)\n",
+             target.thing != NULL ? target.thing->GetName() : "unknown",
+             (target.thing != NULL)
+                 ? ship->GetPos().DistTo(target.thing->GetPos())
+                 : 0.0);
+      printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+             ctx.best_path.fueltraj.time_to_intercept,
+             (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
+             : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
+                                                             : "other/none",
+             ctx.best_path.fueltraj.order_mag);
+    }
+
+    // Use MagicBag navigation to intercept
+    ship->SetOrder(ctx.best_path.fueltraj.order_kind,
+                   ctx.best_path.fueltraj.order_mag);
+
+    // Opportunistic shooting - if we happen to be facing them during intercept
+    if (target.thing != NULL && ship->IsFacing(*target.thing) &&
+        ctx.available_fuel > g_fp_error_epsilon) {
+      double distance = ship->GetPos().DistTo(target.thing->GetPos());
+      if (distance < ctx.max_beam_length) {
+        double beam_length =
+            std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        bool good_efficiency = (beam_length >= 3.0 * distance);
+        if (good_efficiency) {
+          groonew::laser::BeamEvaluation eval =
+              groonew::laser::EvaluateBeam(beam_length, distance);
+          groonew::laser::LogPotshotDecision(ship,
+                                             target.thing,
+                                             eval,
+                                             "fire (intercept opportunist)");
+          ship->SetOrder(O_LASER, beam_length);
+        }
+      }
+    }
+  }
+}
+
+void Groonew::HandleViolence(
+    CShip* ship, unsigned int shipnum, double cur_fuel,
+    bool uranium_available, std::vector<CShip*>* ships_seeking_resources,
+    std::map<CShip*, unsigned int>* ship_ptr_to_shipnum) {
+  if (ship == NULL) {
+    return;
+  }
+
+  // VIOLENCE mode: Converge on enemy ships/stations. We issue orders directly -
+  // no need for utility optimization since combat targeting is generally
+  // robust against uncoordinated action.
+  last_turn_targets_.erase(ship);
+
+  // Dynamic fuel management: If we're low on fuel and uranium is available,
+  // temporarily switch to FUEL seeking to restock before continuing combat.
+  if (cur_fuel <= 5.5 && uranium_available) {
+    if (g_pParser && g_pParser->verbose) {
+      printf("\t→ [VIOLENCE override] Low fuel (%.1f), seeking uranium before combat\n",
+             cur_fuel);
+    }
+    // Calculate utilities for uranium asteroids
+    EvaluateResourceUtilities(ship,
+                              FUEL,
+                              shipnum,
+                              ships_seeking_resources,
+                              ship_ptr_to_shipnum);
+    return;  // Skip to next ship, let resource assignment handle this
+  }
+
+  ViolenceContext ctx = BuildViolenceContext(ship, shipnum);
+  ViolenceTarget target = PickViolenceTarget(&ctx);
+
+  if (target.thing == NULL) {
+    if (g_pParser && g_pParser->verbose) {
+      double time = (ctx.world != NULL) ? ctx.world->GetGameTime() : 0.0;
+      printf("t=%.1f\t%s [VIOLENCE]:\n", time, ship->GetName());
+      printf("\t→ No valid enemy targets found\n");
+    }
+    return;
+  }
+
+  if (g_pParser && g_pParser->verbose) {
+    double time = (ctx.world != NULL) ? ctx.world->GetGameTime() : 0.0;
+    const char* target_type =
+        (target.thing->GetKind() == STATION) ? "enemy station" : "enemy ship";
+    printf("t=%.1f\t%s [VIOLENCE]:\n", time, ship->GetName());
+    printf("\t→ Engaging %s '%s'\n",
+           target_type,
+           target.thing->GetName());
+  }
+
+  if (target.thing->GetKind() == STATION) {
+    ExecuteViolenceAgainstStation(ctx, target);
+  } else {
+    ExecuteViolenceAgainstShip(ctx, target);
+  }
+}
 namespace {
 // Helper struct to manage the state of the brute-force search.
 struct AssignmentResult {
@@ -303,7 +1048,8 @@ struct AssignmentResult {
 // The utility accumulated so far in this path. utilities: The utility matrix.
 // result: The structure storing the overall best result found so far.
 // current_assignment: The assignments made so far in this path.
-void FindMaxAssignment(int agent_idx, std::vector<bool>& used_tasks,
+void FindMaxAssignment(int agent_idx,
+                       std::vector<bool>& used_tasks,
                        double current_utility,
                        const std::vector<std::vector<double>>& utilities,
                        AssignmentResult& result,
@@ -325,19 +1071,22 @@ void FindMaxAssignment(int agent_idx, std::vector<bool>& used_tasks,
   for (int task_idx = 0; task_idx < num_tasks; ++task_idx) {
     if (!used_tasks[task_idx]) {
       // Optimization: Skip if utility is non-positive.
-      if (utilities[agent_idx][task_idx] <= 0.0)
+      if (utilities[agent_idx][task_idx] <= 0.0) {
         continue;
+      }
 
       assignment_attempted = true;
-
       // 1. Choose
       used_tasks[task_idx] = true;
       current_assignment[agent_idx] = task_idx;
       double utility_gain = utilities[agent_idx][task_idx];
 
       // 2. Explore
-      FindMaxAssignment(agent_idx + 1, used_tasks,
-                        current_utility + utility_gain, utilities, result,
+      FindMaxAssignment(agent_idx + 1,
+                        used_tasks,
+                        current_utility + utility_gain,
+                        utilities,
+                        result,
                         current_assignment);
 
       // 3. Unchoose (Backtrack)
@@ -346,13 +1095,17 @@ void FindMaxAssignment(int agent_idx, std::vector<bool>& used_tasks,
     }
   }
 
-  // Handle the case where the agent is not assigned to any task
-  // (e.g., fewer tasks than agents, or no positive utility tasks available).
-  // If we didn't find a positive utility assignment to attempt for this agent,
-  // we must still proceed to the next agent.
   if (!assignment_attempted) {
-    FindMaxAssignment(agent_idx + 1, used_tasks, current_utility, utilities,
-                      result, current_assignment);
+    // Handle the case where the agent is not assigned to any task
+    // (e.g., fewer tasks than agents, or no positive utility tasks available).
+    // If we didn't find a positive utility assignment to attempt for this agent,
+    // we must still proceed to the next agent.
+    FindMaxAssignment(agent_idx + 1,
+                      used_tasks,
+                      current_utility,
+                      utilities,
+                      result,
+                      current_assignment);
   }
 }
 }  // namespace
@@ -475,660 +1228,65 @@ void Groonew::AssignShipOrders() {
   // Map Ship Ptr to the internal ship number (index in GetShip()).
   std::map<CShip*, unsigned int> ship_ptr_to_shipnum;
 
-  CWorld* pmyWorld = GetWorld();
+  CWorld* world = GetWorld();
 
   // PHASE A: Determine wants, calculate utilities, and handle non-contentious
   // goals. Process each ship to determine its high-level goal.
   for (unsigned int shipnum = 0; shipnum < GetShipCount(); ++shipnum) {
-    CShip* pShip = GetShip(shipnum);
-    if (pShip == NULL || !pShip->IsAlive()) {
+    CShip* ship = GetShip(shipnum);
+    if (ship == NULL || !ship->IsAlive()) {
       continue;  // Skip dead ships
     }
 
-    // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
-    if (DEBUG_MODE && strcmp(pShip->GetName(), "Gold Leader") != 0) {
+    if (DEBUG_MODE && strcmp(ship->GetName(), "Gold Leader") != 0) {
       // Skip other ships in debug mode
       continue;
     }
 
     // Verbose logging header
     if (g_pParser && g_pParser->verbose) {
-      printf("t=%.1f\t%s [strategic planning]:\n", pmyWorld->GetGameTime(),
-             pShip->GetName());
+      printf("t=%.1f\t%s [strategic planning]:\n", world->GetGameTime(),
+             ship->GetName());
     }
 
-    double cur_fuel = pShip->GetAmount(S_FUEL);
-    double cur_cargo = pShip->GetAmount(S_CARGO);
-    double max_fuel = pShip->GetCapacity(S_FUEL);
-    double max_cargo = pShip->GetCapacity(S_CARGO);
+    double cur_fuel = ship->GetAmount(S_FUEL);
+    double cur_cargo = ship->GetAmount(S_CARGO);
+    double max_fuel = ship->GetCapacity(S_FUEL);
+    double max_cargo = ship->GetCapacity(S_CARGO);
 
     // Determine preferred asteroid type based on current state
-    AsteroidKind prefered_asteroid = VINYL;
     bool uranium_available = (uranium_left > (0.0 + g_fp_error_epsilon));
     bool vinyl_available = (vinyl_left > (0.0 + g_fp_error_epsilon));
 
     // Prioritize fuel if low and available; otherwise prefer vinyl if
     // available.
-    if (cur_fuel <= 5.0 && uranium_available) {
-      prefered_asteroid = URANIUM;
-    } else if (!vinyl_available && uranium_available) {
-      prefered_asteroid = URANIUM;
+    ShipWants wants = DetermineShipWants(ship, cur_fuel, cur_cargo, max_fuel,
+                                         max_cargo, uranium_available,
+                                         vinyl_available);
+
+    switch (wants) {
+      case HOME:
+        // Execute non-contentious goals or prepare for assignment problem.
+        HandleGoHome(ship, cur_cargo);
+        break;
+      case POINTS:
+      case FUEL:
+        // Harvest resources case - this ship participates in the optimization
+        // problem.
+        EvaluateResourceUtilities(ship, wants, shipnum, &ships_seeking_resources,
+                                   &ship_ptr_to_shipnum);
+        break;
+      case VIOLENCE:
+        // Those who can't create will destroy.
+        HandleViolence(ship, shipnum, cur_fuel, uranium_available,
+                       &ships_seeking_resources, &ship_ptr_to_shipnum);
+        break;
+      case NOTHING:
+      default:
+        // If wants == NOTHING the ship currently does nothing strategic.
+        break;
     }
-
-    // E.g. if we don't have enough room for 1 more medium size asteroid.
-    bool cargo_nearly_full = ((max_cargo - cur_cargo) < ((40.0 / 3.0) + g_fp_error_epsilon));
-    bool has_cargo = (cur_cargo > g_fp_error_epsilon);
-
-    ShipWants wants = NOTHING;
-
-    // TODO: As it is in the case where: we have a little vinyl, there is
-    // vinyl left in the world, we're low on fuel, and there's no fuel
-    // left in the world - we try to continue harvesting vinyl. Perhaps 
-    // we should head home instead. (NOTE: In practical gameplay this never
-    // happens - vinyl is collected before uranium typically.)
-    if (cargo_nearly_full || (!vinyl_available && has_cargo)) {
-      // Return to base if our cargo is nearly full, or if there's no
-      // vinyl available and we've got any cargo.
-      // TODO: Maybe we should offer priority here to getting Uranium
-      // if we're low on fuel?
-      wants = HOME;
-    } else if (prefered_asteroid == VINYL && vinyl_available) {
-      wants = POINTS;
-    } else if (prefered_asteroid == URANIUM && uranium_available && vinyl_available) {
-      // While there's still vinyl we just get vinyl and fuel if we need it.
-      wants = FUEL;
-    } else if (prefered_asteroid == URANIUM && uranium_available && cur_fuel <= 6.6) {
-      // If there's still uranium but no vinyl, and we're low on fuel, stock up
-      // for battle.
-      wants = FUEL;
-    } else {
-      // Those who can't create will destroy.
-      wants = VIOLENCE;
-    }
-
-    // Execute non-contentious goals or prepare for assignment problem.
-    if (wants == HOME) {
-      // We're heading home; clear any remembered resource target.
-      last_turn_targets_.erase(pShip);
-
-      // Find path home (This logic is okay as the station is unique)
-      // Start j at 1 turn out, as pathfinding often requires time > 0.
-      for (unsigned int j = 1; j < 50; ++j) {
-        FuelTraj ft = Pathfinding::DetermineOrders(pShip, GetStation(), j,
-                                                   calculator_ship);
-        if (ft.path_found) {
-          // DEBUG - fix this - this is a hack were using right now when we want
-          // to drift, we set the order to O_SHIELD with mag 0.
-          if (ft.order_kind != O_SHIELD) {
-            pShip->SetOrder(ft.order_kind, ft.order_mag);
-          }
-
-          if (g_pParser && g_pParser->verbose) {
-            printf("\t→ Returning to base (cargo=%.1f) (tti=%d) (Order=%d %.1f)\n", cur_cargo, j, ft.order_kind, ft.order_mag);
-          }
-          // Either we set the order above, or we didn't need an order this turn
-          // to achieve our goal.
-          break;
-        }
-        if (g_pParser && g_pParser->verbose) {
-          printf("\t→ No path found to base for tti=%d\n", j);
-        }
-      }
-    } else if (wants == POINTS || wants == FUEL) {
-      // Harvest resources case - this ship participates in the optimization
-      // problem.
-      ships_seeking_resources.push_back(pShip);
-      ship_ptr_to_shipnum[pShip] = shipnum;
-
-      // Calculate utilities for all potential targets in the MagicBag.
-      auto& ship_paths = mb->getShipPaths(shipnum);
-      for (auto&& pair : ship_paths) {
-        PathInfo& e = pair.second;
-
-        // We must ensure we only calculate utility for the correct type of
-        // asteroid.
-        if (e.dest != NULL && e.dest->GetKind() == ASTEROID) {
-          // Check if the asteroid material matches what the ship wants.
-          AsteroidKind material =
-              static_cast<CAsteroid*>(e.dest)->GetMaterial();
-
-          bool favor_previous_target = false;
-          auto remembered = last_turn_targets_.find(pShip);
-          if (remembered != last_turn_targets_.end() &&
-              remembered->second == e.dest) {
-            favor_previous_target = true;
-          }
-
-          if ((wants == POINTS && material == VINYL) ||
-              (wants == FUEL && material == URANIUM)) {
-            e.utility = CalculateUtility(pShip, wants, e, favor_previous_target);
-          } else {
-            e.utility = 0.0;  // Not the desired material
-          }
-        } else {
-          e.utility = 0.0;  // Not an asteroid or destination is null
-        }
-      }
-    } else if (wants == VIOLENCE) {
-      last_turn_targets_.erase(pShip);
-      // VIOLENCE mode: Converge on enemy ships/stations
-      // We issue orders directly - no need for utility optimization since
-      // combat targeting is generally robust against uncoordinated action.
-
-      CTeam* pmyTeam = pShip->GetTeam();
-
-      // Dynamic fuel management: If we're low on fuel and uranium is available,
-      // temporarily switch to FUEL seeking to restock before continuing combat
-      if (cur_fuel <= 5.5 && uranium_available) {
-        if (g_pParser && g_pParser->verbose) {
-          printf("\t→ [VIOLENCE override] Low fuel (%.1f), seeking uranium before combat\n", cur_fuel);
-        }
-        wants = FUEL;
-        ships_seeking_resources.push_back(pShip);
-        ship_ptr_to_shipnum[pShip] = shipnum;
-
-        // Calculate utilities for uranium asteroids
-        auto& ship_paths = mb->getShipPaths(shipnum);
-        for (auto&& pair : ship_paths) {
-          PathInfo& e = pair.second;
-          if (e.dest != NULL && e.dest->GetKind() == ASTEROID) {
-            AsteroidKind material = static_cast<CAsteroid*>(e.dest)->GetMaterial();
-            bool favor_previous_target = false;
-            auto remembered = last_turn_targets_.find(pShip);
-            if (remembered != last_turn_targets_.end() &&
-                remembered->second == e.dest) {
-              favor_previous_target = true;
-            }
-
-            if (material == URANIUM) {
-              e.utility = CalculateUtility(pShip, wants, e, favor_previous_target);
-            } else {
-              e.utility = 0.0;
-            }
-          } else {
-            e.utility = 0.0;
-          }
-        }
-        continue;  // Skip to next ship, let resource assignment handle this
-      }
-
-      // No fuel reserve if: (1) turn >= 280, OR (2) no uranium left in world
-      const double emergency_fuel_reserve =
-          (pmyWorld->GetGameTime() >= 280.0 || uranium_left <= g_fp_error_epsilon) ? 0.0 : 5.0;
-      const double available_fuel = pShip->GetAmount(S_FUEL) - emergency_fuel_reserve;
-      const double max_beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
-
-      // Structure to hold potential targets
-      struct ViolenceTarget {
-        CThing* thing;
-        int priority_class;  // 1=station with vinyl, 2=ship with vinyl, 3=other ship
-        double sort_key1;    // For stations: 0, For ships: cargo (desc) or shields (asc)
-        double sort_key2;    // For ships with cargo: shields, For others: fuel
-        double sort_key3;    // For ships with cargo: fuel, For others: 0
-      };
-
-      std::vector<ViolenceTarget> targets;
-
-      // Check if enemy base has vinyl (for end-game determination)
-      double enemy_base_vinyl = 0.0;
-      for (unsigned int idx = pmyWorld->UFirstIndex; idx != BAD_INDEX;
-           idx = pmyWorld->GetNextIndex(idx)) {
-        CThing* thing = pmyWorld->GetThing(idx);
-        if (thing == NULL || !thing->IsAlive()) continue;
-        if (thing->GetKind() != STATION) continue;
-
-        CTeam* thing_team = thing->GetTeam();
-        if (thing_team == NULL) continue;
-        if (thing_team->GetTeamNumber() == pmyTeam->GetTeamNumber()) continue;
-
-        CStation* station = static_cast<CStation*>(thing);
-        enemy_base_vinyl = station->GetVinylStore();
-        break;  // Only one enemy station
-      }
-
-      // Scan world for enemy targets
-      for (unsigned int idx = pmyWorld->UFirstIndex; idx != BAD_INDEX;
-           idx = pmyWorld->GetNextIndex(idx)) {
-        CThing* thing = pmyWorld->GetThing(idx);
-        if (thing == NULL || !thing->IsAlive()) continue;
-
-        ThingKind kind = thing->GetKind();
-        if (kind != STATION && kind != SHIP) continue;
-
-        CTeam* thing_team = thing->GetTeam();
-        if (thing_team == NULL) continue;
-        if (thing_team->GetTeamNumber() == pmyTeam->GetTeamNumber()) continue;
-
-        ViolenceTarget target;
-        target.thing = thing;
-
-        if (kind == STATION) {
-          CStation* station = static_cast<CStation*>(thing);
-          double vinyl = station->GetVinylStore();
-          if (vinyl > g_fp_error_epsilon) {
-            target.priority_class = 1;
-            target.sort_key1 = 0.0;
-            target.sort_key2 = 0.0;
-            target.sort_key3 = 0.0;
-            targets.push_back(target);
-          }
-        } else if (kind == SHIP) {
-          CShip* enemy = static_cast<CShip*>(thing);
-
-          // Skip docked enemy ships - they're safe at their base
-          if (enemy->IsDocked()) {
-            continue;
-          }
-
-          double cargo = enemy->GetAmount(S_CARGO);
-          double shields = enemy->GetAmount(S_SHIELD);
-          double fuel = enemy->GetAmount(S_FUEL);
-
-          if (cargo > g_fp_error_epsilon) {
-            // Second priority: ships with vinyl
-            // Sort by: most vinyl (desc), least shields (asc), least fuel (asc)
-            target.priority_class = 2;
-            target.sort_key1 = -cargo;  // Negate for descending
-            target.sort_key2 = shields;  // Ascending
-            target.sort_key3 = fuel;     // Ascending
-            targets.push_back(target);
-          } else {
-            // Third priority: other enemy ships
-            // Sort by: least shields (asc), least fuel (asc)
-            target.priority_class = 3;
-            target.sort_key1 = shields;
-            target.sort_key2 = fuel;
-            target.sort_key3 = 0.0;
-            targets.push_back(target);
-          }
-        }
-      }
-
-      // Sort targets by priority
-      std::sort(targets.begin(), targets.end(),
-                [](const ViolenceTarget& a, const ViolenceTarget& b) {
-        if (a.priority_class != b.priority_class) return a.priority_class < b.priority_class;
-        if (fabs(a.sort_key1 - b.sort_key1) > g_fp_error_epsilon) return a.sort_key1 < b.sort_key1;
-        if (fabs(a.sort_key2 - b.sort_key2) > g_fp_error_epsilon) return a.sort_key2 < b.sort_key2;
-        return a.sort_key3 < b.sort_key3;
-      });
-
-      // Find best target we can path to
-      CThing* best_target = NULL;
-      PathInfo best_path;
-
-      for (const auto& target : targets) {
-        // Check if we have a path to this target in MagicBag
-        auto& ship_paths = mb->getShipPaths(shipnum);
-        auto it = ship_paths.find(target.thing);
-        if (it != ship_paths.end()) {
-          best_target = target.thing;
-          best_path = it->second;
-          break;
-        }
-      }
-
-      // Issue navigation orders if we found a target
-      if (best_target != NULL) {
-        const char* target_type = (best_target->GetKind() == STATION) ? "enemy station" : "enemy ship";
-
-        if (g_pParser && g_pParser->verbose) {
-          printf("t=%.1f\t%s [VIOLENCE]:\n", pmyWorld->GetGameTime(), pShip->GetName());
-          printf("\t→ Engaging %s '%s'\n", target_type, best_target->GetName());
-        }
-
-        // Phase-based station attack: navigate → exit dock → maintain firing position
-        if (best_target->GetKind() == STATION) {
-          CStation* enemy_station = static_cast<CStation*>(best_target);
-          double distance = pShip->GetPos().DistTo(enemy_station->GetPos());
-
-          // Determine current phase based on ship state
-          bool docked_at_enemy = (pShip->IsDocked() && distance < g_ship_default_docking_distance + 5.0);
-
-          if (docked_at_enemy) {
-            // PHASE 2: Exit dock with staggered angles to avoid collisions
-            // Assign each ship a unique exit angle based on shipnum
-            // Angles: 3*PI/4 (135°), PI/4 (45°), -PI/4 (-45°), -3*PI/4 (-135°)
-            const double exit_angles[4] = {3.0*PI/4.0, PI/4.0, -PI/4.0, -3.0*PI/4.0};
-            double target_exit_angle = exit_angles[shipnum % 4];
-
-            double current_orient = pShip->GetOrient();
-            double angle_diff = target_exit_angle - current_orient;
-
-            // Normalize angle difference to [-PI, PI]
-            while (angle_diff > PI) angle_diff -= PI2;
-            while (angle_diff < -PI) angle_diff += PI2;
-
-            if (fabs(angle_diff) > 0.1) {
-              // Not facing exit angle, turn to face it
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ PHASE 2a: Turning to exit angle %.2f (current=%.2f, diff=%.2f)\n",
-                       target_exit_angle, current_orient, angle_diff);
-              }
-              pShip->SetOrder(O_TURN, angle_diff);
-            } else {
-              // Facing exit angle, thrust backwards to exit
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ PHASE 2b: Exiting dock at angle %.2f (dist=%.1f)\n",
-                       target_exit_angle, distance);
-              }
-              pShip->SetOrder(O_THRUST, -1.0);
-            }
-          } else if (distance < 100.0) {
-            // PHASE 3: Maintain firing position within 100 units
-            bool facing = pShip->IsFacing(*enemy_station);
-            CTraj velocity = pShip->GetVelocity();
-
-            if (facing) {
-              // Case 3a: Facing station - maintain position and prepare to shoot
-              double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
-              double radial_velocity = velocity.rho * cos(velocity.theta - angle_to_station);
-
-              if (radial_velocity > 0.5) {
-                // Moving away from station, counter with positive thrust
-                if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ PHASE 3a: Countering drift away (radial_vel=%.2f, dist=%.1f)\n",
-                         radial_velocity, distance);
-                }
-                pShip->SetOrder(O_THRUST, 2.0);
-              } else {
-                if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ PHASE 3a: Holding firing position (radial_vel=%.2f, dist=%.1f)\n",
-                         radial_velocity, distance);
-                }
-                // No thrust order - let natural drift continue
-              }
-            } else if (velocity.rho < 1.0) {
-              // Case 3b: Not facing but velocity low - turn to face
-              double angle_to_station = pShip->GetPos().AngleTo(enemy_station->GetPos());
-              double current_orient = pShip->GetOrient();
-              double angle_diff = angle_to_station - current_orient;
-
-              // Normalize angle difference to [-PI, PI]
-              while (angle_diff > PI) angle_diff -= PI2;
-              while (angle_diff < -PI) angle_diff += PI2;
-
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ PHASE 3b: Turning to face station (angle_diff=%.2f, vel=%.2f, dist=%.1f)\n",
-                       angle_diff, velocity.rho, distance);
-              }
-              pShip->SetOrder(O_TURN, angle_diff);
-            } else {
-              // Case 3c: Lost target lock (high velocity, not facing) - return to Phase 1
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ PHASE 3c: Lost lock (vel=%.2f, facing=%d, dist=%.1f) - returning to Phase 1\n",
-                       velocity.rho, facing, distance);
-                printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                       best_path.fueltraj.time_to_intercept,
-                       (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
-                       : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
-                       best_path.fueltraj.order_mag);
-              }
-              // Use MagicBag navigation to re-acquire target
-              pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
-            }
-          } else {
-            // PHASE 1: Navigate to station using MagicBag pathfinding
-            if (g_pParser && g_pParser->verbose) {
-              printf("\t→ PHASE 1: Navigating to enemy station (dist=%.1f)\n", distance);
-              printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                     best_path.fueltraj.time_to_intercept,
-                     (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
-                     : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
-                     best_path.fueltraj.order_mag);
-            }
-            pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
-          }
-
-          // Shooting logic - attempt to fire if within range and facing
-          if (distance < 100.0 && pShip->IsFacing(*enemy_station) && available_fuel > g_fp_error_epsilon) {
-            double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
-            bool good_efficiency = (beam_length >= 3.0 * distance);
-
-            if (good_efficiency) {
-              groonew::laser::BeamEvaluation eval =
-                  groonew::laser::EvaluateBeam(beam_length, distance);
-              groonew::laser::LogPotshotDecision(pShip,
-                                                 enemy_station,
-                                                 eval,
-                                                 "fire (maintain pressure)");
-              pShip->SetOrder(O_LASER, beam_length);
-            } else {
-              groonew::laser::BeamEvaluation eval =
-                  groonew::laser::EvaluateBeam(beam_length, distance);
-              groonew::laser::LogPotshotDecision(pShip,
-                                                 enemy_station,
-                                                 eval,
-                                                 "skip (poor efficiency)");
-            }
-          }
-        } else {
-          // Ship-to-ship combat: Choose between ramming or shooting
-
-          // RAMMING SPEED MODE: When enabled and enemy base has no vinyl,
-          // ram enemy ships instead of shooting them
-          if (ramming_speed && enemy_base_vinyl <= g_fp_error_epsilon) {
-            // === RAMMING SPEED TACTICS ===
-            // Strategy: Use shields as a battering ram, maintain shields >= 13 until t >= 280
-
-            if (g_pParser && g_pParser->verbose) {
-              printf("\t→ [RAMMING SPEED] Engaging '%s' for collision attack\n",
-                     best_target->GetName());
-            }
-
-            // Shield management: Keep shields high until very endgame
-            double current_shields = pShip->GetAmount(S_SHIELD);
-            double shield_target = (pmyWorld->GetGameTime() >= 280.0) ? 0.0 : 13.0;
-
-            if (current_shields < shield_target && cur_fuel > 1.0) {
-              // Recharge shields to maintain ramming protection
-              double shield_boost = std::min(shield_target - current_shields, cur_fuel);
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ [RAMMING SPEED] Boosting shields %.1f->%.1f (target=%.1f)\n",
-                       current_shields, current_shields + shield_boost, shield_target);
-              }
-              pShip->SetOrder(O_SHIELD, shield_boost);
-            }
-
-            // Navigation: Just head straight for the enemy ship using MagicBag pathfinding
-            // No fancy shooting logic - we WANT to collide!
-            if (g_pParser && g_pParser->verbose) {
-              printf("\t→ [RAMMING SPEED] Ramming course to '%s' (dist=%.1f)\n",
-                     best_target->GetName(), pShip->GetPos().DistTo(best_target->GetPos()));
-              printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\tshields=%.1f\n",
-                     best_path.fueltraj.time_to_intercept,
-                     (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
-                     : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
-                     best_path.fueltraj.order_mag, current_shields);
-            }
-
-            // Use MagicBag pathfinding to ram the enemy
-            pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
-
-          } else {
-            // === STANDARD SHOOTING TACTICS ===
-            // Phase-based ship-to-ship combat
-            const double SHOOTING_DISTANCE = 160.0;
-
-          // Scan for NON-DOCKED enemy ships within shooting distance
-          // Re-evaluated every turn - no mode locking
-          CShip* nearest_enemy = NULL;
-          double nearest_distance = SHOOTING_DISTANCE + 1.0;
-
-          for (unsigned int idx = pmyWorld->UFirstIndex; idx != BAD_INDEX;
-               idx = pmyWorld->GetNextIndex(idx)) {
-            CThing* thing = pmyWorld->GetThing(idx);
-            if (thing == NULL || !thing->IsAlive() || thing->GetKind() != SHIP) continue;
-
-            CTeam* thing_team = thing->GetTeam();
-            if (thing_team == NULL || thing_team->GetTeamNumber() == pmyTeam->GetTeamNumber()) continue;
-
-            CShip* enemy_ship = static_cast<CShip*>(thing);
-            if (enemy_ship->IsDocked()) continue;  // CRITICAL: Skip docked ships - they don't trigger combat mode
-
-            double distance = pShip->GetPos().DistTo(enemy_ship->GetPos());
-            if (distance < nearest_distance) {
-              nearest_enemy = enemy_ship;
-              nearest_distance = distance;
-            }
-          }
-
-          if (nearest_enemy != NULL && nearest_distance <= SHOOTING_DISTANCE) {
-            // PHASE 2: Within shooting distance of a non-docked enemy
-            bool facing = pShip->IsFacing(*nearest_enemy);
-
-            if (facing) {
-              // Case 2a: Facing the enemy - shoot them
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ PHASE 2a: Engaging enemy ship '%s' at close range (dist=%.1f)\n",
-                       nearest_enemy->GetName(), nearest_distance);
-              }
-
-              // Shoot if we have fuel and they're in range
-              if (available_fuel > g_fp_error_epsilon && nearest_distance < max_beam_length) {
-                double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
-
-                // End-game condition: no resources left and enemy base empty
-                bool end_game = (uranium_left <= g_fp_error_epsilon &&
-                                vinyl_left <= g_fp_error_epsilon &&
-                                enemy_base_vinyl <= g_fp_error_epsilon);
-
-                bool good_efficiency = (beam_length >= 3.0 * nearest_distance);
-
-                if (end_game || good_efficiency) {
-                  const char* reason = end_game ? "fire (end-game full blast)"
-                                                : "fire (efficient)";
-                  groonew::laser::BeamEvaluation eval =
-                      groonew::laser::EvaluateBeam(beam_length, nearest_distance);
-                  groonew::laser::LogPotshotDecision(pShip,
-                                                     nearest_enemy,
-                                                     eval,
-                                                     reason);
-                  pShip->SetOrder(O_LASER, beam_length);
-                }
-              }
-              // No thrust order - maintain current trajectory while engaging
-            } else {
-              // Case 2b: Not facing - evaluate if we should turn or pursue
-              CTraj our_vel = pShip->GetVelocity();
-              CTraj enemy_vel = nearest_enemy->GetVelocity();
-
-              // Predict enemy position one turn from now
-              CCoord enemy_pos_t0 = nearest_enemy->GetPos();
-              CCoord enemy_pos_t1 = enemy_pos_t0 + CCoord(enemy_vel.rho * cos(enemy_vel.theta),
-                                                           enemy_vel.rho * sin(enemy_vel.theta));
-
-              // Predict our position one turn from now (considering our current velocity)
-              CCoord our_pos_t0 = pShip->GetPos();
-              CCoord our_pos_t1 = our_pos_t0 + CCoord(our_vel.rho * cos(our_vel.theta),
-                                                       our_vel.rho * sin(our_vel.theta));
-
-              // Check if we'll still be within shooting distance next turn
-              double predicted_distance_t1 = our_pos_t1.DistTo(enemy_pos_t1);
-
-              if (predicted_distance_t1 <= SHOOTING_DISTANCE) {
-                // Case 2b1: Still in range next turn - turn to face predicted position
-                double angle_to_target_t1 = our_pos_t1.AngleTo(enemy_pos_t1);
-                double current_orient = pShip->GetOrient();
-                double angle_diff = angle_to_target_t1 - current_orient;
-
-                // Normalize angle difference to [-PI, PI]
-                while (angle_diff > PI) angle_diff -= PI2;
-                while (angle_diff < -PI) angle_diff += PI2;
-
-                if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ PHASE 2b1: Turning to face enemy ship '%s' (angle_diff=%.2f)\n",
-                         nearest_enemy->GetName(), angle_diff);
-                  printf("\t  Current dist=%.1f, Predicted dist=%.1f\n",
-                         nearest_distance, predicted_distance_t1);
-                  printf("\t  Enemy: (%.1f,%.1f) -> (%.1f,%.1f)\n",
-                         enemy_pos_t0.fX, enemy_pos_t0.fY, enemy_pos_t1.fX, enemy_pos_t1.fY);
-                  printf("\t  Us: (%.1f,%.1f) -> (%.1f,%.1f)\n",
-                         our_pos_t0.fX, our_pos_t0.fY, our_pos_t1.fX, our_pos_t1.fY);
-                }
-
-                pShip->SetOrder(O_TURN, angle_diff);
-              } else {
-                // Case 2b2: Will be out of range - resume Phase 1 pursuit
-                if (g_pParser && g_pParser->verbose) {
-                  printf("\t→ PHASE 2b2: Enemy moving out of range, resuming pursuit\n");
-                  printf("\t  Current dist=%.1f, Predicted dist=%.1f (> %.1f)\n",
-                         nearest_distance, predicted_distance_t1, SHOOTING_DISTANCE);
-                  printf("\t  Switching to MagicBag pursuit of '%s'\n", best_target->GetName());
-                  printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                         best_path.fueltraj.time_to_intercept,
-                         (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
-                         : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
-                         best_path.fueltraj.order_mag);
-                }
-
-                // Use MagicBag navigation to pursue
-                pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
-
-                // Opportunistic shooting during pursuit
-                if (pShip->IsFacing(*best_target) && available_fuel > g_fp_error_epsilon) {
-                  double distance = pShip->GetPos().DistTo(best_target->GetPos());
-                  if (distance < max_beam_length) {
-                    double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
-                    bool good_efficiency = (beam_length >= 3.0 * distance);
-                    if (good_efficiency) {
-                      groonew::laser::BeamEvaluation eval =
-                          groonew::laser::EvaluateBeam(beam_length, distance);
-                      groonew::laser::LogPotshotDecision(pShip,
-                                                         best_target,
-                                                         eval,
-                                                         "fire (pursuit opportunist)");
-                      pShip->SetOrder(O_LASER, beam_length);
-                    }
-                  }
-                }
-              }
-            }
-          } else {
-            // PHASE 1: No enemies within shooting distance - navigate to intercept
-            if (g_pParser && g_pParser->verbose) {
-              printf("\t→ PHASE 1: Navigating to intercept enemy ship '%s' (dist=%.1f)\n",
-                     best_target->GetName(), pShip->GetPos().DistTo(best_target->GetPos()));
-              printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                     best_path.fueltraj.time_to_intercept,
-                     (best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
-                     : (best_path.fueltraj.order_kind == O_TURN) ? "turn" : "other/none",
-                     best_path.fueltraj.order_mag);
-            }
-
-            // Use MagicBag navigation to intercept
-            pShip->SetOrder(best_path.fueltraj.order_kind, best_path.fueltraj.order_mag);
-
-            // Opportunistic shooting - if we happen to be facing them during intercept
-            if (pShip->IsFacing(*best_target) && available_fuel > g_fp_error_epsilon) {
-              double distance = pShip->GetPos().DistTo(best_target->GetPos());
-
-              if (distance < max_beam_length) {
-                double beam_length = min(512.0, available_fuel * g_laser_range_per_fuel_unit);
-                bool good_efficiency = (beam_length >= 3.0 * distance);
-
-                if (good_efficiency) {
-                  groonew::laser::BeamEvaluation eval =
-                      groonew::laser::EvaluateBeam(beam_length, distance);
-                  groonew::laser::LogPotshotDecision(pShip,
-                                                     best_target,
-                                                     eval,
-                                                     "fire (intercept opportunist)");
-                  pShip->SetOrder(O_LASER, beam_length);
-                }
-              }
-            }
-          }
-          }  // End of ramming_speed vs shooting tactics
-        }
-      } else if (g_pParser && g_pParser->verbose) {
-        printf("t=%.1f\t%s [VIOLENCE]:\n", pmyWorld->GetGameTime(), pShip->GetName());
-        printf("\t→ No valid enemy targets found\n");
-      }
-    }
-    // If wants == NOTHING or VIOLENCE, the ship currently does nothing
-    // strategic.
-  }  // End of ship loop
+  }
 
   // PHASE B: Solve the resource assignment problem.
   if (!ships_seeking_resources.empty()) {
