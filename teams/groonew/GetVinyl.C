@@ -3,6 +3,7 @@
 #include "GetVinyl.h"
 #include "Groonew.h"
 #include "MagicBag.h"
+#include "LaserUtils.h"
 #include "Pathfinding.h"
 #include "Ship.h"
 #include "Station.h"
@@ -12,6 +13,7 @@
 #include "ParserModern.h"
 #include "GameConstants.h"
 
+#include <algorithm>
 #include <limits>
 
 // External reference to global parser instance
@@ -96,52 +98,167 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
   return targets;
 }
 
-double ComputeLaserFuelCost(double beam_length) {
-  return beam_length / g_laser_range_per_fuel_unit;
+struct LaserResources {
+  double available_fuel = 0.0;
+  double max_beam_length = 0.0;
+  double damage_per_unit = 0.0;
+};
+
+LaserResources ComputeLaserResources(const CShip* ship, double fuel_reserve) {
+  LaserResources resources;
+  resources.damage_per_unit = groonew::laser::DamagePerExtraUnit();
+  resources.available_fuel = ship->GetAmount(S_FUEL) - fuel_reserve;
+  if (resources.available_fuel > g_fp_error_epsilon) {
+    resources.max_beam_length = std::min(
+        512.0, resources.available_fuel * g_laser_range_per_fuel_unit);
+  } else {
+    resources.available_fuel = 0.0;
+    resources.max_beam_length = 0.0;
+  }
+  return resources;
 }
 
-double ComputeLaserDamage(double beam_length, double target_distance) {
-  double extra_length = beam_length - target_distance;
-  if (extra_length <= g_fp_error_epsilon) {
-    return 0.0;
+bool TryStationPotshot(const LaserResources& laser,
+                       CShip* shooter,
+                       CStation* enemy_station,
+                       double distance_to_target) {
+  using namespace groonew::laser;
+
+  if (enemy_station == NULL) {
+    return false;
   }
-  return extra_length *
-         (g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor);
+  if (distance_to_target > laser.max_beam_length + g_fp_error_epsilon) {
+    return false;
+  }
+
+  double station_vinyl = enemy_station->GetVinylStore();
+  double max_extra = laser.max_beam_length - distance_to_target;
+  double max_damage = max_extra * laser.damage_per_unit;
+
+  if (station_vinyl <= g_fp_error_epsilon || max_extra <= g_fp_error_epsilon) {
+    return false;
+  }
+
+  // max_damage is already in vinyl units (damage_per_unit = 30 / 1000),
+  // so compare directly against the station’s stored vinyl.
+  double beam_length = laser.max_beam_length;
+
+  if (max_damage >= station_vinyl) {
+    beam_length =
+        distance_to_target + (station_vinyl / laser.damage_per_unit);
+    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    LogPotshotDecision(shooter,
+                       enemy_station,
+                       eval,
+                       "fire (destroy all vinyl)");
+    shooter->SetOrder(O_LASER, beam_length);
+    return true;
+  }
+
+  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
+
+  if (good_efficiency) {
+    LogPotshotDecision(shooter,
+                       enemy_station,
+                       eval,
+                       "fire (partial damage)");
+    shooter->SetOrder(O_LASER, beam_length);
+    return true;
+  }
+
+  LogPotshotDecision(shooter,
+                     enemy_station,
+                     eval,
+                     "skip (poor efficiency)");
+  return false;
 }
 
-void LogPotshotDecision(const CShip* shooter,
-                        const CThing* target,
-                        double distance,
-                        double beam_length,
-                        double expected_damage,
-                        double fuel_cost,
-                        double efficiency,
-                        const char* reason) {
-  if (!(g_pParser && g_pParser->verbose)) {
-    return;
+bool TryShipPotshot(const LaserResources& laser,
+                    CShip* shooter,
+                    CShip* enemy_ship,
+                    double distance_to_target) {
+  using namespace groonew::laser;
+
+  if (enemy_ship == NULL) {
+    return false;
+  }
+  if (distance_to_target + g_fp_error_epsilon >= laser.max_beam_length) {
+    return false;
   }
 
-  const CCoord shooter_pos = shooter->GetPos();
-  const CCoord target_pos = target->GetPos();
-  const char* target_kind =
-      (target->GetKind() == STATION) ? "Station"
-                                     : (target->GetKind() == SHIP) ? "Ship"
-                                                                   : "Thing";
+  double max_extra = laser.max_beam_length - distance_to_target;
+  double max_damage = max_extra * laser.damage_per_unit;
+  if (max_damage <= g_fp_error_epsilon) {
+    return false;
+  }
 
-  printf("\t[Potshot] %s -> %s '%s'\n",
-         shooter->GetName(),
-         target_kind,
-         target->GetName());
-  printf("\t  shooter_pos(%.1f, %.1f) target_pos(%.1f, %.1f)\n",
-         shooter_pos.fX, shooter_pos.fY,
-         target_pos.fX, target_pos.fY);
-  printf("\t  dist=%.1f beam=%.1f dmg=%.2f fuel=%.2f eff=%.2f : %s\n",
-         distance,
-         beam_length,
-         expected_damage,
-         fuel_cost,
-         efficiency,
-         reason);
+  const double kill_margin = 0.01;
+  double enemy_shield = enemy_ship->GetAmount(S_SHIELD);
+
+  if (max_damage >= enemy_shield + kill_margin) {
+    double damage_to_kill = enemy_shield + kill_margin;
+    double beam_length =
+        distance_to_target + (damage_to_kill / laser.damage_per_unit);
+    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    LogPotshotDecision(shooter, enemy_ship, eval, "fire (kill)");
+    shooter->SetOrder(O_LASER, beam_length);
+    return true;
+  }
+
+  double beam_length = laser.max_beam_length;
+  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+
+  if (enemy_shield <= 6.0) {
+    LogPotshotDecision(shooter,
+                       enemy_ship,
+                       eval,
+                       "skip (already vulnerable)");
+    return false;
+  }
+
+  double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
+  if (max_damage < min_damage_to_cross) {
+    LogPotshotDecision(shooter,
+                       enemy_ship,
+                       eval,
+                       "skip (insufficient damage)");
+    return false;
+  }
+
+  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
+  if (!good_efficiency) {
+    LogPotshotDecision(shooter,
+                       enemy_ship,
+                       eval,
+                       "skip (poor efficiency)");
+    return false;
+  }
+
+  LogPotshotDecision(shooter,
+                     enemy_ship,
+                     eval,
+                     "fire (force dock)");
+  shooter->SetOrder(O_LASER, beam_length);
+  return true;
+}
+
+void ApplyEmergencyOrders(CShip* ship, const EmergencyOrders& orders) {
+  if (orders.exclusive_order != O_ALL_ORDERS) {
+    if (orders.exclusive_order == O_JETTISON) {
+      ship->SetJettison(VINYL, orders.exclusive_order_amount);
+    } else {
+      ship->SetOrder(static_cast<OrderKind>(orders.exclusive_order),
+                     orders.exclusive_order_amount);
+    }
+  }
+
+  if (orders.shield_order_amount > 0.0) {
+    ship->SetOrder(O_SHIELD, orders.shield_order_amount);
+  }
+  if (orders.laser_order_amount > 0.0) {
+    ship->SetOrder(O_LASER, orders.laser_order_amount);
+  }
 }
 }  // namespace
 
@@ -234,151 +351,34 @@ void GetVinyl::Decide() {
     }
 
     EmergencyOrders emergency_orders;
-    emergency_orders = HandleImminentCollision(t1_collisions, 1, emergency_orders);
-    emergency_orders = HandleImminentCollision(t2_collisions, 2, emergency_orders);
-    emergency_orders = HandleImminentCollision(t3_collisions, 3, emergency_orders);
+    emergency_orders =
+        HandleImminentCollision(t1_collisions, 1, emergency_orders);
+    emergency_orders =
+        HandleImminentCollision(t2_collisions, 2, emergency_orders);
+    emergency_orders =
+        HandleImminentCollision(t3_collisions, 3, emergency_orders);
 
-    if (emergency_orders.exclusive_order != O_ALL_ORDERS) {
-      if (emergency_orders.exclusive_order == O_JETTISON) {
-        pShip->SetJettison(VINYL, emergency_orders.exclusive_order_amount);
-      } else {
-        pShip->SetOrder((OrderKind)emergency_orders.exclusive_order, emergency_orders.exclusive_order_amount);
-      }
-    }
-
-    if (emergency_orders.shield_order_amount > 0.0) {
-      pShip->SetOrder(O_SHIELD, emergency_orders.shield_order_amount);
-    }
-    if (emergency_orders.laser_order_amount > 0.0) {
-      pShip->SetOrder(O_LASER, emergency_orders.laser_order_amount);
-    }
+    ApplyEmergencyOrders(pShip, emergency_orders);
   }
 
   // TODO: Take potshots at enemy ships and stations.
   if (pShip->GetOrder(O_LASER) == 0.0) {
-    const double laser_damage_per_unit =
-        g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor;
+    LaserResources laser = ComputeLaserResources(pShip, fuel_reserve);
+    if (laser.max_beam_length > g_fp_error_epsilon) {
+      FacingTargets facing_targets = FindEnemyFacingTargets(pShip);
 
-    FacingTargets facing_targets = FindEnemyFacingTargets(pShip);
+      if (facing_targets.station != NULL) {
+        TryStationPotshot(laser,
+                          pShip,
+                          facing_targets.station,
+                          facing_targets.station_dist);
+      }
 
-    double available_fuel = pShip->GetAmount(S_FUEL) - fuel_reserve;
-
-    if (available_fuel > g_fp_error_epsilon) {
-      double max_beam_length =
-          min(512.0, available_fuel * g_laser_range_per_fuel_unit);
-      if (max_beam_length > g_fp_error_epsilon) {
-        // Station potshots: simplified logic
-        if (facing_targets.station != NULL) {
-          double distance_to_target = facing_targets.station_dist;
-          if (distance_to_target <= max_beam_length + g_fp_error_epsilon) {
-            CStation *enemy_station = facing_targets.station;
-            double station_vinyl = enemy_station->GetVinylStore();
-            double max_extra = max_beam_length - distance_to_target;
-            double max_damage = max_extra * laser_damage_per_unit;
-
-            if (station_vinyl > g_fp_error_epsilon && max_extra > g_fp_error_epsilon) {
-              // A. Can we destroy all vinyl?
-              bool can_destroy_all = (max_damage >= station_vinyl);
-              if (can_destroy_all) {
-                double beam_length = distance_to_target + (station_vinyl / laser_damage_per_unit);
-                double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                double fuel_cost = ComputeLaserFuelCost(beam_length);
-                double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                LogPotshotDecision(pShip, enemy_station, distance_to_target, beam_length,
-                                  expected_damage, fuel_cost, efficiency, "fire (destroy all vinyl)");
-                pShip->SetOrder(O_LASER, beam_length);
-              }
-              // B. Can we damage vinyl with good efficiency (beam >= 3x distance)?
-              else {
-                double beam_length = max_beam_length;
-                bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
-                if (good_efficiency) {
-                  double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                  double fuel_cost = ComputeLaserFuelCost(beam_length);
-                  double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                  LogPotshotDecision(pShip, enemy_station, distance_to_target, beam_length,
-                                    expected_damage, fuel_cost, efficiency, "fire (partial damage)");
-                  pShip->SetOrder(O_LASER, beam_length);
-                } else {
-                  double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                  double fuel_cost = ComputeLaserFuelCost(beam_length);
-                  double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                  LogPotshotDecision(pShip, enemy_station, distance_to_target, beam_length,
-                                    expected_damage, fuel_cost, efficiency, "skip (poor efficiency)");
-                }
-              }
-            }
-          }
-        }
-
-        // Ship potshots: simplified logic
-        if (pShip->GetOrder(O_LASER) == 0.0 &&
-            facing_targets.ship != NULL) {
-          double distance_to_target = facing_targets.ship_dist;
-          if (distance_to_target + g_fp_error_epsilon < max_beam_length) {
-            CShip *enemy_ship = facing_targets.ship;
-            double enemy_shield = enemy_ship->GetAmount(S_SHIELD);
-            double max_extra = max_beam_length - distance_to_target;
-            double max_damage = max_extra * laser_damage_per_unit;
-
-            if (max_damage > g_fp_error_epsilon) {
-              const double kill_margin = 0.01;
-
-              // A. Can we kill them?
-              bool can_kill = (max_damage >= enemy_shield + kill_margin);
-              if (can_kill) {
-                double damage_to_kill = enemy_shield + kill_margin;
-                double beam_length = distance_to_target + (damage_to_kill / laser_damage_per_unit);
-                double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                double fuel_cost = ComputeLaserFuelCost(beam_length);
-                double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                LogPotshotDecision(pShip, enemy_ship, distance_to_target, beam_length,
-                                  expected_damage, fuel_cost, efficiency, "fire (kill)");
-                pShip->SetOrder(O_LASER, beam_length);
-              }
-              // B. Can we get them below 6.0 with good efficiency (beam >= 3x distance)?
-              else if (enemy_shield > 6.0) {
-                double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
-                bool can_cross_threshold = (max_damage >= min_damage_to_cross);
-                if (can_cross_threshold) {
-                  // Deal max damage (not just min to cross 6.0)
-                  double beam_length = max_beam_length;
-                  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
-                  if (good_efficiency) {
-                    double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                    double fuel_cost = ComputeLaserFuelCost(beam_length);
-                    double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                    LogPotshotDecision(pShip, enemy_ship, distance_to_target, beam_length,
-                                      expected_damage, fuel_cost, efficiency, "fire (force dock)");
-                    pShip->SetOrder(O_LASER, beam_length);
-                  } else {
-                    double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                    double fuel_cost = ComputeLaserFuelCost(beam_length);
-                    double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                    LogPotshotDecision(pShip, enemy_ship, distance_to_target, beam_length,
-                                      expected_damage, fuel_cost, efficiency, "skip (poor efficiency)");
-                  }
-                } else {
-                  // Can't even get them below 6.0
-                  double beam_length = max_beam_length;
-                  double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                  double fuel_cost = ComputeLaserFuelCost(beam_length);
-                  double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                  LogPotshotDecision(pShip, enemy_ship, distance_to_target, beam_length,
-                                    expected_damage, fuel_cost, efficiency, "skip (insufficient damage)");
-                }
-              } else {
-                // Enemy already below 6.0, can't kill
-                double beam_length = max_beam_length;
-                double expected_damage = ComputeLaserDamage(beam_length, distance_to_target);
-                double fuel_cost = ComputeLaserFuelCost(beam_length);
-                double efficiency = (fuel_cost > g_fp_error_epsilon) ? (expected_damage / fuel_cost) : 0.0;
-                LogPotshotDecision(pShip, enemy_ship, distance_to_target, beam_length,
-                                  expected_damage, fuel_cost, efficiency, "skip (already vulnerable)");
-              }
-            }
-          }
-        }
+      if (pShip->GetOrder(O_LASER) == 0.0 && facing_targets.ship != NULL) {
+        TryShipPotshot(laser,
+                       pShip,
+                       facing_targets.ship,
+                       facing_targets.ship_dist);
       }
     }
   }

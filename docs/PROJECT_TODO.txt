@@ -3,6 +3,39 @@
 
 ===
 
+Should this damage per unit user our function?
+
+  107 +LaserResources ComputeLaserResources(const CShip* ship, double fuel_reserve) {
+    108 +  LaserResources resources;
+    109 +  resources.damage_per_unit =
+    110 +      g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor;
+
+
+Error in units, laser_damage is 30*remaining beam length, but depleted vinyl (or ship shields) is laser_damge / 1000.0. Max damage is nearly always going to exceed station vinyl (which will be 200 or less).
+
+    143 +  if (max_damage >= station_vinyl) {
+    144 +    double beam_length =
+    145 +        distance_to_target + (station_vinyl / laser.damage_per_unit);
+    146 +    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    147 +    LogPotshotDecision(shooter,
+    148 +                       enemy_station,
+    149 +                       eval,
+    150 +                       "fire (destroy all vinyl)");
+
+
+Why do we call BeamEvaluation but then unconditi0onally set the
+O_LASER order regardless of it's return value?
+
+    146 +    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    147 +    LogPotshotDecision(shooter,
+    148 +                       enemy_station,
+    149 +                       eval,
+    150 +                       "fire (destroy all vinyl)");
+    151 +    shooter->SetOrder(O_LASER, beam_length);
+    152 +    return true;
+    153 +  }
+
+
 === GrooReview ===
 
 We are ready for another round of code reviews.
