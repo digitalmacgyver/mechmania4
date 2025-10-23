@@ -844,15 +844,12 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
     bool has_line_of_fire =
         groonew::laser::FutureLineOfFire(ship, nearest_enemy, &future_distance);
 
-    const auto our_collision = Pathfinding::GetFirstCollision(ship);
-    const auto their_collision = Pathfinding::GetFirstCollision(nearest_enemy);
-    bool safe_window =
-        (!our_collision.HasCollision() ||
-         our_collision.time > g_game_turn_duration + g_fp_error_epsilon) &&
-        (!their_collision.HasCollision() ||
-         their_collision.time > g_game_turn_duration + g_fp_error_epsilon);
+    // Check if either us or our target will collide with something 
+    // in the next turn.
+    auto predictability =
+        groonew::laser::EvaluateFiringPredictability(ship, nearest_enemy);
 
-    if (has_line_of_fire && safe_window) {
+    if (has_line_of_fire && predictability.BothReliable()) {
       // Case 2a: Clear future line of fire - shoot them
       if (g_pParser && g_pParser->verbose) {
         printf("\t→ PHASE 2a: Engaging enemy ship '%s' (dist=%.1f, future=%.1f)\n",
@@ -864,11 +861,15 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
       double engagement_distance =
           (future_distance > g_fp_error_epsilon) ? future_distance
                                                  : nearest_distance;
+
+      // Note - available fuel varies by game time - towards the end of the 
+      // game it will be all fuel, prior to that some fuel is kept in reserve.                                           
       if (ctx.available_fuel > g_fp_error_epsilon &&
           engagement_distance < ctx.max_beam_length) {
-        // End-game condition: no resources left and enemy base empty
         double beam_length =
             std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+
+        // End-game condition: no resources left and enemy base empty
         bool end_game = (uranium_left <= g_fp_error_epsilon &&
                          vinyl_left <= g_fp_error_epsilon &&
                          ctx.enemy_base_vinyl <= g_fp_error_epsilon);
@@ -884,7 +885,8 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
         }
       }
     } else {
-      // Case 2b: No safe line of fire - evaluate if we should turn or pursue
+      // Case 2b: No predictable line of fire - evaluate if we should turn or
+      // pursue
       double lookahead_time = g_game_turn_duration;
       CCoord enemy_pos_t0 = nearest_enemy->GetPos();
       CCoord enemy_pos_t1 = nearest_enemy->PredictPosition(lookahead_time);
@@ -942,20 +944,31 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
                        ctx.best_path.fueltraj.order_mag);
 
         // Opportunistic shooting during pursuit
-        if (ship->IsFacing(*target.thing) &&
+        double pursuit_distance = 0.0;
+        bool pursuit_line = (target.thing != NULL) &&
+                            groonew::laser::FutureLineOfFire(
+                                ship, target.thing, &pursuit_distance);
+        auto pursuit_predictability =
+            (target.thing != NULL)
+                ? groonew::laser::EvaluateFiringPredictability(ship,
+                                                                target.thing)
+                : groonew::laser::FiringPredictability{};
+        if (pursuit_line && pursuit_predictability.BothReliable() &&
             ctx.available_fuel > g_fp_error_epsilon) {
-          double distance = ship->GetPos().DistTo(target.thing->GetPos());
-          if (distance < ctx.max_beam_length) {
+          double engagement_distance =
+              (pursuit_distance > g_fp_error_epsilon)
+                  ? pursuit_distance
+                  : ship->GetPos().DistTo(target.thing->GetPos());
+          if (engagement_distance < ctx.max_beam_length) {
             double beam_length = std::min(
                 512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
-            bool good_efficiency = (beam_length >= 3.0 * distance);
+            bool good_efficiency = (beam_length >= 3.0 * engagement_distance);
             if (good_efficiency) {
               groonew::laser::BeamEvaluation eval =
-                  groonew::laser::EvaluateBeam(beam_length, distance);
-              groonew::laser::LogPotshotDecision(ship,
-                                                 target.thing,
-                                                 eval,
-                                                 "fire (pursuit opportunist)");
+                  groonew::laser::EvaluateBeam(beam_length,
+                                               engagement_distance);
+              groonew::laser::LogPotshotDecision(
+                  ship, target.thing, eval, "fire (pursuit opportunist)");
               ship->SetOrder(O_LASER, beam_length);
             }
           }
@@ -982,17 +995,28 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
     ship->SetOrder(ctx.best_path.fueltraj.order_kind,
                    ctx.best_path.fueltraj.order_mag);
 
-    // Opportunistic shooting - if we happen to be facing them during intercept
-    if (target.thing != NULL && ship->IsFacing(*target.thing) &&
+    // Opportunistic shooting - if we can predict a reliable shot while intercepting
+    double intercept_distance = 0.0;
+    bool intercept_line = (target.thing != NULL) &&
+                          groonew::laser::FutureLineOfFire(
+                              ship, target.thing, &intercept_distance);
+    auto intercept_predictability =
+        (target.thing != NULL)
+            ? groonew::laser::EvaluateFiringPredictability(ship, target.thing)
+            : groonew::laser::FiringPredictability{};
+    if (intercept_line && intercept_predictability.BothReliable() &&
         ctx.available_fuel > g_fp_error_epsilon) {
-      double distance = ship->GetPos().DistTo(target.thing->GetPos());
-      if (distance < ctx.max_beam_length) {
+      double engagement_distance =
+          (intercept_distance > g_fp_error_epsilon)
+              ? intercept_distance
+              : ship->GetPos().DistTo(target.thing->GetPos());
+      if (engagement_distance < ctx.max_beam_length) {
         double beam_length =
             std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
-        bool good_efficiency = (beam_length >= 3.0 * distance);
+        bool good_efficiency = (beam_length >= 3.0 * engagement_distance);
         if (good_efficiency) {
           groonew::laser::BeamEvaluation eval =
-              groonew::laser::EvaluateBeam(beam_length, distance);
+              groonew::laser::EvaluateBeam(beam_length, engagement_distance);
           groonew::laser::LogPotshotDecision(ship,
                                              target.thing,
                                              eval,

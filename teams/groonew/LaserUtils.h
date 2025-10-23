@@ -3,6 +3,7 @@
 
 #include "GameConstants.h"
 #include "ParserModern.h"
+#include "Pathfinding.h"
 #include "Ship.h"
 #include "Thing.h"
 
@@ -45,6 +46,44 @@ struct LaserResources {
   double max_beam_length = 0.0;
   double damage_per_unit = 0.0;
 };
+
+struct FiringPredictability {
+  bool shooter_reliable = true;
+  bool target_reliable = true;
+
+  bool BothReliable() const { return shooter_reliable && target_reliable; }
+};
+
+inline FiringPredictability EvaluateFiringPredictability(const CShip* shooter,
+                                                         const CThing* target,
+                                                         double horizon =
+                                                             g_game_turn_duration) {
+  FiringPredictability result;
+  if (shooter == nullptr) {
+    result.shooter_reliable = false;
+    result.target_reliable = false;
+    return result;
+  }
+
+  const auto shooter_collision = Pathfinding::GetFirstCollision(
+      const_cast<CShip*>(shooter));
+  if (shooter_collision.HasCollision() &&
+      shooter_collision.time <= horizon + g_fp_error_epsilon) {
+    result.shooter_reliable = false;
+  }
+
+  if (target != nullptr && target->GetKind() == SHIP) {
+    const CShip* target_ship = static_cast<const CShip*>(target);
+    const auto target_collision =
+        Pathfinding::GetFirstCollision(const_cast<CShip*>(target_ship));
+    if (target_collision.HasCollision() &&
+        target_collision.time <= horizon + g_fp_error_epsilon) {
+      result.target_reliable = false;
+    }
+  }
+
+  return result;
+}
 
 inline LaserResources ComputeLaserResources(const CShip* ship,
                                             double fuel_reserve) {

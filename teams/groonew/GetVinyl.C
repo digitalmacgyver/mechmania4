@@ -24,9 +24,10 @@ GetVinyl::GetVinyl() {}
 GetVinyl::~GetVinyl() {}
 
 namespace {
-using groonew::laser::LaserResources;
 using groonew::laser::FutureLineOfFire;
+using groonew::laser::LaserResources;
 using groonew::laser::NormalizeAngle;
+using groonew::laser::EvaluateFiringPredictability;
 
 struct FacingTargets {
   CStation* station = NULL;
@@ -49,13 +50,13 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
     return targets;
   }
 
-  // If we'll collide with something in the next turn, further 
-  // reasoning would be invalidated.
-  const auto upcoming = Pathfinding::GetFirstCollision(ship);
-  if (upcoming.HasCollision() && upcoming.time <= g_game_turn_duration + g_fp_error_epsilon) {
+  // If we'll collide with something in the next turn, further reasoning would
+  // be invalidated.
+  const auto self_reliability =
+      EvaluateFiringPredictability(ship, nullptr);
+  if (!self_reliability.shooter_reliable) {
     return targets;
-  }  
-
+  }
 
   for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
        idx = world->GetNextIndex(idx)) {
@@ -81,6 +82,13 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
       continue;
     }
 
+    // Re-check predictability per target; stations never adjust position, so we
+    // only care about movable ships colliding before the shot resolves.
+    const auto reliability = EvaluateFiringPredictability(ship, thing);
+    if (!reliability.shooter_reliable) {
+      return targets;
+    }
+
     if (kind == STATION) {
       // Note: We intentionally don't do collision checking 
       // for stations as we know they'll still be in the same position.
@@ -95,12 +103,9 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
         continue;
       }
 
-      // If they'll collide with something in the next turn, further 
-      // reasoning would be invalidated.
-      const auto e_upcoming = Pathfinding::GetFirstCollision(enemy_ship);
-      if (e_upcoming.HasCollision() && e_upcoming.time <= g_game_turn_duration + g_fp_error_epsilon) {
+      if (!reliability.target_reliable) {
         continue;
-      }  
+      }
 
       if (future_distance < targets.ship_dist) {
         targets.ship = enemy_ship;
