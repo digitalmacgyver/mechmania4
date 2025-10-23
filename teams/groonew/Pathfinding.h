@@ -32,9 +32,6 @@ namespace Pathfinding {
     // Returns information about the earliest collision (or no-collision sentinel).
     CollisionInfo GetFirstCollision(CShip* ship);
 
-    // TODO: Currently returns hardcoded 5.0 - should calculate actual fuel cost
-    double determine_probable_fuel_cost(CShip* ship, CThing* thing, double time);
-
     // TODO: Currently returns dummy collision - should check path for obstacles
     Collision detect_collisions_on_path(CShip* ship, CThing* thing, double time);
 }

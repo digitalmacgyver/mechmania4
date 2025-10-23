@@ -46,6 +46,7 @@ utils_files=(
   "${REPO_ROOT}/team/src/Team.C"
   "${REPO_ROOT}/team/src/GameConstants.h"
   "${REPO_ROOT}/team/src/World.h"
+  "${REPO_ROOT}/teams/groonew/LaserUtils.h"
 )
 concat_files "${OUTPUT_DIR}/Utils.cpp" "${utils_files[@]}"
 

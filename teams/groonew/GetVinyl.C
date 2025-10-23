@@ -126,7 +126,7 @@ bool TryStationPotshot(const LaserResources& laser,
   if (enemy_station == NULL) {
     return false;
   }
-  if (distance_to_target > laser.max_beam_length + g_fp_error_epsilon) {
+  if (distance_to_target > laser.max_beam_length) {
     return false;
   }
 
@@ -182,7 +182,7 @@ bool TryShipPotshot(const LaserResources& laser,
   if (enemy_ship == NULL) {
     return false;
   }
-  if (distance_to_target + g_fp_error_epsilon >= laser.max_beam_length) {
+  if (distance_to_target > laser.max_beam_length) {
     return false;
   }
 

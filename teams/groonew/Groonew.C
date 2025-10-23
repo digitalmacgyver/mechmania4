@@ -250,41 +250,42 @@ void Groonew::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
   CWorld* pmyWorld = GetWorld();
   if (g_pParser && g_pParser->verbose) {
     CThing* target = best_e.dest;
-    // We know it's an asteroid because the solver only considered valid
-    // asteroids.
-    CAsteroid* ast = (CAsteroid*)target;
 
-    // Use a distinct header for the assignment action
-    printf("t=%.1f\t%s [assignment]:\n", pmyWorld->GetGameTime(),
-           pShip->GetName());
-    printf("\t→ Following %s asteroid %u (Utility: %.2f):\n",
-           (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",
-           target->GetWorldIndex(), best_e.utility);
+    if (target->GetKind() != ASTEROID) {
+      CAsteroid* ast = (CAsteroid*)target;
 
-    // Ship state
-    CCoord ship_pos = pShip->GetPos();
-    CTraj ship_vel = pShip->GetVelocity();
-    double ship_orient = pShip->GetOrient();
-    printf("\t  Ship:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\n",
-           ship_pos.fX, ship_pos.fY, ship_vel.rho, ship_vel.theta, ship_orient);
+      // Use a distinct header for the assignment action
+      printf("t=%.1f\t%s [assignment]:\n", pmyWorld->GetGameTime(),
+             pShip->GetName());
+      printf("\t→ Following %s asteroid %u (Utility: %.2f):\n",
+             (ast->GetMaterial() == VINYL) ? "vinyl" : "uranium",
+             target->GetWorldIndex(), best_e.utility);
 
-    // Asteroid state
-    CCoord ast_pos = target->GetPos();
-    CTraj ast_vel = target->GetVelocity();
-    double ast_orient = target->GetOrient();
-    printf(
-        "\t  Asteroid:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\tmass "
-        "%.1f\n",
-        ast_pos.fX, ast_pos.fY, ast_vel.rho, ast_vel.theta, ast_orient,
-        target->GetMass());
+      // Ship state
+      CCoord ship_pos = pShip->GetPos();
+      CTraj ship_vel = pShip->GetVelocity();
+      double ship_orient = pShip->GetOrient();
+      printf("\t  Ship:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\n",
+             ship_pos.fX, ship_pos.fY, ship_vel.rho, ship_vel.theta, ship_orient);
 
-    // Trajectory info
-    printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-           best_e.fueltraj.time_to_intercept,
-           ((best_e.fueltraj).order_kind == O_THRUST) ? "thrust"
-           : ((best_e.fueltraj).order_kind == O_TURN) ? "turn"
-                                                      : "other/none",
-           (best_e.fueltraj).order_mag);
+      // Asteroid state
+      CCoord ast_pos = target->GetPos();
+      CTraj ast_vel = target->GetVelocity();
+      double ast_orient = target->GetOrient();
+      printf(
+          "\t  Asteroid:\tpos(%.1f,%.1f)\tvel(%.1f,%.2f)\torient %.2f\tmass "
+          "%.1f\n",
+          ast_pos.fX, ast_pos.fY, ast_vel.rho, ast_vel.theta, ast_orient,
+          target->GetMass());
+
+      // Trajectory info
+      printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
+             best_e.fueltraj.time_to_intercept,
+             ((best_e.fueltraj).order_kind == O_THRUST) ? "thrust"
+             : ((best_e.fueltraj).order_kind == O_TURN) ? "turn"
+                                                        : "other/none",
+             (best_e.fueltraj).order_mag);
+    }
   }
 
   // Set the order on the ship
@@ -336,7 +337,7 @@ ShipWants Groonew::DetermineShipWants(CShip* ship,
 
   // E.g. if we don't have enough room for 1 more medium size asteroid.
   bool cargo_nearly_full =
-      ((max_cargo - cur_cargo) < ((40.0 / 3.0) + g_fp_error_epsilon));
+      ((max_cargo - cur_cargo) < ((g_initial_asteroid_mass / g_asteroid_split_child_count) + g_fp_error_epsilon));
   bool has_cargo = (cur_cargo > g_fp_error_epsilon);
 
   // TODO: As it is in the case where: we have a little vinyl, there is vinyl

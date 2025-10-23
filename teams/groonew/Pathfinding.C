@@ -154,11 +154,11 @@ namespace Pathfinding {
       // TODO: This condition is really trying to represent "we have at least 2
       // game turns to intercept - because we wish to issue 2 orders to arrive on
       // an intercept course."
-      bool t1_vectors_valid = false;
+      ctx.t1_vectors_valid = false;
       if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
         ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
         ctx.thrust_vec_t1 = ctx.intercept_vec_t1 - ctx.ship_vel_t0; // Note - ship_vel hasn't changed since T0
-        t1_vectors_valid = true;
+        ctx.t1_vectors_valid = true;
       }
 
       ctx.calculator_ship = calculator_ship;
@@ -249,6 +249,88 @@ namespace Pathfinding {
 
       return fj;
     }
+
+    // Docking case - this is special because we get a free 48 unit
+    // teleport at the start of the turn. Evaluates a launch maneuver
+    // (Thrust while docked) accounting for the teleport. Checks both
+    // forward (O_THRUST > 0) and reverse (O_THRUST < 0) possibilities.
+    FuelTraj TryDockedLaunchAndIntercept(const PathfindingContext& ctx) {
+      CShip* ship = ctx.ship;
+      
+      // Must be docked and stationary.
+      if (!ship->IsDocked()) return FAILURE_TRAJ;
+      
+      // Must have time to intercept.
+      if (ctx.time <= g_fp_error_epsilon) return FAILURE_TRAJ;
+
+      double launch_distance = GetLaunchDistance(ship);
+
+      // Iterate over possible launch directions: Forward (true) and Reverse (false)
+      for (bool forward_launch : {true, false}) {
+          
+          // 1. Determine launch position based on assumed thrust direction.
+          // Forward thrust -> Teleport forward. Reverse thrust -> Teleport backward.
+          double launch_angle = ctx.ship_orient_t0 + (forward_launch ? 0.0 : PI);
+          CTraj displacement(launch_distance, launch_angle);
+          
+          // ctx.ship_pos_t0 is the station center here.
+          CCoord launch_pos = ctx.ship_pos_t0 + displacement.ConvertToCoord();
+          launch_pos.Normalize(); // Ensure position is wrapped correctly
+
+          // 2. Calculate required velocity from the LAUNCH position.
+          // This correctly uses toroidal VectTo.
+          CTraj dest_vec = launch_pos.VectTo(ctx.destination);
+          CTraj intercept_vec = dest_vec;
+          intercept_vec.rho /= ctx.time;
+
+          // 3. Required thrust = required velocity (since V0=0).
+          CTraj thrust_vec = intercept_vec;
+          double thrust_mag_abs = thrust_vec.rho;
+
+          // 4. Determine the sign of the thrust and ensure it aligns with orientation.
+          bool thrust_is_forward;
+          // Use a minimum distance for alignment check to avoid issues with near-zero vectors.
+          double alignment_check_dist = std::max(1.0, thrust_mag_abs);
+
+          if (on_target(thrust_vec, ctx.ship_orient_vec_t0, alignment_check_dist)) {
+              thrust_is_forward = true;
+          } else if (on_target(thrust_vec, -ctx.ship_orient_vec_t0, alignment_check_dist)) {
+              thrust_is_forward = false;
+          } else {
+              // Thrust required is off-axis. Cannot achieve this with O_THRUST alone.
+              continue;
+          }
+          
+          double thrust_order_mag = thrust_is_forward ? thrust_mag_abs : -thrust_mag_abs;
+
+          // 5. Check Consistency: Does the calculated thrust direction match the launch assumption?
+          // If we assumed forward launch (teleport forward), we must have positive thrust.
+          if (forward_launch) {
+              if (thrust_order_mag <= g_fp_error_epsilon) continue; 
+          } 
+          // If we assumed reverse launch (teleport backward), we must have negative thrust.
+          else {
+              if (thrust_order_mag >= -g_fp_error_epsilon) continue;
+          }
+
+          // 6. Check constraints (Max thrust, Speed limit).
+          if (fabs(thrust_order_mag) > g_game_max_thrust_order_mag) continue;
+          if (intercept_vec.rho > g_game_max_speed + g_fp_error_epsilon) continue;
+
+          // 7. Calculate fuel cost. Thrust during the launch turn is free.
+          // We verify this using the calculator, passing is_docked=true.
+          double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_order_mag, true);
+
+          // 8. Success.
+          const char* case_label = forward_launch ? "LaunchFwd" : "LaunchBwd";
+          return CreateSuccessTraj(ctx, ship, O_THRUST, thrust_order_mag, fuel_used, 1, ctx.time, fuel_used, case_label);
+      }
+
+      return FAILURE_TRAJ;
+  }
+
+
+
 
     // Case 1a: And we'll drift into it at or before the desired time. => No order.
     // NOTE: Since our obects aren't point masses, we don't need to be on an
@@ -784,6 +866,15 @@ namespace Pathfinding {
     //            NOTE: Logically we can't go from case 2a to case 1b without an external event so it's not considered in planning.
     // Case 2b: There is a turn we can issue that will get us onto case 2ai in the following turn.
     //          => O_TURN (and plan to thrust next turn)
+
+    // Special Undock Case - can even violate game max speed due to free teleport of 48 units.
+    if (ship->IsDocked()) {
+      // Case Launch: Thrust immediately (causes teleport)
+      FuelTraj fj = TryDockedLaunchAndIntercept(ctx);
+      if (fj.path_found) {
+        return fj;
+      }
+    }
 
     // Case 0: Even at the game's max speed we can't get there in time.
     if (ctx.intercept_vec_t0.rho > g_game_max_speed) {

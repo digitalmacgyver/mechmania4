@@ -572,7 +572,7 @@ Better Shooting Todo:
 * Are we calculating turn 1 distance in our distance math or do we
   fire too short sometimes?
 * For ship to ship duelling, figure out fastest time to intercetp, not
-  shortest distance.
+  shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
 Fix the convolute ExecuteViolence methods - break them and and factor
@@ -583,83 +583,15 @@ b. Lots of the shooting logic is incredibly similar and repeated over
 and over with small variations in efficiency permissivenes, comments,
 etc. factor out the common code.
 
-We have ships get "stuck" near the enemy station not shooting it and
-not collecting vinyl sometimes in endgame - fix this.
-
-OK we want uranium when:
-
-PREFERRED ASTEROID TYPE IS URANIUM WHEN:
-((cur_fuel <= FUEL_RESERVE && uranium_available)
-OR
-(!vinyl_available && uranium_available))
-
-We only get to violence when these are false:
-  if (preferred == URANIUM && uranium_available && vinyl_available) {
-    // While there's still vinyl we just get vinyl and fuel if we need it.
-    return FUEL;
-  }
-  if (preferred == URANIUM && uranium_available && cur_fuel <= 6.6) {
-    // If there's still uranium but no vinyl, and we're low on fuel, stock up
-    // for battle.
-    return FUEL;
-  }
-
-Note -the second condition tells us to get fuel if we're under 6.6!!! at endgame conditions (!vinyl)
-
-So watch stuck ships and see if their fuel is > 6.6 <- yes this is happening.
-
-OK so we're in violence mode and stuck....
-
-Replenish threshold is:
-
-  bool zero_reserve_phase =
-      ((world != NULL &&
-        world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER) ||
-       uranium_left <= g_fp_error_epsilon);
-  double replenish_threshold =
-      groonew::constants::FUEL_RESERVE + groonew::constants::FUEL_REPLENISH_MARGIN;
-  if (zero_reserve_phase) {
-    replenish_threshold = groonew::constants::FINAL_FUEL_RESERVE;
-  }
-
-  // Dynamic fuel management: If we're low on fuel and uranium is available,
-  // temporarily switch to FUEL seeking to restock before continuing combat.
-  if (!zero_reserve_phase && uranium_available &&
-      cur_fuel <= replenish_threshold + g_fp_error_epsilon) {
-    if (g_pParser && g_pParser->verbose) {
-      printf(
-          "\t→ [VIOLENCE override] Low fuel (%.1f <= %.1f), seeking uranium before combat\n",
-          cur_fuel,
-          replenish_threshold);
-    }
-    // Calculate utilities for uranium asteroids
-    EvaluateResourceUtilities(ship,
-                              FUEL,
-                              shipnum,
-                              ships_seeking_resources,
-                              ship_ptr_to_shipnum);
-    return;  // Skip to next ship, let resource assignment handle this
-  }
-
-Once we enter violence mode we'll never get fuel.
-
-And we won't shoot if we can't because we'll go below our emergency reserve.
-
-Solition: WANTS has to keep us out of this situation.
-
-WANTS on fuel goes up to 20-40/9-g_fp_epsillon
-
-
-
---
-
 Code cleanup - it looks like no one uses violence
 context.max_beam_length which is quite handy - we shoould be using
 thatn instead of doing our own beam_lenghth = max( 512,
 mathonfuelremainig).
 
 Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
-1.
+1.0
+
+--
 
 3. Double check our base launch logic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles
@@ -668,9 +600,6 @@ is_docked and fuel costs while docked.
     - toy with approaches like turn 1: orient twards middle in fan,
     turn 2 max launch, turn 3+ normal control.
 
-Handle undocking logic: When we undock we are teleported 48 units
-along our launch direction before drift.
-
 Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.
 
@@ -678,9 +607,6 @@ We are also pretty bad at shooting ships - look at how Chromefunk does
 htis - it's actually much btter - we might be trying to get too close,
 or maybe we need to get onto an intercept pursuit angle and not come
 at them obliquely or something.
-
-In endgame - don't max up shields before colliding with big uranium -
-just take the hit to preserve more uranium in the world.
 
 If we're done with everything else, and there's still uranium, harvest
 it.
