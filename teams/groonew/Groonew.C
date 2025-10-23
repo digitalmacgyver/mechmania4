@@ -945,20 +945,20 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
 
         // Opportunistic shooting during pursuit
         double pursuit_distance = 0.0;
-        bool pursuit_line = (target.thing != NULL) &&
-                            groonew::laser::FutureLineOfFire(
-                                ship, target.thing, &pursuit_distance);
+        bool pursuit_line =
+            groonew::laser::FutureLineOfFire(ship, target.thing, &pursuit_distance);
+
         auto pursuit_predictability =
-            (target.thing != NULL)
-                ? groonew::laser::EvaluateFiringPredictability(ship,
-                                                                target.thing)
-                : groonew::laser::FiringPredictability{};
+            groonew::laser::EvaluateFiringPredictability(ship, target.thing);
+
         if (pursuit_line && pursuit_predictability.BothReliable() &&
             ctx.available_fuel > g_fp_error_epsilon) {
+          
           double engagement_distance =
               (pursuit_distance > g_fp_error_epsilon)
                   ? pursuit_distance
                   : ship->GetPos().DistTo(target.thing->GetPos());
+          
           if (engagement_distance < ctx.max_beam_length) {
             double beam_length = std::min(
                 512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
@@ -997,13 +997,10 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
 
     // Opportunistic shooting - if we can predict a reliable shot while intercepting
     double intercept_distance = 0.0;
-    bool intercept_line = (target.thing != NULL) &&
-                          groonew::laser::FutureLineOfFire(
-                              ship, target.thing, &intercept_distance);
+    bool intercept_line =
+        groonew::laser::FutureLineOfFire(ship, target.thing, &intercept_distance);
     auto intercept_predictability =
-        (target.thing != NULL)
-            ? groonew::laser::EvaluateFiringPredictability(ship, target.thing)
-            : groonew::laser::FiringPredictability{};
+        groonew::laser::EvaluateFiringPredictability(ship, target.thing);
     if (intercept_line && intercept_predictability.BothReliable() &&
         ctx.available_fuel > g_fp_error_epsilon) {
       double engagement_distance =
