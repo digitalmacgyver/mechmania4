@@ -473,7 +473,7 @@ namespace Pathfinding {
       if (fabs(denominator) > g_fp_error_epsilon) {
         // TODO - What if ship_vel_t0.rho is zero - as it will be when we're
         // docked? Analyze the cases - hopefully if we're docked or at zero
-        // velcoity and facing the right way we catch that up above in case 1.
+        // velocity and facing the right way we catch that up above in case 1.
         double k = ship_vel_t0.rho * sin(dest_vec_t0.theta - ship_vel_t0.theta) / denominator;
         if (fabs(k) <= g_game_max_thrust_order_mag) {
           // Note - due to how the engine works, even if this thrust results in
@@ -705,26 +705,10 @@ namespace Pathfinding {
   }
 
   // This will be the first thing we refine:
-
-  // Step 0: As I'm checking the stuff below, I want to validate with hello
-  // world style code checks, for instance that VectTo does what I expect.
-
-  // Step 0: in case 1a We don't check if anything is going to collide with us
-  //         in the case where we plan a drift intercept. If we're planning to
-  //         drift we should see if anything will collide with us _before_ our
-  //         target does. More broadly for all case where we drift for a turn we
-  //         should check if anything other than what we're trying to hit
-  //         collides first and return failure.
   
   // Step 1: Think about our treatment of time as a double below - are we
   // creating signpost problems where we are cutting things too close and are
   // going to be 1 turn late on stuff (or 1 turn early?)
-
-  // Step 3: Consider how to make planning stable so we don't pingping between
-  // targets with equal distance from us, e.g. we pick asteroid A that is 4
-  // turns away this turn (but B is also 4 turns away) and plan to intercept A,
-  // but next round we pick asteroid B (both A and B now 3 turns away) and turn
-  // again, etc. and never execute on a plan for either.0
 
   // Step 3: Consider how to make the logic toroid aware and relative velocity
   // aware - e.g. ship at -200, asteroid at 200, ship going 30 left, asteroid
@@ -889,24 +873,10 @@ namespace Pathfinding {
       if (has_best_case) {
         return best_case;
       }
-
-      // TODO: Case 2b is not always optimal - it may be better to do some
-      // thrust->overthrust->turn sequence instead. Consider the case where we are
-      // oriented right, and are trying to get to something mostly right and
-      // slightly up. We can thrust right on turn 1, rotate slightly up and on turn
-      // 2, and thrust up/right on turn 3, having benefitted from our initial
-      // thrus's velocity on both turns 1 and 2 to reduce the desired distance to
-      // our object for our thurst onto intercept on turn 3.
-      //
-      // TODO: Actually - the comment above gave me an idea - maybe we should
-      // analyze our current thrust options in terms of decompositon of parallel to,
-      // and perpendicualr to, our desired thurst, and consider strongly thrusting
-      // where the parallel to dimension is high.
     }
 
     // If we got down here we couldn't find any way to intercept in time.
     return FAILURE_TRAJ;
-
   }
 
   /*
