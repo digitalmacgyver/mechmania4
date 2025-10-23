@@ -85,8 +85,6 @@ namespace Pathfinding {
       return cost;
     }
 
-    // (GetFirstCollision moved out of internal namespace for reuse.)
-
     // --- Pathfinding Context ---
 
     // Struct to hold the context of the pathfinding attempt for a specific ship and target.
@@ -772,6 +770,10 @@ namespace Pathfinding {
 
     // Populates context as an in/out parameter.
     InitializeContext(ctx, ship, thing, time, calculator);
+
+    // Note - we tried pruning paths where a collision with our ship is expected
+    // before intercept, but that seemed to decrease performance - so for now we
+    // deliberately don't check for collisions with our ships or targets.
 
     // Overview:
 

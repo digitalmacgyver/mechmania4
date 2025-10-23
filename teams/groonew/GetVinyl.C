@@ -286,9 +286,9 @@ void GetVinyl::Decide() {
 
   // Check resource availability for shield strategy
   Groonew* groonew_team = static_cast<Groonew*>(pmyTeam);
-  bool no_vinyl_free = (groonew_team->vinyl_left <= g_fp_error_epsilon);
-  bool no_resources_free = (groonew_team->uranium_left <= g_fp_error_epsilon &&
-                            groonew_team->vinyl_left <= g_fp_error_epsilon);
+  bool no_vinyl_free = (fabs(groonew_team->vinyl_left) <= g_fp_error_epsilon);
+  bool no_resources_free = (fabs(groonew_team->uranium_left) <= g_fp_error_epsilon &&
+                            fabs(groonew_team->vinyl_left) <= g_fp_error_epsilon);
 
   // Shield maintenance strategy based on game phase:
   // - Normal (resources available): 20.66 shields (protect against collisions + laser)
@@ -481,12 +481,15 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
       }
     }
 
-    double asteroid_mass = (is_asteroid ? athing->GetMass() : 0.0);
+    // Check resource availability for shield strategy
+    Groonew* groonew_team = static_cast<Groonew*>(pmyTeam);
+    bool world_has_vinyl = (fabs(groonew_team->vinyl_left) > g_fp_error_epsilon);
+    bool world_has_uranium = (fabs(groonew_team->uranium_left) > g_fp_error_epsilon);
 
+    double asteroid_mass = (is_asteroid ? athing->GetMass() : 0.0);
 
     // You can't jettison less than the minimum asteroid size.
     bool have_cargo = (pShip->GetAmount(S_CARGO) >= g_thing_minmass);
-
 
     // Handle enemy stations.
     if (is_enemy && is_station) {
@@ -516,8 +519,6 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
         }
       }
 
-      // DEBUG - We should check if we're going to turn before shooting so we don't waste
-      // bullets - but for now leave this as is and see how it works.
       if (enemy_cargo && laser_allowed) {
         double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
         if (FutureLineOfFire(pShip, athing, &future_distance)) {
@@ -533,16 +534,19 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
       }
     }
 
-    // Handle enemy ships.
-    // TODO: For now we'll handle this in a more general potshot taking 
-    // logic not tied to emergency maneuvers.
+    // We handle shooting enemy ships in the general potshot taking logic,
+    // not here.
 
     // Handle Uranium asteroids.
     if (is_uranium) {
 
       if (asteroid_mass <= max_fuel) {
-        if (shield_allowed) {
-          // uranium less than max fuel
+        // Note - when there is no vinyl free in the game world we choose
+        // not to boost our shields to completely consume breakable, eatable
+        // asteroids, prefering to split them by ramming so we keep that
+        // extra uranium in the game world for fuel and lasers.
+        bool endgame_shield_management = (!world_has_vinyl && ((asteroid_mass / g_asteroid_split_child_count) >= g_thing_minmass));
+        if (shield_allowed && !endgame_shield_management) {
           if (g_pParser && g_pParser->verbose) {
             printf("\t→ Using shields to absorb %.1f uranium\n",
                    athing->GetMass() - (max_fuel - cur_fuel));
@@ -551,7 +555,13 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
           emergency_orders.shield_order_amount = shield_order;
           shield_allowed = false;
         }
-      } else {
+      } 
+      /* We used to have logic here to shoot asteroids to break them up,
+      however the expected fuel cost to break up the asteroid is around 
+      2.2, and the expected damage to shields is around 0.6. In nearly 
+      the worst case scenario we'd take around 3 damage from a collision.
+      So it's not worth the fuel to break up the asteroid.
+      else {
         // uranium greater than max fuel
         if (g_pParser && g_pParser->verbose) {
           printf("\t→ CONSIDERING Shooting %.1f uranium\n", asteroid_mass);
@@ -579,8 +589,8 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
               }
             }
           }
-       }
-      }
+        }
+      }*/
     }
 
     // TODO: For us this isn't a big deal as we can hold max size asteroid, and tend

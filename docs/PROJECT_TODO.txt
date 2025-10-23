@@ -226,14 +226,26 @@ Now review the system for architectural concerns:
 
 Contest results:
 
-Game 1-5 as team #2: 1: 80 | 120 | Win by ~93 2: 120 | 80 | Win by 160
-3: 160 | 160 | Win by 120 4: 80 | 160 | Win by ~55 5: 160 | 97.777
+Game 1-5 as team #2:
+1: 80 | 120 | Win by ~93
+2: 120 | 80 | Win by 160
+3: 160 | 160 | Win by 120
+4: 80 | 160 | Win by ~55
+5: 160 | 97.777
 (tie some vinyl destroyed)
 
-Game 6-10 as team #1: 6: 120 | 120 7: 80 | 80 8: 120 | 120 9: 120 |
-93.333 10: 120 | 40
+Game 6-10 as team #1:
+6: 120 | 120
+7: 80 | 80
+8: 120 | 120
+9: 120 |93.333
+10: 120 | 40
 
 7-3 | 5-4-1
+
+Game 1-10 (original vs new)
+Original: 6
+New     : 4
 
 ===
 
@@ -555,9 +567,10 @@ new team? Why bother with all this?
 ========================== Groonew TODO =============================
 
 Better Shooting Todo:
-
 * If we turn to get a better firing solution WE CAN FIRE THE SAME
   TURN! We'll have turned by then! Are we doing that?
+* Are we calculating turn 1 distance in our distance math or do we
+  fire too short sometimes?
 * For ship to ship duelling, figure out fastest time to intercetp, not
   shortest distance.
 * Somehow cancel order if something will interpose (see experimental world sim logic)
@@ -573,107 +586,30 @@ etc. factor out the common code.
 We have ships get "stuck" near the enemy station not shooting it and
 not collecting vinyl sometimes in endgame - fix this.
 
+OK we want uranium when:
+
+PREFERRED ASTEROID TYPE IS URANIUM WHEN:
+((cur_fuel <= FUEL_RESERVE && uranium_available)
+OR
+(!vinyl_available && uranium_available))
+
+We only get to violence when these are false:
+  if (preferred == URANIUM && uranium_available && vinyl_available) {
+    // While there's still vinyl we just get vinyl and fuel if we need it.
+    return FUEL;
+  }
+  if (preferred == URANIUM && uranium_available && cur_fuel <= 6.6) {
+    // If there's still uranium but no vinyl, and we're low on fuel, stock up
+    // for battle.
+    return FUEL;
+  }
+
+Note -the second condition tells us to get fuel if we're under 6.6!!! at endgame conditions (!vinyl)
+
+So watch stuck ships and see if their fuel is > 6.6
+
+
 --
-
-
-??
-
-Do we have a systematic off by 1 error in our pathfinding turn_1,
-turn_2 type logic?
-
-E.g. if we're moving to the right at 1 unit per sec and facing to the
-left, start at 5, and we wannt to be at the origin in 5 seconds, what
-needs to happen, and what do we actually compute?
-
-What needs to happen: we can't thrust for 1 second, by which time
-we'll be at 6.
-
-We would then have 4 more seconds to get to the origin, which is 6
-away.
-
-So we ought to issue a thrust of 1+6/4 = 2.5 to the left (1 to
-counteract our current movement, and 1.5 to get enough velocity to
-cover 6 units in 4 seconds).
-
-What do we actually do in Pathfinding.C?
-
-ctx.destination = 0
-ctx.ship_pos_t0 = 5
-ctx.ship_orient_t0 = pi
-ctx.ship_orient_vec_t0 = (1, pi)
-ctx.ship_vel_t0 = (1, 0)
-
-ctx.ship_trajectory_t0 = (1, 0)
-
-ctx.dest_vec_t0 = (5).VectTo(0) = (5, pi)
-ctx.intercept_vec_t0 = (5, pi)
-ctx.intercept_vec_t0 is updated to: (1, pi) no change
-
-ship_pos_t1 = 6
-dest_vec_t1 = (6, pi)
-ctx.intercept_vec_t1 = (6, pi)
-ctx.intercept_vec_t1.rho = 6/4 = 1.5
-ctx.thurst_vec_t1 = (1.5, pi) - (1, 0) = (2.5, pi)
-
-So, our T1 vecs ar right, but make sure we're not using our T0 vecs anywherre!!!! (or if we are that it makes sense!!!)
-
-WE MAY HAVE A BUG IN CASE 1B - WE THRUST AS IF WE'RE DOING IT "NOW" -
-BUT WE WILL DRIFT FOR A TURN FIRST!
-
-CASE 1B IS WHAT WE WORKED OUT ABOVE - ALIGNED THRUST - BUT WE NEED TO DO T1 THRUST!
-
-WE PROBABLY NEED T2 STUFF EVERYWHERE ALSO - WE LIKELY HAVE A BROAD OFF BY ONE.
-
-THINK ABOUT IF IT MATTERS THOUGH GIVEN HOW WE WALK UP TIMES FROM ZERO.
-
-==
-
-      ctx.destination = thing->PredictPosition(time);
-
-      // Initialize T0 state
-      ctx.ship_pos_t0 = ship->GetPos();
-      ctx.ship_orient_t0 = ship->GetOrient();
-      ctx.ship_orient_vec_t0 = CTraj(1.0, ctx.ship_orient_t0);
-      ctx.ship_vel_t0 = ship->GetVelocity();
-
-      // If our ship isn't moving, consider our trajectory for the purposes of
-      // trajectory matching to be along the direction of our orientation.
-      ctx.ship_trajectory_t0 = ctx.ship_vel_t0;
-      if (ctx.ship_vel_t0.rho <= g_fp_error_epsilon) {
-        ctx.ship_trajectory_t0 = ctx.ship_orient_vec_t0;
-      }
-
-      // T0 Calculations
-      ctx.dest_vec_t0 = ctx.ship_pos_t0.VectTo(ctx.destination);  // Vector to target
-      ctx.intercept_vec_t0 = ctx.dest_vec_t0;
-      ctx.intercept_vec_t0.rho /= time;  // Velocity needed to reach target in time
-      // So now intercep_vec_t0 represents the ideal velocity starting now.
-
-      CCoord ship_pos_t1 = ship->PredictPosition(g_game_turn_duration);
-      CTraj dest_vec_t1 = ship_pos_t1.VectTo(ctx.destination);
-      ctx.intercept_vec_t1 = dest_vec_t1;
-      // TODO: This condition is really trying to represent "we have at least 2
-      // game turns to intercept - because we wish to issue 2 orders to arrive on
-      // an intercept course."
-      bool t1_vectors_valid = false;
-      if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
-        ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
-        ctx.thrust_vec_t1 = ctx.intercept_vec_t1 - ctx.ship_vel_t0; // Note - ship_vel hasn't changed since T0
-        t1_vectors_valid = true;
-      }
-
-???
-
-Does it ever make sense to shoot a asteroid to break it up (other than
-perhaps action econmy of getting to smaller chunks a tick earlier?)
-how much fuel does it take to break it up, versus how much shield do
-you lose and how much fuel to restore shield?
-
-* Improve Groonew collision detection in determine_orders - we predict
-  where thing X will be in N turns, but we could also check if thing X
-  is going to collide with something before N turns, and if so not
-  bother trying to intercept it at a place it won't likely to be in
-  those turns.
 
 3. Double check our base launch logic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles
