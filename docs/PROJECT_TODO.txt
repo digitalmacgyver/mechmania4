@@ -578,17 +578,15 @@ to incorrect guesses about remaining vinyl and uranium. Keep an eye
 out for if it comes back. (I did change comparisons on is_vinyl /
 is_uranium to want more than fp epsillon.
 
+Better Shooting Todo:
+* Somehow cancel order if something will interpose (see experimental world sim logic)
+
 We have ships get "stuck" near the enemy station not shooting it and
 not collecting vinyl sometimes in endgame - fix this.
 
 ExecuteViolenceAgainstShips ramming logic - this is bad - consider
 removing it entirely - minimally the shield section needs work as it
 can just buff our shields nad leave us without fuel.
-
-Need better shooting logic - we shoot ourselves a lot or get bumped off:
-* Revisit the assumption that we shoot early in the turn
-* Check where we'll be in a turn
-* Check if any dam thing is colliding with us first and abort
 
 How does our n_turns_vector / n_turns thing actually work?, e.g. If
 we're moving to the right at 1 unit/sec and we want to be at -5 in

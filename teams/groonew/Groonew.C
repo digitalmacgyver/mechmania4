@@ -42,6 +42,8 @@ Feature change log:
 2025-10-13: Fleshed out opportunistic / emergency orders: taking potshots and enemy ships and stations, breaking apart asteroids we're about to collide with.
 2025-10-13: Basic / barely functional endgame logic of switching goals from gathering vinyl to destorying enemy vinyl reserves and then ships; lowering shield and fuel retention standards as game conditions evolve.
 2025-10-22: Implemented 1 turn lookahead in positions for potshot and collision lasers.
+2025-10-23: Better Potshots: no targeting data if us or them will collide with something first (excepting enemy stations)
+2025-10-23: Better emergency orders: Don't boost shields before midsize uranium collisions once the world is out of vinyl to preserve uranium in game world.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
@@ -710,20 +712,28 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
                    ctx.best_path.fueltraj.order_mag);
   }
 
-  // Shooting logic - attempt to fire if within range and facing
-  if (distance < 100.0 && ship->IsFacing(*enemy_station) &&
-      ctx.available_fuel > g_fp_error_epsilon) {
-    double beam_length =
-        std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
-    bool good_efficiency = (beam_length >= 3.0 * distance);
+  if (ctx.available_fuel > g_fp_error_epsilon) {
+    const auto upcoming = Pathfinding::GetFirstCollision(ship);
+    if (!upcoming.HasCollision() ||
+        upcoming.time > g_game_turn_duration + g_fp_error_epsilon) {
+      double future_distance = distance;
+      if (groonew::laser::FutureLineOfFire(ship, enemy_station,
+                                           &future_distance) &&
+          future_distance < 100.0) {
+        double beam_length =
+            std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        bool good_efficiency = (beam_length >= 3.0 * future_distance);
 
-    groonew::laser::BeamEvaluation eval =
-        groonew::laser::EvaluateBeam(beam_length, distance);
-    const char* reason =
-        good_efficiency ? "fire (maintain pressure)" : "skip (poor efficiency)";
-    groonew::laser::LogPotshotDecision(ship, enemy_station, eval, reason);
-    if (good_efficiency) {
-      ship->SetOrder(O_LASER, beam_length);
+        auto eval =
+            groonew::laser::EvaluateBeam(beam_length, future_distance);
+        const char* reason =
+            good_efficiency ? "fire (maintain pressure)"
+                            : "skip (poor efficiency)";
+        groonew::laser::LogPotshotDecision(ship, enemy_station, eval, reason);
+        if (good_efficiency) {
+          ship->SetOrder(O_LASER, beam_length);
+        }
+      }
     }
   }
 }

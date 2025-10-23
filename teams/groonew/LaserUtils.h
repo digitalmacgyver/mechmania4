@@ -30,6 +30,16 @@ inline double DamagePerExtraUnit() {
   return g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor;
 }
 
+inline double DamageForExtraLength(double extra_length) {
+  return extra_length * DamagePerExtraUnit();
+}
+
+inline double NormalizeAngle(double angle) {
+  while (angle > PI) angle -= PI2;
+  while (angle < -PI) angle += PI2;
+  return angle;
+}
+
 struct LaserResources {
   double available_fuel = 0.0;
   double max_beam_length = 0.0;
@@ -56,7 +66,38 @@ inline double ComputeLaserDamage(double beam_length, double target_distance) {
   if (extra_length <= g_fp_error_epsilon) {
     return 0.0;
   }
-  return extra_length * DamagePerExtraUnit();
+  return DamageForExtraLength(extra_length);
+}
+
+inline bool FutureLineOfFire(const CShip* shooter,
+                             const CThing* target,
+                             double* predicted_distance = nullptr,
+                             unsigned int turns = 1) {
+  if (shooter == nullptr || target == nullptr) {
+    return false;
+  }
+
+  const double lookahead = g_game_turn_duration *
+                           static_cast<double>(std::max(1u, turns));
+  const CCoord future_shooter = shooter->PredictPosition(lookahead);
+  const CCoord future_target  = target->PredictPosition(lookahead);
+  const double distance = future_shooter.DistTo(future_target);
+
+  const CTraj desired = future_shooter.VectTo(future_target);
+  const double future_orient =
+      shooter->GetOrient() + shooter->GetOrder(O_TURN);
+  const CTraj actual{distance, NormalizeAngle(future_orient)};
+
+  const double miss =
+      desired.ConvertToCoord().DistTo(actual.ConvertToCoord());
+  if (miss > target->GetSize() * 0.5) {
+    return false;
+  }
+
+  if (predicted_distance != nullptr) {
+    *predicted_distance = distance;
+  }
+  return true;
 }
 
 inline BeamEvaluation EvaluateBeam(double beam_length, double target_distance) {

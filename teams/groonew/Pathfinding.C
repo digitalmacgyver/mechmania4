@@ -85,77 +85,7 @@ namespace Pathfinding {
       return cost;
     }
 
-    // We want to know often what is the first thing we'll collide with,
-    // as subsequent to that later collisions are speculative because
-    // our path will be changed.
-    CThing* GetFirstCollision(CShip* ship) {
-      CWorld* worldp = ship->GetWorld();
-
-      double min_collision_time = DBL_MAX;
-      CThing* min_collision_thing = NULL;
-
-      // Can't collide with anything if we're docked.
-      if (ship->IsDocked()) {
-        return NULL;
-      }
-
-      // Iterate over everything till we find the soonest collision with our ship.
-      for (unsigned int idx = worldp->UFirstIndex; 
-        idx != BAD_INDEX; 
-        idx = worldp->GetNextIndex(idx)) {
-    
-        CThing* athing = worldp->GetThing(idx);
-    
-        // Always check both null and alive
-        if (!athing || !athing->IsAlive()) {
-          continue;
-        }
-        if (athing->GetKind() == GENTHING) {
-          continue;  // Skip generic things (laser beams, etc.)
-        }
-        if (athing == ship) {
-          continue;  // Skip self
-        }
-        double collision_time = ship->DetectCollisionCourse(*athing);
-        if (collision_time == g_no_collide_sentinel) {
-          continue;  // Skip objects we won't collide with
-        }
-        if (collision_time < min_collision_time) {
-          min_collision_time = collision_time;
-          min_collision_thing = athing;
-        }
-      }
-
-      // Verbose logging of first collision detection
-      if (g_pParser && g_pParser->verbose && min_collision_thing != NULL) {
-        // Convert ThingKind to string
-        const char* object_type;
-        switch (min_collision_thing->GetKind()) {
-          case GENTHING:  object_type = "GENTHING"; break;
-          case ASTEROID:  object_type = "ASTEROID"; break;
-          case STATION:   object_type = "STATION"; break;
-          case SHIP:      object_type = "SHIP"; break;
-          default:        object_type = "UNKNOWN"; break;
-        }
-  
-        // Get velocities
-        CTraj ship_vel = ship->GetVelocity();
-        CTraj obj_vel = min_collision_thing->GetVelocity();
-  
-        /* For now skip this as it's very noisy but we might want it again later.
-        printf("[FirstCollision] Ship '%s' -> %s '%s' in %.2fs\n",
-          ship->GetName(), object_type, min_collision_thing->GetName(), min_collision_time);
-        printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
-          ship->GetPos().fX, ship->GetPos().fY,
-          ship_vel.rho, ship_vel.theta);
-        printf("  Object: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
-          min_collision_thing->GetPos().fX, min_collision_thing->GetPos().fY,
-          obj_vel.rho, obj_vel.theta);
-        */
-      }
-
-      return min_collision_thing;
-    }
+    // (GetFirstCollision moved out of internal namespace for reuse.)
 
     // --- Pathfinding Context ---
 
@@ -185,8 +115,7 @@ namespace Pathfinding {
       CTraj thrust_vec_t1;      // Required change in velocity at t1.
       bool t1_vectors_valid;
 
-      CThing* first_collision_thing;
-      double first_collision_time;
+      CollisionInfo first_collision;
     };
 
     // TODO: Is tere a way to do this with a return rather than an in/out parameter?
@@ -237,12 +166,7 @@ namespace Pathfinding {
       ctx.calculator_ship = calculator_ship;
       ctx.state_t0 = CaptureState(ship); // Capture T0 state
 
-      ctx.first_collision_thing = GetFirstCollision(ship);
-      if (ctx.first_collision_thing != NULL) {
-        ctx.first_collision_time = ship->DetectCollisionCourse(*ctx.first_collision_thing);
-      } else {
-        ctx.first_collision_time = g_no_collide_sentinel;
-      }
+      ctx.first_collision = GetFirstCollision(ship);
     }
 
     // Returns true if the game engine will clamp us as a result sending a thrust
@@ -336,8 +260,9 @@ namespace Pathfinding {
       CShip* ship = ctx.ship;
       CThing* thing = ctx.thing;
       double time = ctx.time;
-      CThing* first_collision_thing = ctx.first_collision_thing;
-      double first_collision_time = ctx.first_collision_time;
+      const CollisionInfo& first_collision = ctx.first_collision;
+      CThing* first_collision_thing = first_collision.thing;
+      double first_collision_time = first_collision.time;
 
       if (!ship->IsDocked() 
       && first_collision_time <= time 
@@ -697,6 +622,89 @@ namespace Pathfinding {
     }
 
   } // End anonymous namespace
+
+  // We want to know often what is the first thing we'll collide with,
+  // as subsequent collisions are speculative because our path will change.
+  CollisionInfo GetFirstCollision(CShip* ship) {
+    CollisionInfo info;
+    if (ship == NULL) {
+      return info;
+    }
+
+    CWorld* worldp = ship->GetWorld();
+    if (worldp == NULL) {
+      return info;
+    }
+
+    double min_collision_time = DBL_MAX;
+    CThing* min_collision_thing = NULL;
+
+    // Can't collide with anything if we're docked.
+    if (ship->IsDocked()) {
+      return info;
+    }
+
+    // Iterate over everything till we find the soonest collision with our ship.
+    for (unsigned int idx = worldp->UFirstIndex; idx != BAD_INDEX;
+         idx = worldp->GetNextIndex(idx)) {
+      CThing* athing = worldp->GetThing(idx);
+
+      // Always check both null and alive
+      if (!athing || !athing->IsAlive()) {
+        continue;
+      }
+      if (athing->GetKind() == GENTHING) {
+        continue;  // Skip generic things (laser beams, etc.)
+      }
+      if (athing == ship) {
+        continue;  // Skip self
+      }
+
+      double collision_time = ship->DetectCollisionCourse(*athing);
+      if (collision_time == g_no_collide_sentinel) {
+        continue;  // Skip objects we won't collide with
+      }
+      if (collision_time < min_collision_time) {
+        min_collision_time = collision_time;
+        min_collision_thing = athing;
+      }
+    }
+
+    // Verbose logging of first collision detection (disabled by default to
+    // avoid log spam, but kept for future debugging needs).
+    if (g_pParser && g_pParser->verbose && min_collision_thing != NULL) {
+      const char* object_type;
+      switch (min_collision_thing->GetKind()) {
+        case GENTHING:  object_type = "GENTHING"; break;
+        case ASTEROID:  object_type = "ASTEROID"; break;
+        case STATION:   object_type = "STATION"; break;
+        case SHIP:      object_type = "SHIP"; break;
+        default:        object_type = "UNKNOWN"; break;
+      }
+
+      (void)object_type;  // Suppress unused-variable warnings unless logging enabled.
+      /*
+      CTraj ship_vel = ship->GetVelocity();
+      CTraj obj_vel = min_collision_thing->GetVelocity();
+      printf("[GetFirstCollision] Ship '%s' will collide with %s '%s' in %.2f turns\n",
+             ship->GetName(), object_type, min_collision_thing->GetName(),
+             min_collision_time);
+      printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
+             ship->GetPos().fX, ship->GetPos().fY,
+             ship_vel.rho, ship_vel.theta);
+      printf("  Object: pos(%.1f,%.1f) vel(%.1f,%.2f)\n",
+             min_collision_thing->GetPos().fX, min_collision_thing->GetPos().fY,
+             obj_vel.rho, obj_vel.theta);
+      */
+    }
+
+    if (min_collision_thing != NULL) {
+      info.thing = min_collision_thing;
+      info.time = min_collision_time;
+    }
+
+    return info;
+  }
 
   // This will be the first thing we refine:
 

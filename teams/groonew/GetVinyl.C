@@ -24,50 +24,9 @@ GetVinyl::GetVinyl() {}
 GetVinyl::~GetVinyl() {}
 
 namespace {
-double NormalizeAngle(double angle) {
-  while (angle > PI) angle -= PI2;
-  while (angle < -PI) angle += PI2;
-  return angle;
-}
-
 using groonew::laser::LaserResources;
-
-// Predict whether `shooter` will have a clear shot at `target` after `num_turns`
-// turns. Optional `predicted_distance` is treated as an output parameter and
-// is overwritten with the distance between the predicted positions when the
-// function returns true.
-bool FutureLineOfFire(const CShip* shooter,
-                      const CThing* target,
-                      double* predicted_distance = NULL,
-                      unsigned int num_turns = 1) {
-  if (shooter == NULL || target == NULL) {
-    return false;
-  }
-
-  double lookahead_time = g_game_turn_duration * static_cast<double>(num_turns);
-
-  CCoord future_shooter_pos = shooter->PredictPosition(lookahead_time);
-  CCoord future_target_pos = target->PredictPosition(lookahead_time);
-
-  double distance = future_shooter_pos.DistTo(future_target_pos);
-  CTraj desired_path = future_shooter_pos.VectTo(future_target_pos);
-
-  double future_orient = shooter->GetOrient() + shooter->GetOrder(O_TURN);
-  future_orient = NormalizeAngle(future_orient);
-  CTraj actual_path(distance, future_orient);
-
-  double misalignment = desired_path.ConvertToCoord()
-                            .DistTo(actual_path.ConvertToCoord());
-  double tolerance = target->GetSize() * 0.5;
-  if (misalignment > tolerance) {
-    return false;
-  }
-
-  if (predicted_distance != NULL) {
-    *predicted_distance = distance;
-  }
-  return true;
-}
+using groonew::laser::FutureLineOfFire;
+using groonew::laser::NormalizeAngle;
 
 struct FacingTargets {
   CStation* station = NULL;

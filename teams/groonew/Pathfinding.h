@@ -11,13 +11,26 @@
 
 #include "Collision.h"
 #include "FuelTraj.h"
+#include "GameConstants.h"
 #include "Ship.h"
 #include "Thing.h"
 
 namespace Pathfinding {
+    struct CollisionInfo {
+        CThing* thing = nullptr;
+        double time = g_no_collide_sentinel;
+
+        bool HasCollision() const {
+            return thing != nullptr && time != g_no_collide_sentinel;
+        }
+    };
+
     // The core algorithmic function.
     // Calculates orders (thrust/turn) to reach target in given time.
     FuelTraj DetermineOrders(CShip* ship, CThing* thing, double time, CShip* calculator);
+
+    // Returns information about the earliest collision (or no-collision sentinel).
+    CollisionInfo GetFirstCollision(CShip* ship);
 
     // TODO: Currently returns hardcoded 5.0 - should calculate actual fuel cost
     double determine_probable_fuel_cost(CShip* ship, CThing* thing, double time);
