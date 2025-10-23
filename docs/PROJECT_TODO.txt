@@ -606,10 +606,60 @@ We only get to violence when these are false:
 
 Note -the second condition tells us to get fuel if we're under 6.6!!! at endgame conditions (!vinyl)
 
-So watch stuck ships and see if their fuel is > 6.6
+So watch stuck ships and see if their fuel is > 6.6 <- yes this is happening.
+
+OK so we're in violence mode and stuck....
+
+Replenish threshold is:
+
+  bool zero_reserve_phase =
+      ((world != NULL &&
+        world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER) ||
+       uranium_left <= g_fp_error_epsilon);
+  double replenish_threshold =
+      groonew::constants::FUEL_RESERVE + groonew::constants::FUEL_REPLENISH_MARGIN;
+  if (zero_reserve_phase) {
+    replenish_threshold = groonew::constants::FINAL_FUEL_RESERVE;
+  }
+
+  // Dynamic fuel management: If we're low on fuel and uranium is available,
+  // temporarily switch to FUEL seeking to restock before continuing combat.
+  if (!zero_reserve_phase && uranium_available &&
+      cur_fuel <= replenish_threshold + g_fp_error_epsilon) {
+    if (g_pParser && g_pParser->verbose) {
+      printf(
+          "\t→ [VIOLENCE override] Low fuel (%.1f <= %.1f), seeking uranium before combat\n",
+          cur_fuel,
+          replenish_threshold);
+    }
+    // Calculate utilities for uranium asteroids
+    EvaluateResourceUtilities(ship,
+                              FUEL,
+                              shipnum,
+                              ships_seeking_resources,
+                              ship_ptr_to_shipnum);
+    return;  // Skip to next ship, let resource assignment handle this
+  }
+
+Once we enter violence mode we'll never get fuel.
+
+And we won't shoot if we can't because we'll go below our emergency reserve.
+
+Solition: WANTS has to keep us out of this situation.
+
+WANTS on fuel goes up to 20-40/9-g_fp_epsillon
+
 
 
 --
+
+Code cleanup - it looks like no one uses violence
+context.max_beam_length which is quite handy - we shoould be using
+thatn instead of doing our own beam_lenghth = max( 512,
+mathonfuelremainig).
+
+Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
+1.
 
 3. Double check our base launch logic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles

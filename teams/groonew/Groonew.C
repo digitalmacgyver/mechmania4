@@ -357,9 +357,12 @@ ShipWants Groonew::DetermineShipWants(CShip* ship,
     // While there's still vinyl we just get vinyl and fuel if we need it.
     return FUEL;
   }
-  if (preferred == URANIUM && uranium_available && cur_fuel <= 6.6) {
+  // TODO: The math here breaks if we change the world asteroid sizes, or
+  // fuel tank sizes.
+  if (preferred == URANIUM && uranium_available && cur_fuel <= (40.0 / 9.0) + g_fp_error_epsilon) {
     // If there's still uranium but no vinyl, and we're low on fuel, stock up
-    // for battle.
+    // for battle. This amount fills us up till all we can hold is the smallest
+    // shattered asteroid from the initial ones.
     return FUEL;
   }
   // Those who can't create will destroy.
@@ -688,6 +691,11 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
       ship->SetOrder(O_TURN, angle_diff);
       double beam_length =
           std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+      // Clamp beam length to only deplete remaining station vinyl (avoid waste)
+      // Add 30 units as safety margin to ensure complete depletion
+      double max_useful_beam =
+          distance + (ctx.enemy_base_vinyl / groonew::laser::DamagePerExtraUnit()) + 30.0;
+      beam_length = std::min(beam_length, max_useful_beam);
       if (ctx.available_fuel > g_fp_error_epsilon && beam_length > 0.0) {
         ship->SetOrder(O_LASER, beam_length);
       }
@@ -739,6 +747,11 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
           future_distance < 100.0) {
         double beam_length =
             std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        // Clamp beam length to only deplete remaining station vinyl (avoid waste)
+        // Add 30 units as safety margin to ensure complete depletion
+        double max_useful_beam =
+            future_distance + (ctx.enemy_base_vinyl / groonew::laser::DamagePerExtraUnit()) + 30.0;
+        beam_length = std::min(beam_length, max_useful_beam);
         bool good_efficiency = (beam_length >= 3.0 * future_distance);
 
         auto eval =
