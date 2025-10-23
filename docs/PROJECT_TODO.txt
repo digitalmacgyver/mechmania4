@@ -1,23 +1,6 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
-===
-
-The Code in Groonew AssignOrders is much too complicated and long for a single function.
-
-  Refactor this function - without changing behavior along these lines:
-
-  1. Break out conceptual groups of actions in to related helper or member functions.
-  2. Apply the 'keep it DRY' or 'Don't Repeat Yourself' principle where blocks of similar code appear
-  over and over doing the same or very similar work: either move the common work up and use it in all
-  areas below it, or factor it out into a function or member.
-  3. Keep the nesting to a reasonable depth.
-  4. Prefer if {} else if {} else if {} else {} type structures to if { if { if { if return } return }
-  return} reuturn } type structures.
-  5. Double check in logic about shooting things if that logic is already implemented in GetVinyl.C or
-  LaserUtils.h - and if so refactor so both code files can use the same functions.
-
-
 === GrooReview ===
 
 We are ready for another round of code reviews.
@@ -579,14 +562,12 @@ out for if it comes back. (I did change comparisons on is_vinyl /
 is_uranium to want more than fp epsillon.
 
 Better Shooting Todo:
+* For ship to ship duelling, figure out fastest time to intercetp, not
+  shortest distance.
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
 We have ships get "stuck" near the enemy station not shooting it and
 not collecting vinyl sometimes in endgame - fix this.
-
-ExecuteViolenceAgainstShips ramming logic - this is bad - consider
-removing it entirely - minimally the shield section needs work as it
-can just buff our shields nad leave us without fuel.
 
 How does our n_turns_vector / n_turns thing actually work?, e.g. If
 we're moving to the right at 1 unit/sec and we want to be at -5 in

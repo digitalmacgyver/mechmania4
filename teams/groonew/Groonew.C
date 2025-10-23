@@ -761,14 +761,16 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
       }
 
       double current_shields = ship->GetAmount(S_SHIELD);
+      // How much shields we ourselves wish to have - 0 if the game is
+      // nearly over, 13 otherwise once we're in this mode.
       double shield_target =
           (world != NULL &&
            world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER)
               ? 0.0
               : 13.0;
-      if (current_shields < shield_target && ctx.current_fuel > 1.0) {
+      if (current_shields < shield_target && ctx.available_fuel > 0.0) {
         double shield_boost =
-            std::min(shield_target - current_shields, ctx.current_fuel);
+            std::min(shield_target - current_shields, ctx.available_fuel);
         if (g_pParser && g_pParser->verbose) {
           printf("\t→ [RAMMING SPEED] Boosting shields %.1f->%.1f (target=%.1f)\n",
                  current_shields,
@@ -838,36 +840,51 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
   if (nearest_enemy != NULL &&
       nearest_distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
     // PHASE 2: Within shooting distance of a non-docked enemy
-    bool facing = ship->IsFacing(*nearest_enemy);
-    if (facing) {
-      // Case 2a: Facing the enemy - shoot them
+    double future_distance = nearest_distance;
+    bool has_line_of_fire =
+        groonew::laser::FutureLineOfFire(ship, nearest_enemy, &future_distance);
+
+    const auto our_collision = Pathfinding::GetFirstCollision(ship);
+    const auto their_collision = Pathfinding::GetFirstCollision(nearest_enemy);
+    bool safe_window =
+        (!our_collision.HasCollision() ||
+         our_collision.time > g_game_turn_duration + g_fp_error_epsilon) &&
+        (!their_collision.HasCollision() ||
+         their_collision.time > g_game_turn_duration + g_fp_error_epsilon);
+
+    if (has_line_of_fire && safe_window) {
+      // Case 2a: Clear future line of fire - shoot them
       if (g_pParser && g_pParser->verbose) {
-        printf("\t→ PHASE 2a: Engaging enemy ship '%s' at close range (dist=%.1f)\n",
+        printf("\t→ PHASE 2a: Engaging enemy ship '%s' (dist=%.1f, future=%.1f)\n",
                nearest_enemy->GetName(),
-               nearest_distance);
+               nearest_distance,
+               future_distance);
       }
 
+      double engagement_distance =
+          (future_distance > g_fp_error_epsilon) ? future_distance
+                                                 : nearest_distance;
       if (ctx.available_fuel > g_fp_error_epsilon &&
-          nearest_distance < ctx.max_beam_length) {
+          engagement_distance < ctx.max_beam_length) {
         // End-game condition: no resources left and enemy base empty
         double beam_length =
             std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
         bool end_game = (uranium_left <= g_fp_error_epsilon &&
                          vinyl_left <= g_fp_error_epsilon &&
                          ctx.enemy_base_vinyl <= g_fp_error_epsilon);
-        bool good_efficiency = (beam_length >= 3.0 * nearest_distance);
+        bool good_efficiency = (beam_length >= 3.0 * engagement_distance);
 
         if (end_game || good_efficiency) {
           const char* reason = end_game ? "fire (end-game full blast)"
                                         : "fire (efficient)";
           groonew::laser::BeamEvaluation eval =
-              groonew::laser::EvaluateBeam(beam_length, nearest_distance);
+              groonew::laser::EvaluateBeam(beam_length, engagement_distance);
           groonew::laser::LogPotshotDecision(ship, nearest_enemy, eval, reason);
           ship->SetOrder(O_LASER, beam_length);
         }
       }
     } else {
-      // Case 2b: Not facing - evaluate if we should turn or pursue
+      // Case 2b: No safe line of fire - evaluate if we should turn or pursue
       double lookahead_time = g_game_turn_duration;
       CCoord enemy_pos_t0 = nearest_enemy->GetPos();
       CCoord enemy_pos_t1 = nearest_enemy->PredictPosition(lookahead_time);

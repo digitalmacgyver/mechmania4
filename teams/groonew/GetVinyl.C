@@ -49,6 +49,14 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
     return targets;
   }
 
+  // If we'll collide with something in the next turn, further 
+  // reasoning would be invalidated.
+  const auto upcoming = Pathfinding::GetFirstCollision(ship);
+  if (upcoming.HasCollision() && upcoming.time <= g_game_turn_duration + g_fp_error_epsilon) {
+    return targets;
+  }  
+
+
   for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
        idx = world->GetNextIndex(idx)) {
     CThing* thing = world->GetThing(idx);
@@ -60,7 +68,7 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
     if (kind != STATION && kind != SHIP) {
       continue;
     }
-
+    
     CTeam* thing_team = thing->GetTeam();
     if (thing_team == NULL) {
       continue;
@@ -74,6 +82,8 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
     }
 
     if (kind == STATION) {
+      // Note: We intentionally don't do collision checking 
+      // for stations as we know they'll still be in the same position.
       if (future_distance < targets.station_dist) {
         targets.station = static_cast<CStation*>(thing);
         targets.station_dist = future_distance;
@@ -84,6 +94,13 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
       if (enemy_ship->IsDocked()) {
         continue;
       }
+
+      // If they'll collide with something in the next turn, further 
+      // reasoning would be invalidated.
+      const auto e_upcoming = Pathfinding::GetFirstCollision(enemy_ship);
+      if (e_upcoming.HasCollision() && e_upcoming.time <= g_game_turn_duration + g_fp_error_epsilon) {
+        continue;
+      }  
 
       if (future_distance < targets.ship_dist) {
         targets.ship = enemy_ship;
