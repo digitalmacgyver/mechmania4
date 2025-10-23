@@ -312,6 +312,8 @@ struct Groonew::ViolenceContext {
   PathInfo best_path;
   double emergency_fuel_reserve = groonew::constants::FINAL_FUEL_RESERVE;
   bool uranium_available = false;
+  bool zero_reserve_phase = false;
+  double fuel_replenish_threshold = groonew::constants::FINAL_FUEL_RESERVE;
 };
 
 
@@ -449,12 +451,18 @@ Groonew::ViolenceContext Groonew::BuildViolenceContext(CShip* ship,
 
   if (ship != NULL) {
     // No fuel reserve if: (1) turn >= GAME_NEARLY_OVER, OR (2) no uranium left in world
-    ctx.emergency_fuel_reserve =
+    ctx.zero_reserve_phase =
         ((ctx.world != NULL &&
           ctx.world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER) ||
-         uranium_left <= g_fp_error_epsilon)
+         uranium_left <= g_fp_error_epsilon);
+    ctx.emergency_fuel_reserve =
+        ctx.zero_reserve_phase ? groonew::constants::FINAL_FUEL_RESERVE
+                               : groonew::constants::FUEL_RESERVE;
+    ctx.fuel_replenish_threshold =
+        ctx.zero_reserve_phase
             ? groonew::constants::FINAL_FUEL_RESERVE
-            : groonew::constants::FUEL_RESERVE;
+            : (groonew::constants::FUEL_RESERVE +
+               groonew::constants::FUEL_REPLENISH_MARGIN);
     groonew::laser::LaserResources resources =
         groonew::laser::ComputeLaserResources(ship,
                                               ctx.emergency_fuel_reserve);
@@ -669,6 +677,8 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
       double angle_diff = angle_to_station - current_orient;
       while (angle_diff > PI) angle_diff -= PI2;
       while (angle_diff < -PI) angle_diff += PI2;
+      // Issue both turn and laser so rotation completes before firing; we rely
+      // on Later firing check to keep us from wasting fuel needlessly.
       if (g_pParser && g_pParser->verbose) {
         printf("\t→ PHASE 3b: Turning to face station (angle_diff=%.2f, vel=%.2f, dist=%.1f)\n",
                angle_diff,
@@ -676,6 +686,11 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
                distance);
       }
       ship->SetOrder(O_TURN, angle_diff);
+      double beam_length =
+          std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+      if (ctx.available_fuel > g_fp_error_epsilon && beam_length > 0.0) {
+        ship->SetOrder(O_LASER, beam_length);
+      }
     } else {
       // Case 3c: Lost target lock (high velocity, not facing) - return to Phase 1
       if (g_pParser && g_pParser->verbose) {
@@ -712,7 +727,9 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
                    ctx.best_path.fueltraj.order_mag);
   }
 
-  if (ctx.available_fuel > g_fp_error_epsilon) {
+  if (ctx.current_fuel >
+          ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
+      ctx.available_fuel > g_fp_error_epsilon) {
     const auto upcoming = Pathfinding::GetFirstCollision(ship);
     if (!upcoming.HasCollision() ||
         upcoming.time > g_game_turn_duration + g_fp_error_epsilon) {
@@ -864,7 +881,9 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
 
       // Note - available fuel varies by game time - towards the end of the 
       // game it will be all fuel, prior to that some fuel is kept in reserve.                                           
-      if (ctx.available_fuel > g_fp_error_epsilon &&
+      if (ctx.current_fuel >
+              ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
+          ctx.available_fuel > g_fp_error_epsilon &&
           engagement_distance < ctx.max_beam_length) {
         double beam_length =
             std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
@@ -952,6 +971,8 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
             groonew::laser::EvaluateFiringPredictability(ship, target.thing);
 
         if (pursuit_line && pursuit_predictability.BothReliable() &&
+            ctx.current_fuel >
+                ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
             ctx.available_fuel > g_fp_error_epsilon) {
           
           double engagement_distance =
@@ -1001,12 +1022,17 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
         groonew::laser::FutureLineOfFire(ship, target.thing, &intercept_distance);
     auto intercept_predictability =
         groonew::laser::EvaluateFiringPredictability(ship, target.thing);
+
     if (intercept_line && intercept_predictability.BothReliable() &&
+        ctx.current_fuel >
+            ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
         ctx.available_fuel > g_fp_error_epsilon) {
+      
       double engagement_distance =
           (intercept_distance > g_fp_error_epsilon)
               ? intercept_distance
               : ship->GetPos().DistTo(target.thing->GetPos());
+      
       if (engagement_distance < ctx.max_beam_length) {
         double beam_length =
             std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
@@ -1033,6 +1059,18 @@ void Groonew::HandleViolence(
     return;
   }
 
+  CTeam* team = ship->GetTeam();
+  CWorld* world = (team != NULL) ? team->GetWorld() : NULL;
+  bool zero_reserve_phase =
+      ((world != NULL &&
+        world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER) ||
+       uranium_left <= g_fp_error_epsilon);
+  double replenish_threshold =
+      groonew::constants::FUEL_RESERVE + groonew::constants::FUEL_REPLENISH_MARGIN;
+  if (zero_reserve_phase) {
+    replenish_threshold = groonew::constants::FINAL_FUEL_RESERVE;
+  }
+
   // VIOLENCE mode: Converge on enemy ships/stations. We issue orders directly -
   // no need for utility optimization since combat targeting is generally
   // robust against uncoordinated action.
@@ -1040,10 +1078,13 @@ void Groonew::HandleViolence(
 
   // Dynamic fuel management: If we're low on fuel and uranium is available,
   // temporarily switch to FUEL seeking to restock before continuing combat.
-  if (cur_fuel <= 5.5 && uranium_available) {
+  if (!zero_reserve_phase && uranium_available &&
+      cur_fuel <= replenish_threshold + g_fp_error_epsilon) {
     if (g_pParser && g_pParser->verbose) {
-      printf("\t→ [VIOLENCE override] Low fuel (%.1f), seeking uranium before combat\n",
-             cur_fuel);
+      printf(
+          "\t→ [VIOLENCE override] Low fuel (%.1f <= %.1f), seeking uranium before combat\n",
+          cur_fuel,
+          replenish_threshold);
     }
     // Calculate utilities for uranium asteroids
     EvaluateResourceUtilities(ship,

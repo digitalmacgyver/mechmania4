@@ -554,26 +554,115 @@ new team? Why bother with all this?
 
 ========================== Groonew TODO =============================
 
-NOTE: We had a weird bug of "lazy" ships that weren't flying home. I
-moved around some debugging logic but don't think I changed anything
-and I went away. Maybe it was FP math on remaining resources leading
-to incorrect guesses about remaining vinyl and uranium. Keep an eye
-out for if it comes back. (I did change comparisons on is_vinyl /
-is_uranium to want more than fp epsillon.
-
 Better Shooting Todo:
+
+* If we turn to get a better firing solution WE CAN FIRE THE SAME
+  TURN! We'll have turned by then! Are we doing that?
 * For ship to ship duelling, figure out fastest time to intercetp, not
   shortest distance.
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
+Fix the convolute ExecuteViolence methods - break them and and factor
+out common logic:
+a. They are kind of a state machine - on each call we should evalate
+the case we're in, and execute case logic which can be broken out.
+b. Lots of the shooting logic is incredibly similar and repeated over
+and over with small variations in efficiency permissivenes, comments,
+etc. factor out the common code.
+
 We have ships get "stuck" near the enemy station not shooting it and
 not collecting vinyl sometimes in endgame - fix this.
 
-How does our n_turns_vector / n_turns thing actually work?, e.g. If
-we're moving to the right at 1 unit/sec and we want to be at -5 in
-5 seconds, then we need to change our velocity to -1 this turn, or
--6/5 next turn, a change of -2 or -11/5, not a change of -5 (or -6) /
-5?
+--
+
+
+??
+
+Do we have a systematic off by 1 error in our pathfinding turn_1,
+turn_2 type logic?
+
+E.g. if we're moving to the right at 1 unit per sec and facing to the
+left, start at 5, and we wannt to be at the origin in 5 seconds, what
+needs to happen, and what do we actually compute?
+
+What needs to happen: we can't thrust for 1 second, by which time
+we'll be at 6.
+
+We would then have 4 more seconds to get to the origin, which is 6
+away.
+
+So we ought to issue a thrust of 1+6/4 = 2.5 to the left (1 to
+counteract our current movement, and 1.5 to get enough velocity to
+cover 6 units in 4 seconds).
+
+What do we actually do in Pathfinding.C?
+
+ctx.destination = 0
+ctx.ship_pos_t0 = 5
+ctx.ship_orient_t0 = pi
+ctx.ship_orient_vec_t0 = (1, pi)
+ctx.ship_vel_t0 = (1, 0)
+
+ctx.ship_trajectory_t0 = (1, 0)
+
+ctx.dest_vec_t0 = (5).VectTo(0) = (5, pi)
+ctx.intercept_vec_t0 = (5, pi)
+ctx.intercept_vec_t0 is updated to: (1, pi) no change
+
+ship_pos_t1 = 6
+dest_vec_t1 = (6, pi)
+ctx.intercept_vec_t1 = (6, pi)
+ctx.intercept_vec_t1.rho = 6/4 = 1.5
+ctx.thurst_vec_t1 = (1.5, pi) - (1, 0) = (2.5, pi)
+
+So, our T1 vecs ar right, but make sure we're not using our T0 vecs anywherre!!!! (or if we are that it makes sense!!!)
+
+WE MAY HAVE A BUG IN CASE 1B - WE THRUST AS IF WE'RE DOING IT "NOW" -
+BUT WE WILL DRIFT FOR A TURN FIRST!
+
+CASE 1B IS WHAT WE WORKED OUT ABOVE - ALIGNED THRUST - BUT WE NEED TO DO T1 THRUST!
+
+WE PROBABLY NEED T2 STUFF EVERYWHERE ALSO - WE LIKELY HAVE A BROAD OFF BY ONE.
+
+THINK ABOUT IF IT MATTERS THOUGH GIVEN HOW WE WALK UP TIMES FROM ZERO.
+
+==
+
+      ctx.destination = thing->PredictPosition(time);
+
+      // Initialize T0 state
+      ctx.ship_pos_t0 = ship->GetPos();
+      ctx.ship_orient_t0 = ship->GetOrient();
+      ctx.ship_orient_vec_t0 = CTraj(1.0, ctx.ship_orient_t0);
+      ctx.ship_vel_t0 = ship->GetVelocity();
+
+      // If our ship isn't moving, consider our trajectory for the purposes of
+      // trajectory matching to be along the direction of our orientation.
+      ctx.ship_trajectory_t0 = ctx.ship_vel_t0;
+      if (ctx.ship_vel_t0.rho <= g_fp_error_epsilon) {
+        ctx.ship_trajectory_t0 = ctx.ship_orient_vec_t0;
+      }
+
+      // T0 Calculations
+      ctx.dest_vec_t0 = ctx.ship_pos_t0.VectTo(ctx.destination);  // Vector to target
+      ctx.intercept_vec_t0 = ctx.dest_vec_t0;
+      ctx.intercept_vec_t0.rho /= time;  // Velocity needed to reach target in time
+      // So now intercep_vec_t0 represents the ideal velocity starting now.
+
+      CCoord ship_pos_t1 = ship->PredictPosition(g_game_turn_duration);
+      CTraj dest_vec_t1 = ship_pos_t1.VectTo(ctx.destination);
+      ctx.intercept_vec_t1 = dest_vec_t1;
+      // TODO: This condition is really trying to represent "we have at least 2
+      // game turns to intercept - because we wish to issue 2 orders to arrive on
+      // an intercept course."
+      bool t1_vectors_valid = false;
+      if (time >= (g_game_turn_duration + g_fp_error_epsilon)) {
+        ctx.intercept_vec_t1.rho /= (time - g_game_turn_duration);  // Note - we have 1 turn less to get there
+        ctx.thrust_vec_t1 = ctx.intercept_vec_t1 - ctx.ship_vel_t0; // Note - ship_vel hasn't changed since T0
+        t1_vectors_valid = true;
+      }
+
+???
 
 Does it ever make sense to shoot a asteroid to break it up (other than
 perhaps action econmy of getting to smaller chunks a tick earlier?)
