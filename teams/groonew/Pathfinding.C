@@ -18,6 +18,13 @@ extern CParser* g_pParser;
 
 namespace Pathfinding {
 
+  // When reasoning about intercepts, we only need to get 
+  // this close - which is the appoximate intercept 
+  // distance between our ship and the smallest possible
+  // world object - e.g. if our ship ends up within this
+  // distance it will collide.
+  const double POSITIONAL_TOLERANCE = 8.9;
+
   // Internal namespace for implementation details
   namespace {
 
@@ -133,10 +140,15 @@ namespace Pathfinding {
       ctx.ship_orient_vec_t0 = CTraj(1.0, ctx.ship_orient_t0);
       ctx.ship_vel_t0 = ship->GetVelocity();
 
-      // If our ship isn't moving, consider our trajectory for the purposes of
-      // trajectory matching to be along the direction of our orientation.
+      // If our ship isn't moving very fast, consider our trajectory for the purposes of
+      // trajectory matching to be along the direction of our orientation - as future
+      // thrusts will push is primarily in that direction. The low velocity threshold
+      // is chosen to be ship radius / 21, our maximum planning theshold - e.g. the
+      // total error accumulated by this approach should be 1 ship radius in the worse
+      // case.
+      const double ship_low_velocity_threshold = ship->GetSize() / 21.0;
       ctx.ship_trajectory_t0 = ctx.ship_vel_t0;
-      if (ctx.ship_vel_t0.rho <= g_fp_error_epsilon) {
+      if (ctx.ship_vel_t0.rho <= ship_low_velocity_threshold) {
         ctx.ship_trajectory_t0 = ctx.ship_orient_vec_t0;
       }
 
@@ -290,9 +302,9 @@ namespace Pathfinding {
           // 4. Determine the sign of the thrust and ensure it aligns with orientation.
           bool thrust_is_forward;
 
-          if (on_target(thrust_vec, ctx.ship_orient_vec_t0)) {
+          if (on_target(thrust_vec, ctx.ship_orient_vec_t0, thrust_vec.rho, POSITIONAL_TOLERANCE / ctx.time)) {
               thrust_is_forward = true;
-          } else if (on_target(-thrust_vec, ctx.ship_orient_vec_t0)) {
+          } else if (on_target(-thrust_vec, ctx.ship_orient_vec_t0, thrust_vec.rho, POSITIONAL_TOLERANCE / ctx.time)) {
               thrust_is_forward = false;
           } else {
               // Thrust required is off-axis. Cannot achieve this with O_THRUST alone.
@@ -418,8 +430,8 @@ namespace Pathfinding {
       const CTraj& intercept_vec_t0 = ctx.intercept_vec_t0;
       CShip* ship = ctx.ship;
 
-      bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, dest_vec_t0.rho);
-      bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, dest_vec_t0.rho);
+      bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, dest_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
+      bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, dest_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
 
       if (correct_heading && correct_facing) {
         // Calculate required thrust (Required change in velocity).
@@ -645,7 +657,7 @@ namespace Pathfinding {
           // time.
           double time_left = time - g_game_turn_duration;
           bool thrust_and_drift = (
-            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho)
+            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho, POSITIONAL_TOLERANCE / ctx.time)
             && time_left > 0.0
             && t_ship_vel_t1.rho >= (t_dest_vec_t1.rho / time_left)
           );
@@ -685,7 +697,7 @@ namespace Pathfinding {
             // Note - we have 2 turns less to arrive on this order because we'll
             // have issued a thrust and a turn to get into this position.
             t_intercept_vec_t2.rho /= (time - 2*g_game_turn_duration);  
-            if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho)
+            if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho, POSITIONAL_TOLERANCE / ctx.time)
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
 
               double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k, ship->IsDocked());
@@ -943,7 +955,7 @@ namespace Pathfinding {
     // Determine if we are currently on an intercept trajectory.
     // If our ship isn't moving, consider our trajectory for the purposes of
     // this check to be along the direction of our orientation.
-    bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.dest_vec_t0.rho);
+    bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.dest_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
 
     fj = FAILURE_TRAJ;
     if (on_intercept_trajectory) {

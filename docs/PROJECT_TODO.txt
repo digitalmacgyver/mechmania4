@@ -597,35 +597,22 @@ Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
   if (preferred == URANIUM && uranium_available && cur_fuel <= (40.0 / 9.0) + g_fp_error_epsilon) {
 
 
-Fix our path timing logic: we can't "arrive early" - we're trying to
-arrive in time seconds - the other object might not be there in a
-lesser amount of time!!! If we arrive early we might have to just wait
-there, or turn and thurst again.
-  * We might want to do something here to slightly bias paths where
-    our ship arrives at the destination first, but as it is this
-    falsely biases certain order seqauences which can get to
-    destinates "early" - but we don't actually know if we can
-    intercept it early, since that depends on when it will arrive. But
-    we can be ffairly confident we won't actually intercept it early,
-    because if we did a prior iteration of magic bag would have found
-    that path.
-  * So our big trouble here is that we want more information in our
-    magic bag entry - to perhaps slightly bias in favor of early ship
-    arrivals to intercept points - however fueltraj has no way to
-    carry that data now, and if we start adding stuff in there like
-    that it becomes more and more like an entry I think.
-    
+---
+Reason through Pathfinding.C's use of on_target and mostly_parallel and the contexts they are called in along this hypothetical:
 
-Check if on_target handles 0 velocity things - if not guard calls for
-it and for mostly_parallel to handle that case.
+Do they return the desired value when one or the other velocities in question is very, very small?
 
+E.g. if one object is essentially stationary, then it's velocity direction is largely irrelevant to figuring future intercepts - however on_target and mostly_parallel tests could, in principle, disqualify valid interpepts where one of the ship or target's velcoity is very small.
 
-3. Double check our base launchlogic for turn 1 - make sure we get
-the benefit of extra kicks and check if our logic properly handles
-is_docked and fuel costs while docked.
-  * See if we're pervasively crashing into one another on first launch
-    - toy with approaches like turn 1: orient twards middle in fan,
-    turn 2 max launch, turn 3+ normal control.
+For our purposes "very small" is less than 0.5 units per second (which would allow for movement of around 1 ship radius over our maximal planning horizon).
+
+Evaluate if our use of this code ever could result in rejectting otherwise valid intercept paths because the source or target has "very small" velocity relative to the factors above.
+---
+
+Experiment:
+
+A/B test: rather than our custom undock logic, try a turn 1 approach
+where we just launch at max velocity in an arc towards the center.
 
 Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.
