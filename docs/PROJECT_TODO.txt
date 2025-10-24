@@ -593,22 +593,6 @@ Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
 
 --
 
-  // DEBUG - this doesn't fix stuck ships at all - because they don't prefer uranium until they have < 5 fuel!!
-  if (preferred == URANIUM && uranium_available && cur_fuel <= (40.0 / 9.0) + g_fp_error_epsilon) {
-
-
----
-Reason through Pathfinding.C's use of on_target and mostly_parallel and the contexts they are called in along this hypothetical:
-
-Do they return the desired value when one or the other velocities in question is very, very small?
-
-E.g. if one object is essentially stationary, then it's velocity direction is largely irrelevant to figuring future intercepts - however on_target and mostly_parallel tests could, in principle, disqualify valid interpepts where one of the ship or target's velcoity is very small.
-
-For our purposes "very small" is less than 0.5 units per second (which would allow for movement of around 1 ship radius over our maximal planning horizon).
-
-Evaluate if our use of this code ever could result in rejectting otherwise valid intercept paths because the source or target has "very small" velocity relative to the factors above.
----
-
 Experiment:
 
 A/B test: rather than our custom undock logic, try a turn 1 approach
