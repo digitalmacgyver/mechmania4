@@ -207,7 +207,14 @@ namespace Pathfinding {
     // whose actual intercept trajectory is vtarget as long as the distance
     // traversed is less than 1/2 the game world max separation which is a good
     // proxy for maximum reasonble travel distance in our toroidal world.
-    bool on_target(CTraj vtraj, CTraj vtarget, double dist=724.1, double epsilon = 8.9) {
+    //
+    // For best reasoning about intercepts, provide these values:
+    // dist: the distance traveled along vtraj in one turn (e.g. the ship's
+    // velocity magnitude)
+    //
+    // epsilon: our POSITIONAL_TOLERANCE / time_to_get_there (e.g. after our whole
+    // time to get there has elapsed our combined error will be <= POSITIONAL_TOLERANCE)
+    bool on_target(CTraj vtraj, CTraj vtarget, double dist=724.1, double epsilon = POSITIONAL_TOLERANCE) {
       vtraj.rho = dist;
       vtarget.rho = dist;
       CCoord traj_end = vtraj.ConvertToCoord();
@@ -430,8 +437,8 @@ namespace Pathfinding {
       const CTraj& intercept_vec_t0 = ctx.intercept_vec_t0;
       CShip* ship = ctx.ship;
 
-      bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, dest_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
-      bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, dest_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
+      bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, intercept_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
+      bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, intercept_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
 
       if (correct_heading && correct_facing) {
         // Calculate required thrust (Required change in velocity).
@@ -656,8 +663,11 @@ namespace Pathfinding {
           // Check if the thrust put us on a trajectory that will collide in
           // time.
           double time_left = time - g_game_turn_duration;
+          // Since we had to thurst a specific amount to get on target, we
+          // might arrive earlier than the requested time.
+          double time_to_arrive = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
           bool thrust_and_drift = (
-            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho, POSITIONAL_TOLERANCE / ctx.time)
+            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho / time_to_arrive, POSITIONAL_TOLERANCE / time_to_arrive)
             && time_left > 0.0
             && t_ship_vel_t1.rho >= (t_dest_vec_t1.rho / time_left)
           );
@@ -667,9 +677,7 @@ namespace Pathfinding {
             double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k, ship->IsDocked());
             unsigned int num_orders = 1;
             double fuel_total = fuel_used;
-            // Since we had to thurst a specific amount to get on target, we
-            // might arrive earlier than the requested time.
-            double time_to_arrive = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
+
             if (thrust_reaches_target && (time_to_arrive > g_game_turn_duration)) {
               time_to_arrive = g_game_turn_duration;
             }
@@ -697,7 +705,7 @@ namespace Pathfinding {
             // Note - we have 2 turns less to arrive on this order because we'll
             // have issued a thrust and a turn to get into this position.
             t_intercept_vec_t2.rho /= (time - 2*g_game_turn_duration);  
-            if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_dest_vec_t2.rho, POSITIONAL_TOLERANCE / ctx.time)
+            if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_intercept_vec_t2.rho, POSITIONAL_TOLERANCE / (time - 2*g_game_turn_duration))
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
 
               double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k, ship->IsDocked());
@@ -955,7 +963,7 @@ namespace Pathfinding {
     // Determine if we are currently on an intercept trajectory.
     // If our ship isn't moving, consider our trajectory for the purposes of
     // this check to be along the direction of our orientation.
-    bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.dest_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
+    bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.intercept_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
 
     fj = FAILURE_TRAJ;
     if (on_intercept_trajectory) {
