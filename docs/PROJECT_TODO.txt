@@ -591,6 +591,9 @@ mathonfuelremainig).
 Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
 1.0
 
+Change our target collision positioning threshold to be based on the
+target size, not a hard coded constant.
+
 --
 
 Experiment:

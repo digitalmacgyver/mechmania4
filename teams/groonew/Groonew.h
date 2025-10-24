@@ -26,7 +26,6 @@ namespace constants {
 inline constexpr double GAME_NEARLY_OVER = 280.0;
 inline constexpr double FINAL_FUEL_RESERVE = 0.0;
 inline constexpr double FUEL_RESERVE = 5.0;
-inline constexpr double FUEL_REPLENISH_MARGIN = 1.0;
 inline constexpr double MAX_SHIP_ENGAGEMENT_DIST = 160.0;
 }  // namespace constants
 }  // namespace groonew

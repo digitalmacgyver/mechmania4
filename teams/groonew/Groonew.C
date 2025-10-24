@@ -44,6 +44,7 @@ Feature change log:
 2025-10-22: Implemented 1 turn lookahead in positions for potshot and collision lasers.
 2025-10-23: Better Potshots: no targeting data if us or them will collide with something first (excepting enemy stations)
 2025-10-23: Better emergency orders: Don't boost shields before midsize uranium collisions once the world is out of vinyl to preserve uranium in game world.
+2025-10-24: Changed pathfinding to be more forgiving of imperfect intercepts and dynamically adjust this based on target distance.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
@@ -468,8 +469,7 @@ Groonew::ViolenceContext Groonew::BuildViolenceContext(CShip* ship,
     ctx.fuel_replenish_threshold =
         ctx.zero_reserve_phase
             ? groonew::constants::FINAL_FUEL_RESERVE
-            : (groonew::constants::FUEL_RESERVE +
-               groonew::constants::FUEL_REPLENISH_MARGIN);
+            : groonew::constants::FUEL_RESERVE;
     groonew::laser::LaserResources resources =
         groonew::laser::ComputeLaserResources(ship,
                                               ctx.emergency_fuel_reserve);
@@ -1083,7 +1083,7 @@ void Groonew::HandleViolence(
         world->GetGameTime() >= groonew::constants::GAME_NEARLY_OVER) ||
        uranium_left <= g_fp_error_epsilon);
   double replenish_threshold =
-      groonew::constants::FUEL_RESERVE + groonew::constants::FUEL_REPLENISH_MARGIN;
+      groonew::constants::FUEL_RESERVE;
   if (zero_reserve_phase) {
     replenish_threshold = groonew::constants::FINAL_FUEL_RESERVE;
   }
