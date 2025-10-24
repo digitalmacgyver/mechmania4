@@ -233,6 +233,9 @@ void Groonew::PopulateMagicBag() {
           path.traveler = ship;
           path.dest = athing;          // Target object
           path.fueltraj = fueltraj;    // How to get there
+          // Note: fueltraj.time_to_arrive is the time we expect _the ship_ to 
+          // arrive at the intercept point, however the target might not be there yet.
+          path.time_to_intercept = turn_i; // Time to intercept the target on fueltraj.
           path.collision = collision;  // Obstacles (TODO: fix)
 
           // Add to this ship's list of possible targets (will be copied)
@@ -280,7 +283,7 @@ void Groonew::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
 
       // Trajectory info
       printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-             best_e.fueltraj.time_to_intercept,
+             best_e.fueltraj.time_to_arrive,
              ((best_e.fueltraj).order_kind == O_THRUST) ? "thrust"
              : ((best_e.fueltraj).order_kind == O_TURN) ? "turn"
                                                         : "other/none",
@@ -710,7 +713,7 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
                facing,
                distance);
         printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-               ctx.best_path.fueltraj.time_to_intercept,
+               ctx.best_path.fueltraj.time_to_arrive,
                (ctx.best_path.fueltraj.order_kind == O_THRUST)
                    ? "thrust"
                    : (ctx.best_path.fueltraj.order_kind == O_TURN)
@@ -727,7 +730,7 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
       printf("\t→ PHASE 1: Navigating to enemy station (dist=%.1f)\n",
              distance);
       printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-             ctx.best_path.fueltraj.time_to_intercept,
+             ctx.best_path.fueltraj.time_to_arrive,
              (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
              : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
                                                              : "other/none",
@@ -818,7 +821,7 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
                enemy_ship->GetName(),
                ship->GetPos().DistTo(enemy_ship->GetPos()));
         printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\tshields=%.1f\n",
-               ctx.best_path.fueltraj.time_to_intercept,
+               ctx.best_path.fueltraj.time_to_arrive,
                (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
                : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
                                                                : "other/none",
@@ -968,7 +971,7 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
           printf("\t  Switching to MagicBag pursuit of '%s'\n",
                  target.thing->GetName());
           printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-                 ctx.best_path.fueltraj.time_to_intercept,
+                 ctx.best_path.fueltraj.time_to_arrive,
                  (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
                  : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
                                                                  : "other/none",
@@ -1021,7 +1024,7 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
                  ? ship->GetPos().DistTo(target.thing->GetPos())
                  : 0.0);
       printf("\t  Plan:\tturns=%.1f\torder=%s\tmag=%.2f\n",
-             ctx.best_path.fueltraj.time_to_intercept,
+             ctx.best_path.fueltraj.time_to_arrive,
              (ctx.best_path.fueltraj.order_kind == O_THRUST) ? "thrust"
              : (ctx.best_path.fueltraj.order_kind == O_TURN) ? "turn"
                                                              : "other/none",
@@ -1416,18 +1419,23 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
   //   (4) fewer issued orders
   // Implemented via large base multipliers.
   const double multiplier = 1000.0;
-  const double multiplier_sq = multiplier * multiplier;
-  const double multiplier_cubed = multiplier_sq * multiplier;
+  const double multiplier2 = multiplier * multiplier;
+  const double multiplier3 = multiplier2 * multiplier;
+  const double multiplier4 = multiplier3 * multiplier;
   double prior_penalty = favor_previous_target ? 0.0 : 1.0;
+
+  double fuel_spent = e.fueltraj.fuel_total;
+  // When we'll intercept the target.
+  double time_to_intercept = e.time_to_intercept;
+  // When the ship arrives at the intercept point.
+  double time_to_arrive = e.fueltraj.time_to_arrive;
+  unsigned int num_orders = e.fueltraj.num_orders;
 
   if (wants == POINTS) {
     // TODO: This relies on our ships 40 ton cargo hold being big enough to hold
     // any vinyl asteroid, and assumes we'll jettison the difference before
     // trying to catch this.
     double vinyl_gained = std::min(e.dest->GetMass(), max_cargo - cur_cargo);
-    double fuel_spent = e.fueltraj.fuel_total;
-    double time_to_intercept = e.fueltraj.time_to_intercept;
-    unsigned int num_orders = e.fueltraj.num_orders;
 
     // Prevent division by zero if time_to_intercept is somehow 0.
     if (time_to_intercept < g_fp_error_epsilon)
@@ -1438,10 +1446,11 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
     // This should be positive due to min asteroid size of 3, however just in
     // case we wish to preserve utility=0.0 as a sentinel value meaning "issue
     // no orders."
-    utility = utility_per_second * multiplier_cubed -
-              fuel_spent * multiplier_sq -
-              prior_penalty * multiplier -
-              num_orders;
+    utility = utility_per_second * multiplier4 -
+              fuel_spent * multiplier3 -
+              prior_penalty * multiplier2 -
+              num_orders * multiplier -
+              time_to_arrive;
     if (utility < 0.0) {
       utility = 0.0;
     }
@@ -1462,8 +1471,6 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
     // Our gain is acquired - spent.
     double fuel_gained =
         std::min(uranium_size, max_fuel - cur_fuel - fuel_spent) - fuel_spent;
-    double time_to_intercept = e.fueltraj.time_to_intercept;
-    unsigned int num_orders = e.fueltraj.num_orders;
 
     // Prevent division by zero.
     if (time_to_intercept < g_fp_error_epsilon)
@@ -1475,10 +1482,11 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
     // our shields when eating fuel.
 
     // Only grant positive utility if we're actually gaining fuel.
-    utility = utility_per_second * multiplier_cubed -
-              fuel_spent * multiplier_sq -
-              prior_penalty * multiplier -
-              num_orders;
+    utility = utility_per_second * multiplier4 -
+              fuel_spent * multiplier3 -
+              prior_penalty * multiplier2 -
+              num_orders * multiplier -
+              time_to_arrive;
     if (utility < 0.0) {
       utility = 0.0;
     }

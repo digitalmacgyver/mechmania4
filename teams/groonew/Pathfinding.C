@@ -212,14 +212,14 @@ namespace Pathfinding {
 
     // Helper to create a successful FuelTraj and calculate fuel usage via SetOrder.
     FuelTraj CreateSuccessTraj(const PathfindingContext& ctx, CShip* ship, OrderKind kind,
-      double mag, double fuel_used, unsigned int num_orders, double time_to_intercept, 
+      double mag, double fuel_used, unsigned int num_orders, double time_to_arrive,
       double fuel_total, const char* case_label) {
       FuelTraj fj;
       fj.path_found = true;
       fj.order_kind = kind;
       fj.order_mag = mag;
       fj.fuel_used = fuel_used;
-      fj.time_to_intercept = time_to_intercept;
+      fj.time_to_arrive = time_to_arrive;
       fj.num_orders = num_orders;
       fj.fuel_total = fuel_total;
 
@@ -233,7 +233,7 @@ namespace Pathfinding {
         CTraj target_vel = ctx.thing->GetVelocity();
         // DEBUG: sometimes we turn this off... For now skip this as it's very noisy but we might want it again later.
         printf("[Pathfinding] Case %s: %s %.3f (fuel=%.1f) (tti=%.1f)\n",
-               case_label, order_name, mag, fj.fuel_used, fj.time_to_intercept);
+               case_label, order_name, mag, fj.fuel_used, fj.time_to_arrive);
         /* Shush
         printf("  Ship: pos(%.1f,%.1f) vel(%.1f,%.2f) orient=%.2f\n",
                ctx.ship_pos_t0.fX, ctx.ship_pos_t0.fY,
@@ -443,9 +443,8 @@ namespace Pathfinding {
           double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_order_amt, ship->IsDocked());          
           unsigned int num_orders = 1;
           double fuel_total = fuel_used;
-          double time_to_intercept = ctx.time;  
           return CreateSuccessTraj(ctx, ship, O_THRUST, thrust_order_amt, fuel_used, 
-            num_orders, time_to_intercept, fuel_total, "1b");
+            num_orders, ctx.time, fuel_total, "1b");
         }
       }
       return FAILURE_TRAJ;
@@ -489,10 +488,9 @@ namespace Pathfinding {
         unsigned int num_orders = 2;
         // Note on the is_docked argument - if we were docked this turn, we'll be docked when we do this thrust.
         double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho, ship->IsDocked());
-        double time_to_intercept = ctx.time;
         if (fuel_total < ctx.state_t0.fuel) {
           return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
-            time_to_intercept, fuel_total, "1c");
+            ctx.time, fuel_total, "1c");
         }
       }
       return FAILURE_TRAJ;
@@ -541,12 +539,11 @@ namespace Pathfinding {
         // simulating state of our ship next turn for maginally more accurate
         // fuel estimates.
         double fuel_total = fuel_used + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, thrust_vec_t1.rho, ship->IsDocked());
-        double time_to_intercept = ctx.time;
 
         // Check this multi-order path doesn't run out of fuel.
         if (fuel_total < ctx.state_t0.fuel) {
           return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, num_orders,
-            time_to_intercept, fuel_total, "2b");
+            ctx.time, fuel_total, "2b");
         }
       }
       return FAILURE_TRAJ;
@@ -660,17 +657,17 @@ namespace Pathfinding {
             double fuel_total = fuel_used;
             // Since we had to thurst a specific amount to get on target, we
             // might arrive earlier than the requested time.
-            double time_to_intercept = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
-            if (thrust_reaches_target && (time_to_intercept > g_game_turn_duration)) {
-              time_to_intercept = g_game_turn_duration;
+            double time_to_arrive = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
+            if (thrust_reaches_target && (time_to_arrive > g_game_turn_duration)) {
+              time_to_arrive = g_game_turn_duration;
             }
             if (thrust_and_drift && (!thrust_reaches_target && !thrusted_through)) {
               // If we don't thrust right into it, then we'll have spent this durn doing
               // the thrust operations to get us into position for the t1 math above.
-              time_to_intercept += g_game_turn_duration;
+              time_to_arrive += g_game_turn_duration;
             }
             result.fj_2ai = CreateSuccessTraj(ctx, ship, O_THRUST, k, fuel_used, num_orders,
-              time_to_intercept, fuel_total, "2ai");
+              time_to_arrive, fuel_total, "2ai");
           }
 
           // Case 2aii: We can issue a single thrust order with a resulting
@@ -710,14 +707,13 @@ namespace Pathfinding {
                                              false);
                 // Add the acceleration towards the target.
                 + CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, fabs(t_intercept_vec_t2.rho - t_ship_vel_t1.rho), false);
-              double time_to_intercept = ctx.time;
 
               if (fuel_total >= ctx.state_t0.fuel) {
                 // Don't claim to have found multi-order paths that would run out of fuel.
                 result.fj_2aii = FAILURE_TRAJ;
               } else {
                 result.fj_2aii = CreateSuccessTraj(ctx, ship, O_THRUST, k, fuel_used, num_orders,
-                  time_to_intercept, fuel_total, "2aii");
+                  ctx.time, fuel_total, "2aii");
 
                 // Diagnostic logging for Case 2aii orientation analysis
                 if (g_pParser && g_pParser->verbose && result.fj_2aii.path_found) {
@@ -995,11 +991,11 @@ namespace Pathfinding {
           has_best_case = true;
           return;
         }
-        if (candidate.time_to_intercept < best_case.time_to_intercept) {
+        if (candidate.time_to_arrive < best_case.time_to_arrive) {
           best_case = candidate;
           return;
         }
-        if (candidate.time_to_intercept > best_case.time_to_intercept) {
+        if (candidate.time_to_arrive > best_case.time_to_arrive) {
           return;
         }
         if (candidate.fuel_total < best_case.fuel_total) {

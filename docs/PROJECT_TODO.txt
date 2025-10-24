@@ -593,10 +593,28 @@ Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
 
 --
 
+  // DEBUG - this doesn't fix stuck ships at all - because they don't prefer uranium until they have < 5 fuel!!
+  if (preferred == URANIUM && uranium_available && cur_fuel <= (40.0 / 9.0) + g_fp_error_epsilon) {
+
+
 Fix our path timing logic: we can't "arrive early" - we're trying to
 arrive in time seconds - the other object might not be there in a
 lesser amount of time!!! If we arrive early we might have to just wait
 there, or turn and thurst again.
+  * We might want to do something here to slightly bias paths where
+    our ship arrives at the destination first, but as it is this
+    falsely biases certain order seqauences which can get to
+    destinates "early" - but we don't actually know if we can
+    intercept it early, since that depends on when it will arrive. But
+    we can be ffairly confident we won't actually intercept it early,
+    because if we did a prior iteration of magic bag would have found
+    that path.
+  * So our big trouble here is that we want more information in our
+    magic bag entry - to perhaps slightly bias in favor of early ship
+    arrivals to intercept points - however fueltraj has no way to
+    carry that data now, and if we start adding stuff in there like
+    that it becomes more and more like an entry I think.
+    
 
 Check if on_target handles 0 velocity things - if not guard calls for
 it and for mostly_parallel to handle that case.

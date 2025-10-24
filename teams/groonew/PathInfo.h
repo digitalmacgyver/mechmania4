@@ -19,12 +19,14 @@ class PathInfo {
   // The destination for this path.
   CThing* dest;
 
-  // The number of navigtaion orders planned along this path.
-  // TODO - populate this.
-  unsigned int order_count;
-
   // The first order along our path, and estimated values for the path.
   FuelTraj fueltraj;
+
+  // The time we expect to intercept the target on fueltraj.
+  // NOTE: FuelTraj's time_to_arrive records when the ship will arrive
+  // at the intercept point - however we might have to wait for the
+  // target to arrive.
+  double time_to_intercept;
 
   // TODO: This is here for future development - use it or remove it. The
   // first collision on the way

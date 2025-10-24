@@ -10,9 +10,9 @@
 class FuelTraj {
  public:
   FuelTraj(bool found, OrderKind kind, double mag, double fuel_used,
-     double time_to_intercept, unsigned int num_orders, double fuel_total) 
+     double time_to_arrive, unsigned int num_orders, double fuel_total)
    : path_found(found), order_kind(kind), order_mag(mag), fuel_used(fuel_used),
-     time_to_intercept(time_to_intercept), num_orders(num_orders),
+     time_to_arrive(time_to_arrive), num_orders(num_orders),
      fuel_total(fuel_total) {}
 
   FuelTraj() = default;
@@ -24,7 +24,7 @@ class FuelTraj {
   double fuel_used = 0.0; // Estimated order cost (can be 0 if no order needed).
 
   // Estimated values for the path.
-  double time_to_intercept = 0.0; // Estimated time to intercept the target.
+  double time_to_arrive = 0.0; // Estimated time to arrive at the target.
   unsigned int num_orders = 0; // Estimated number of orders to get to the target.
   double fuel_total = 0.0; // Estimated total fuel cost of the path.
 
