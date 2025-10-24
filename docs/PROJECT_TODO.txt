@@ -593,7 +593,16 @@ Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
 
 --
 
-3. Double check our base launch logic for turn 1 - make sure we get
+Fix our path timing logic: we can't "arrive early" - we're trying to
+arrive in time seconds - the other object might not be there in a
+lesser amount of time!!! If we arrive early we might have to just wait
+there, or turn and thurst again.
+
+Check if on_target handles 0 velocity things - if not guard calls for
+it and for mostly_parallel to handle that case.
+
+
+3. Double check our base launchlogic for turn 1 - make sure we get
 the benefit of extra kicks and check if our logic properly handles
 is_docked and fuel costs while docked.
   * See if we're pervasively crashing into one another on first launch

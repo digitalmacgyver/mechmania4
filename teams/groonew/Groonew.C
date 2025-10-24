@@ -360,6 +360,8 @@ ShipWants Groonew::DetermineShipWants(CShip* ship,
   }
   // TODO: The math here breaks if we change the world asteroid sizes, or
   // fuel tank sizes.
+
+  // DEBUG - this doesn't fix stuck ships at all - because they don't prefer uranium until they have < 5 fuel!!
   if (preferred == URANIUM && uranium_available && cur_fuel <= (40.0 / 9.0) + g_fp_error_epsilon) {
     // If there's still uranium but no vinyl, and we're low on fuel, stock up
     // for battle. This amount fills us up till all we can hold is the smallest

@@ -254,7 +254,7 @@ namespace Pathfinding {
     // teleport at the start of the turn. Evaluates a launch maneuver
     // (Thrust while docked) accounting for the teleport. Checks both
     // forward (O_THRUST > 0) and reverse (O_THRUST < 0) possibilities.
-    FuelTraj TryDockedLaunchAndIntercept(const PathfindingContext& ctx) {
+    FuelTraj TryDockedThrust(const PathfindingContext& ctx) {
       CShip* ship = ctx.ship;
       
       // Must be docked and stationary.
@@ -263,7 +263,7 @@ namespace Pathfinding {
       // Must have time to intercept.
       if (ctx.time <= g_fp_error_epsilon) return FAILURE_TRAJ;
 
-      double launch_distance = GetLaunchDistance(ship);
+      double launch_distance = g_station_spawn_size + ship->GetSize() + (ship->GetSize() / 2.0);
 
       // Iterate over possible launch directions: Forward (true) and Reverse (false)
       for (bool forward_launch : {true, false}) {
@@ -289,12 +289,10 @@ namespace Pathfinding {
 
           // 4. Determine the sign of the thrust and ensure it aligns with orientation.
           bool thrust_is_forward;
-          // Use a minimum distance for alignment check to avoid issues with near-zero vectors.
-          double alignment_check_dist = std::max(1.0, thrust_mag_abs);
 
-          if (on_target(thrust_vec, ctx.ship_orient_vec_t0, alignment_check_dist)) {
+          if (on_target(thrust_vec, ctx.ship_orient_vec_t0)) {
               thrust_is_forward = true;
-          } else if (on_target(thrust_vec, -ctx.ship_orient_vec_t0, alignment_check_dist)) {
+          } else if (on_target(-thrust_vec, ctx.ship_orient_vec_t0)) {
               thrust_is_forward = false;
           } else {
               // Thrust required is off-axis. Cannot achieve this with O_THRUST alone.
@@ -303,14 +301,19 @@ namespace Pathfinding {
           
           double thrust_order_mag = thrust_is_forward ? thrust_mag_abs : -thrust_mag_abs;
 
-          // 5. Check Consistency: Does the calculated thrust direction match the launch assumption?
-          // If we assumed forward launch (teleport forward), we must have positive thrust.
+          // It is unlikely but possible the target will be "behind us" after we launch - 
+          // this means the target is very close to the station. The best strategy here is
+          // to launch with low velocity towards the target and back into it if it doesn't
+          // already collide with us.
           if (forward_launch) {
-              if (thrust_order_mag <= g_fp_error_epsilon) continue; 
-          } 
-          // If we assumed reverse launch (teleport backward), we must have negative thrust.
-          else {
-              if (thrust_order_mag >= -g_fp_error_epsilon) continue;
+              if (thrust_order_mag <= g_fp_error_epsilon) {
+                thrust_order_mag = 1.0;
+              }
+          } else {
+              // Negative launch case.
+              if (thrust_order_mag >= -g_fp_error_epsilon) {
+                continue;
+              }
           }
 
           // 6. Check constraints (Max thrust, Speed limit).
@@ -327,7 +330,56 @@ namespace Pathfinding {
       }
 
       return FAILURE_TRAJ;
-  }
+    }
+
+    FuelTraj TryDockedTurnThenThrust(const PathfindingContext& ctx) {
+      const double time = ctx.time;
+      // Where we need to be by time.
+      const CTraj& dest_vec_t0 = ctx.dest_vec_t0;
+      const double ship_orient_t0 = ctx.ship_orient_t0;
+      CShip* ship = ctx.ship;
+
+      // Must be docked and stationary.
+      if (!ship->IsDocked()) {
+        return FAILURE_TRAJ;
+      }
+
+      // This is a 2 turn minimum plan.
+      if (ctx.time - g_game_turn_duration <= g_fp_error_epsilon) {
+        return FAILURE_TRAJ;
+      }
+
+      // We spend this turn rotating to face the direction to the target.
+      double turn_order_amt = NormalizeAngle(dest_vec_t0.theta - ship_orient_t0);
+
+      // And then let's see if we can thrust to get to the target.
+      // Our launch command will send us station raduis + ship radius + 
+      // ship radius / 2 out away from the station.
+      double launch_distance = 3.0 * (ship->GetSize() / 2.0) + g_station_spawn_size;
+
+      if (dest_vec_t0.rho <= launch_distance + ship->GetSize() / 2.0) {
+        // The target will be very close - between us and our launch distnace.
+        // Just launch with a small velocity in case we have to back up.
+        // to get to the target.
+        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt, true);
+        return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, 2, ctx.time, fuel_used, "LaunchTurnThenThrust");
+      }
+
+      // Check if we can get to the target in time.
+      double needed_speed = (dest_vec_t0.rho - launch_distance) / (ctx.time - g_game_turn_duration);
+      // Note - normally we'd check against max thurst, but in this case
+      // we know we're doing a fully alligned thrust, and we know thurst more
+      // than g_game_max_speed does nothing additional in this case.
+      if (needed_speed > g_game_max_speed) {
+        return FAILURE_TRAJ;
+      } else {
+        double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_TURN, turn_order_amt, true);
+        return CreateSuccessTraj(ctx, ship, O_TURN, turn_order_amt, fuel_used, 2, ctx.time, fuel_used, "LaunchTurnThenThrust");
+      }
+
+      return FAILURE_TRAJ;
+    }
+
 
 
 
@@ -868,9 +920,14 @@ namespace Pathfinding {
     //          => O_TURN (and plan to thrust next turn)
 
     // Special Undock Case - can even violate game max speed due to free teleport of 48 units.
+    FuelTraj fj = FAILURE_TRAJ;
     if (ship->IsDocked()) {
       // Case Launch: Thrust immediately (causes teleport)
-      FuelTraj fj = TryDockedLaunchAndIntercept(ctx);
+      fj = TryDockedThrust(ctx);
+      if (fj.path_found) {
+        return fj;
+      }
+      fj = TryDockedTurnThenThrust(ctx);
       if (fj.path_found) {
         return fj;
       }
@@ -882,7 +939,7 @@ namespace Pathfinding {
     }
 
     // Case 1a: Check for drift collision
-    FuelTraj fj = TryDriftIntercept(ctx);
+    fj = TryDriftIntercept(ctx);
     if (fj.path_found) {
       return fj;
     }
