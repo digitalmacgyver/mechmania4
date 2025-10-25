@@ -486,6 +486,13 @@ Violence fixes:
 1. Fuel "thermostat" e.g. look for fuel once under 20, stop once above
 40.
 
+Groonew.C before violence refactor:
+
+1414 LOC
+
+After: 795
+With 647 in trenchrun
+
 OK - it seems the more aggressive strategy of 1 shooter is clearly
 better.
 

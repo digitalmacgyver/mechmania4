@@ -1,6 +1,8 @@
 #include "Brain.h"
 #include "Ship.h"
 #include "Thing.h"
+// Include TrenchRun.h for access to shared combat utilities
+#include "TrenchRun.h"
 
 #include <vector>
 

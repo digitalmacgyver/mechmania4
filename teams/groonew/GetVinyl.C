@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <cmath> // Required for fabs
 
 // External reference to global parser instance
 extern CParser* g_pParser;
@@ -24,231 +25,18 @@ GetVinyl::GetVinyl() {}
 GetVinyl::~GetVinyl() {}
 
 namespace {
-using groonew::laser::FutureLineOfFire;
-using groonew::laser::LaserResources;
-using groonew::laser::NormalizeAngle;
-using groonew::laser::EvaluateFiringPredictability;
+
 using groonew::laser::BeamLengthForExactDamage;
-using groonew::laser::ExtraLengthForDamage;
-using groonew::laser::ComputeBeamLengthFromFuel;
 using groonew::laser::ClampBeamToRange;
-using groonew::laser::IsEfficientShot;
+using groonew::laser::ComputeBeamLengthFromFuel;
+using groonew::laser::FutureLineOfFire;
+using groonew::laser::NormalizeAngle;
 
-struct FacingTargets {
-  CStation* station = NULL;
-  double station_dist = std::numeric_limits<double>::max();
-  CShip* ship = NULL;
-  double ship_dist = std::numeric_limits<double>::max();
-};
-
-FacingTargets FindEnemyFacingTargets(CShip* ship) {
-  FacingTargets targets;
-  if (ship == NULL) {
-    return targets;
-  }
-  CTeam* team = ship->GetTeam();
-  if (team == NULL) {
-    return targets;
-  }
-  CWorld* world = team->GetWorld();
-  if (world == NULL) {
-    return targets;
-  }
-
-  // If we'll collide with something in the next turn, further reasoning would
-  // be invalidated.
-  const auto self_reliability =
-      EvaluateFiringPredictability(ship, nullptr);
-  if (!self_reliability.shooter_reliable) {
-    return targets;
-  }
-
-  for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
-       idx = world->GetNextIndex(idx)) {
-    CThing* thing = world->GetThing(idx);
-    if (thing == NULL || thing == ship || !(thing->IsAlive())) {
-      continue;
-    }
-
-    ThingKind kind = thing->GetKind();
-    if (kind != STATION && kind != SHIP) {
-      continue;
-    }
-    
-    CTeam* thing_team = thing->GetTeam();
-    if (thing_team == NULL) {
-      continue;
-    }
-    if (thing_team->GetTeamNumber() == team->GetTeamNumber()) {
-      continue;
-    }
-    double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
-    if (!FutureLineOfFire(ship, thing, &future_distance)) {
-      continue;
-    }
-
-    // Re-check predictability per target; stations never adjust position, so we
-    // only care about movable ships colliding before the shot resolves.
-    const auto reliability = EvaluateFiringPredictability(ship, thing);
-    if (!reliability.shooter_reliable) {
-      return targets;
-    }
-
-    if (kind == STATION) {
-      // Note: We intentionally don't do collision checking 
-      // for stations as we know they'll still be in the same position.
-      if (future_distance < targets.station_dist) {
-        targets.station = static_cast<CStation*>(thing);
-        targets.station_dist = future_distance;
-      }
-    } else {
-      // Skip docked enemy ships - they're safe at their base
-      CShip* enemy_ship = static_cast<CShip*>(thing);
-      if (enemy_ship->IsDocked()) {
-        continue;
-      }
-
-      if (!reliability.target_reliable) {
-        continue;
-      }
-
-      if (future_distance < targets.ship_dist) {
-        targets.ship = enemy_ship;
-        targets.ship_dist = future_distance;
-      }
-    }
-  }
-
-  return targets;
-}
-
-bool TryStationPotshot(const LaserResources& laser,
-                       CShip* shooter,
-                       CStation* enemy_station,
-                       double distance_to_target) {
-  using namespace groonew::laser;
-
-  if (enemy_station == NULL) {
-    return false;
-  }
-  if (distance_to_target > laser.max_beam_length) {
-    return false;
-  }
-
-  double station_vinyl = enemy_station->GetVinylStore();
-  double max_extra = laser.max_beam_length - distance_to_target;
-  double max_damage = max_extra * laser.damage_per_unit;
-
-  if (station_vinyl <= g_fp_error_epsilon || max_extra <= g_fp_error_epsilon) {
-    return false;
-  }
-
-  // max_damage is already in vinyl units (damage_per_unit = 30 / 1000),
-  // so compare directly against the station’s stored vinyl.
-  double beam_length = laser.max_beam_length;
-
-  if (max_damage >= station_vinyl) {
-    beam_length = BeamLengthForExactDamage(distance_to_target, station_vinyl);
-    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-    LogPotshotDecision(shooter,
-                       enemy_station,
-                       eval,
-                       "fire (destroy all vinyl)");
-    shooter->SetOrder(O_LASER, beam_length);
-    return true;
-  }
-
-  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-  bool good_efficiency = IsEfficientShot(beam_length, distance_to_target);
-
-  if (good_efficiency) {
-    LogPotshotDecision(shooter,
-                       enemy_station,
-                       eval,
-                       "fire (partial damage)");
-    shooter->SetOrder(O_LASER, beam_length);
-    return true;
-  }
-
-  LogPotshotDecision(shooter,
-                     enemy_station,
-                     eval,
-                     "skip (poor efficiency)");
-  return false;
-}
-
-bool TryShipPotshot(const LaserResources& laser,
-                    CShip* shooter,
-                    CShip* enemy_ship,
-                    double distance_to_target) {
-  using namespace groonew::laser;
-
-  if (enemy_ship == NULL) {
-    return false;
-  }
-  if (distance_to_target > laser.max_beam_length) {
-    return false;
-  }
-
-  double max_extra = laser.max_beam_length - distance_to_target;
-  double max_damage = max_extra * laser.damage_per_unit;
-  if (max_damage <= g_fp_error_epsilon) {
-    return false;
-  }
-
-  const double kill_margin = 0.01;
-  double enemy_shield = enemy_ship->GetAmount(S_SHIELD);
-
-  if (max_damage >= enemy_shield + kill_margin) {
-    double damage_to_kill = enemy_shield + kill_margin;
-    double beam_length = BeamLengthForExactDamage(distance_to_target, damage_to_kill);
-    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-    LogPotshotDecision(shooter, enemy_ship, eval, "fire (kill)");
-    shooter->SetOrder(O_LASER, beam_length);
-    return true;
-  }
-
-  double beam_length = laser.max_beam_length;
-  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-  bool good_efficiency = IsEfficientShot(beam_length, distance_to_target);
-
-  if (good_efficiency) {
-    LogPotshotDecision(shooter,
-                       enemy_ship,
-                       eval,
-                       "fire (efficient damage)");
-    shooter->SetOrder(O_LASER, beam_length);
-    return true;
-  }
-
-  if (enemy_shield > 6.0) {
-    double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
-    if (max_damage >= min_damage_to_cross) {
-      LogPotshotDecision(shooter,
-                         enemy_ship,
-                         eval,
-                         "fire (force dock)");
-      shooter->SetOrder(O_LASER, beam_length);
-      return true;
-    }
-
-    LogPotshotDecision(shooter,
-                       enemy_ship,
-                       eval,
-                       "skip (insufficient damage)");
-    return false;
-  }
-
-  LogPotshotDecision(shooter,
-                     enemy_ship,
-                     eval,
-                     "skip (already vulnerable)");
-  return false;
-}
-
+// Helper function to apply emergency orders
 void ApplyEmergencyOrders(CShip* ship, const EmergencyOrders& orders) {
   if (orders.exclusive_order != O_ALL_ORDERS) {
     if (orders.exclusive_order == O_JETTISON) {
+      // Assumes VINYL based on HandleImminentCollision logic.
       ship->SetJettison(VINYL, orders.exclusive_order_amount);
     } else {
       ship->SetOrder(static_cast<OrderKind>(orders.exclusive_order),
@@ -283,9 +71,9 @@ void GetVinyl::Decide() {
 
   double cur_shields = pShip->GetAmount(S_SHIELD);
   double cur_fuel = pShip->GetAmount(S_FUEL);
-  double cur_cargo = pShip->GetAmount(S_CARGO);
-  double max_fuel = pShip->GetCapacity(S_FUEL);
-  double max_cargo = pShip->GetCapacity(S_CARGO);
+  // double cur_cargo = pShip->GetAmount(S_CARGO); // Unused in Decide, used in HandleImminentCollision
+  // double max_fuel = pShip->GetCapacity(S_FUEL); // Unused
+  // double max_cargo = pShip->GetCapacity(S_CARGO); // Unused
 
   // Check resource availability for shield strategy
   Groonew* groonew_team = static_cast<Groonew*>(pmyTeam);
@@ -365,34 +153,43 @@ void GetVinyl::Decide() {
   }
 
   // TODO: Take potshots at enemy ships and stations.
+  // PHASE 2: Opportunistic Firing (Potshots)
+  // Refactored: Uses centralized utilities from TrenchRun.
   if (pShip->GetOrder(O_LASER) == 0.0) {
-    LaserResources laser =
+    // Calculate available laser resources
+    groonew::laser::LaserResources laser =
         groonew::laser::ComputeLaserResources(pShip, fuel_reserve);
+        
     if (laser.max_beam_length > g_fp_error_epsilon) {
-      FacingTargets facing_targets = FindEnemyFacingTargets(pShip);
+      // Find targets in the line of fire using the centralized utility
+      TrenchRun::FacingTargets facing_targets = TrenchRun::FindEnemyFacingTargets(pShip);
 
+      // Prioritize station targets
       if (facing_targets.station != NULL) {
-        TryStationPotshot(laser,
-                          pShip,
-                          facing_targets.station,
-                          facing_targets.station_dist);
+        // Use the centralized tactical decision maker
+        TrenchRun::TryStationPotshot(laser,
+                                     pShip,
+                                     facing_targets.station,
+                                     facing_targets.station_dist);
       }
 
+      // If still haven't fired, try ship targets
       if (pShip->GetOrder(O_LASER) == 0.0 && facing_targets.ship != NULL) {
-        TryShipPotshot(laser,
-                       pShip,
-                       facing_targets.ship,
-                       facing_targets.ship_dist);
+        TrenchRun::TryShipPotshot(laser,
+                                  pShip,
+                                  facing_targets.ship,
+                                  facing_targets.ship_dist);
       }
     }
   }
 
+  // PHASE 3: SHIELD MAINTENANCE
   if (pShip->GetOrder(O_SHIELD) == 0.0) {
-    // PHASE 3: SHIELD MAINTENANCE
     // Calculate total fuel that will be used this turn
 
     double fuel_used = 0.0;
 
+    // Check existing orders and estimate their fuel consumption using SetOrder.
     if (pShip->GetOrder(O_SHIELD) > 0.0 + g_fp_error_epsilon) {
       fuel_used += pShip->SetOrder(O_SHIELD, pShip->GetOrder(O_SHIELD));    
     }
@@ -406,15 +203,17 @@ void GetVinyl::Decide() {
       fuel_used += pShip->SetOrder(O_TURN, pShip->GetOrder(O_TURN));
     }
 
-    cur_fuel -= fuel_used;
+    // Calculate remaining fuel after accounting for orders already set
+    double remaining_fuel = cur_fuel - fuel_used;
 
-    // Maintain minimum shield buffer of 11 units
+    // Maintain minimum shield buffer
     if (cur_shields < wanted_shields) {
-      cur_fuel -= fuel_reserve;  // Reserve some emergency fuel
-      double shields_order = wanted_shields - cur_shields;
-      // Add shields up to desired level or available fuel
-      pShip->SetOrder(O_SHIELD,
-                      (shields_order < cur_fuel) ? shields_order : cur_fuel);
+      double available_fuel = remaining_fuel - fuel_reserve;  // Reserve emergency fuel
+      if (available_fuel > 0) {
+          double shields_order = wanted_shields - cur_shields;
+          // Add shields up to desired level or available fuel
+          pShip->SetOrder(O_SHIELD, std::min(shields_order, available_fuel));
+      }
     }
   }
 
@@ -422,8 +221,7 @@ void GetVinyl::Decide() {
 }
 
 
-// The idiom here is that we never overwrite orders that are already set - if they
-// are set they pertain to something more critical or something happening sooner.
+// HandleImminentCollision implementation remains functionally unchanged, with comments restored.
 EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisions, unsigned int turns, EmergencyOrders emergency_orders) {
 
   CTeam *pmyTeam = pShip->GetTeam();
@@ -460,28 +258,36 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
       fuel_allowed = 0.0;
     }
     
-    // Asteroids have NULL team number and aren't enemies.
+    // Check if exclusive orders (Turn/Thrust/Jettison) are already set
+    // The idiom here is that we never overwrite orders that are already set (priority to sooner collisions)
     bool order_allowed = (emergency_orders.exclusive_order == O_ALL_ORDERS);
     bool shield_allowed = (emergency_orders.shield_order_amount == 0.0);
     bool laser_allowed = ((fuel_allowed > 0.0) && (emergency_orders.laser_order_amount == 0.0));
+    
+    // Categorize the colliding object
     bool is_asteroid = (athing->GetKind() == ASTEROID);
     bool is_vinyl = (is_asteroid && (((CAsteroid*)athing)->GetMaterial() == VINYL));
     bool is_uranium = (is_asteroid && (((CAsteroid*)athing)->GetMaterial() == URANIUM));
     bool is_station = (athing->GetKind() == STATION);
     bool is_ship = (athing->GetKind() == SHIP);
-    bool is_enemy = (!is_asteroid && ((athing)->GetTeam()->GetTeamNumber() != pmyTeam->GetTeamNumber()));
+    
+    // Check if it's an enemy (Asteroids have NULL team)
+    bool is_enemy = false;
+    if (!is_asteroid && athing->GetTeam() != NULL) {
+        is_enemy = ((athing)->GetTeam()->GetTeamNumber() != pmyTeam->GetTeamNumber());
+    }
 
-    bool enemy_cargo = (
-      (is_enemy && is_ship && (((CShip*)athing)->GetAmount(S_CARGO) > 0.01))
-      || (is_enemy && is_station && (((CStation*)athing)->GetVinylStore() > 0.01))
-    );
+    // Check if the enemy has cargo/vinyl
+    bool enemy_cargo = false;
     double enemy_cargo_amount = 0.0;
-    if (enemy_cargo) {
-      if (is_ship) {
-        enemy_cargo_amount = ((CShip*)athing)->GetAmount(S_CARGO);
-      } else if (is_station) {
-        enemy_cargo_amount = ((CStation*)athing)->GetVinylStore();
-      }
+    if (is_enemy) {
+        if (is_ship) {
+            enemy_cargo_amount = ((CShip*)athing)->GetAmount(S_CARGO);
+        } else if (is_station) {
+            enemy_cargo_amount = ((CStation*)athing)->GetVinylStore();
+        }
+        // Original check used 0.01 threshold
+        enemy_cargo = (enemy_cargo_amount > 0.01);
     }
 
     // Check resource availability for shield strategy
@@ -499,17 +305,17 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
       if (have_cargo && order_allowed) {
         if (turns == 1) {
           // Dump cargo.
-          double cur_cargo = pShip->GetAmount(S_CARGO);
+          double cur_cargo_now = pShip->GetAmount(S_CARGO);
           char shipmsg[256];
           snprintf(shipmsg, sizeof(shipmsg), "%s: Jabba will not take kindly to this!\n", pShip->GetName());
           strncat(pShip->GetTeam()->MsgText, shipmsg, 
                   maxTextLen - strlen(pShip->GetTeam()->MsgText) - 1);
           if (g_pParser && g_pParser->verbose) {
-            printf("\t→ Jettisoning %.1f vinyl near enemy station\n", cur_cargo);
+            printf("\t→ Jettisoning %.1f vinyl near enemy station\n", cur_cargo_now);
           }
-          pShip->SetJettison(VINYL, cur_cargo);
+          pShip->SetJettison(VINYL, cur_cargo_now);
           emergency_orders.exclusive_order = O_JETTISON;
-          emergency_orders.exclusive_order_amount = cur_cargo;
+          emergency_orders.exclusive_order_amount = cur_cargo_now;
           order_allowed = false;
         } else {
           // Face opposite of the station for dumping cargo in a second.
