@@ -15,6 +15,9 @@
 #include "World.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
 
+// Global parser instance - will be set by main programs
+extern CParser* g_pParser;
+
 /////////////////////////////////////////////
 // Construction/destruction
 
@@ -431,7 +434,36 @@ CTraj CThing::RelativeMomentum(const CThing& OthThing) const {
   return (RelativeVelocity(OthThing) * OthThing.GetMass());
 }
 
+// IsFacing checks if this object is facing OthThing along the SHORTEST PATH
+// in our toroidal world geometry. Returns true if a ray along GetOrient()
+// would intercept OthThing when following the shortest toroidal distance.
+//
+// Example: Ship at (-400, 0) facing θ=0 (east) checking target at (450, 0):
+//   - Direct distance east: 850 units
+//   - Wrapped distance west: 114 units (SHORTEST PATH)
+//   - Result: FALSE (ship faces east, but shortest path to target is west)
+//
+// Antipodal edge case: When source is exactly at -512 (X or Y boundary) and
+// target is at the same coordinate on the opposite edge, there are two equally
+// valid axis-aligned shortest paths (both 512 units). The new implementation
+// returns TRUE if facing in EITHER valid direction:
+//   - X-axis antipodal: θ=0 (east) OR θ=π (west) both valid
+//   - Y-axis antipodal: θ=π/2 (south) OR θ=-π/2 (north) both valid
+//
+// Note: No 2D diagonal antipodal cases exist. The maximum toroidal distance
+// is ~724 units (corner to diagonal corner), which is > 512. Pure diagonal
+// paths at distance 512 have only one shortest direction.
 bool CThing::IsFacing(const CThing& OthThing) const {
+  // Dispatch to legacy or new implementation based on feature flag
+  if (g_pParser && !g_pParser->UseNewFeature("facing-detection")) {
+    return IsFacingOld(OthThing);
+  } else {
+    return IsFacingNew(OthThing);
+  }
+}
+
+// Legacy implementation - preserves exact 1998 behavior
+bool CThing::IsFacingOld(const CThing& OthThing) const {
   if (*this == OthThing) {
     return false;  // Won't laser-fire yourself
   }
@@ -459,8 +491,106 @@ bool CThing::IsFacing(const CThing& OthThing) const {
   return false;
 }
 
-// Global parser instance - will be set by main programs
-extern CParser* g_pParser;
+// New implementation - toroidal shortest-path aware with antipodal edge case fix
+bool CThing::IsFacingNew(const CThing& OthThing) const {
+  if (*this == OthThing) {
+    return false;  // Won't laser-fire yourself
+  }
+
+  // Get positions
+  CCoord my_pos = GetPos();
+  CCoord other_pos = OthThing.GetPos();
+
+  // Check if at same position (within epsilon)
+  if (my_pos == other_pos) {
+    return true;  // Facing something at our exact position
+  }
+
+  // Get the shortest toroidal vector to target
+  CTraj shortest_vector = my_pos.VectTo(other_pos);
+  double distance = shortest_vector.rho;
+
+  // ANTIPODAL EDGE CASE: Check for axis-aligned antipodal configurations
+  // These occur when source is at -512 boundary and target is at opposite edge
+  // on the same axis, creating two equally valid 512-unit paths.
+  //
+  // Geometric note: Only 1D axis-aligned antipodal cases exist. No 2D diagonal
+  // cases are possible because diagonal distance = 512√2 ≈ 724, not 512.
+
+  bool at_x_min = (fabs(my_pos.fX - fWXMin) < g_fp_error_epsilon);
+  bool at_y_min = (fabs(my_pos.fY - fWYMin) < g_fp_error_epsilon);
+
+  // Calculate raw coordinate differences (before toroidal wrapping)
+  double raw_dx = other_pos.fX - my_pos.fX;
+  double raw_dy = other_pos.fY - my_pos.fY;
+
+  // Check if differences span exactly half the world (512 units)
+  // This creates two equally valid wrapping paths
+  bool x_spans_half_world = (fabs(fabs(raw_dx) - kWorldSizeX/2.0) < g_fp_error_epsilon);
+  bool y_spans_half_world = (fabs(fabs(raw_dy) - kWorldSizeY/2.0) < g_fp_error_epsilon);
+
+  // Check for pure axis-aligned antipodal cases
+  bool x_antipodal = at_x_min && x_spans_half_world && (fabs(raw_dy) < g_fp_error_epsilon);
+  bool y_antipodal = at_y_min && y_spans_half_world && (fabs(raw_dx) < g_fp_error_epsilon);
+
+  if (x_antipodal || y_antipodal) {
+    // Two equally valid axis-aligned paths exist
+    // Check if we're facing in EITHER valid direction
+    double my_orient = GetOrient();
+
+    // Calculate angular tolerance based on target size
+    double angular_tolerance = (distance > g_fp_error_epsilon)
+                                ? atan2(OthThing.GetSize(), distance)
+                                : PI/4;  // Fallback for very close objects
+
+    if (x_antipodal) {
+      // X-axis antipodal: valid directions are θ=0 (east) and θ=π (west)
+      double angle_to_east = fabs(my_orient - 0.0);
+      double angle_to_west = fabs(my_orient - PI);
+
+      // Normalize angles to [0, π] range
+      if (angle_to_east > PI) angle_to_east = PI2 - angle_to_east;
+      if (angle_to_west > PI) angle_to_west = PI2 - angle_to_west;
+
+      // Accept if facing within tolerance of either direction
+      if (angle_to_east <= angular_tolerance || angle_to_west <= angular_tolerance) {
+        return true;
+      }
+    }
+
+    if (y_antipodal) {
+      // Y-axis antipodal: valid directions are θ=π/2 (south) and θ=-π/2 (north)
+      double angle_to_south = fabs(my_orient - PI/2);
+      double angle_to_north = fabs(my_orient - (-PI/2));
+
+      // Normalize angles to [0, π] range
+      if (angle_to_south > PI) angle_to_south = PI2 - angle_to_south;
+      if (angle_to_north > PI) angle_to_north = PI2 - angle_to_north;
+
+      // Accept if facing within tolerance of either direction
+      if (angle_to_south <= angular_tolerance || angle_to_north <= angular_tolerance) {
+        return true;
+      }
+    }
+
+    // Not facing either valid direction in antipodal case
+    return false;
+  }
+
+  // STANDARD CASE: Project ray along orientation for the shortest-path distance
+  // Create ray with same length as shortest toroidal distance
+  CTraj ray(distance, GetOrient());
+  CCoord ray_endpoint = my_pos + ray.ConvertToCoord();
+  ray_endpoint.Normalize();  // Apply toroidal wrapping
+
+  // Check if ray endpoint is within target's radius
+  double hit_distance = ray_endpoint.DistTo(other_pos);
+  if (hit_distance <= OthThing.GetSize()) {
+    return true;
+  }
+
+  return false;
+}
 
 double CThing::DetectCollisionCourse(const CThing& OthThing) const {
   // Use ArgumentParser to determine which collision detection to use

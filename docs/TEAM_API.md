@@ -446,6 +446,47 @@ CCoord future_pos = thing->PredictPosition(5.0);  // 5 seconds ahead
 CTraj rel_vel = pShip->RelativeVelocity(*thing);
 ```
 
+### Facing Detection (Toroidal Aware)
+
+Check if a ship/thing is facing another object along the shortest toroidal path:
+
+```cpp
+bool facing = pShip->IsFacing(*target);
+if (facing) {
+    // Ship's orientation points toward target along shortest path
+    // Safe to fire lasers or plan intercepts
+}
+```
+
+**Important toroidal behavior:**
+- `IsFacing()` only returns `true` if the object's orientation aligns with the **shortest toroidal path** to the target
+- Uses same wrapping logic as `DistTo()` and `AngleTo()`
+
+**Example:**
+```cpp
+// Ship at (-400, 0) with orientation θ=0 (facing east/right)
+// Target at (450, 0)
+
+// Shortest toroidal distance: 114 units (wrapping west through left edge)
+// Direct distance east: 850 units
+
+pShip->IsFacing(*target);  // Returns FALSE
+// Reason: Ship faces east (θ=0), but shortest path to target is WEST (θ=π)
+
+// If ship turns to face west:
+pShip->SetOrder(O_TURN, PI);  // Turn to face west
+pShip->IsFacing(*target);     // Now returns TRUE
+```
+
+**Antipodal edge case (rare):**
+When a ship is exactly at a world boundary (-512 for X or Y) and the target is at the same coordinate on the opposite edge, there are two equally valid shortest paths (both 512 units). In this case, `IsFacing()` returns `true` for BOTH possible axis-aligned facing directions:
+- **X-axis antipodal**: Ship at X=-512, target at X=512 (same Y) → both θ=0 (east) and θ=π (west) return TRUE
+- **Y-axis antipodal**: Ship at Y=-512, target at Y=512 (same X) → both θ=π/2 (south) and θ=-π/2 (north) return TRUE
+
+Note: There are no 2D diagonal antipodal cases. The maximum toroidal distance is ~724 units (corner to diagonal corner), so no diagonal direction has two equally valid opposite paths at distance 512.
+
+This ensures laser targeting and navigation work correctly in toroidal geometry.
+
 ## Combat and Defense
 
 ### Firing Lasers

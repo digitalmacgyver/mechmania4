@@ -40,6 +40,9 @@ void ArgumentParser::InitializeFeatures() {
   // Initial orientation fix
   features["initial-orientation"] = true;  // New: ships face toward map center (balanced)
 
+  // Facing detection
+  features["facing-detection"] = true;  // New: toroidal shortest-path aware IsFacing
+
   // Add more features as they are implemented
 }
 
@@ -80,6 +83,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-docking", "Use legacy docking (dDockDist+5, can get stuck re-docking)")(
         "legacy-rangecheck-bug", "Use buggy laser range check (floating-point comparison dLasRng > dLasPwr)")(
         "legacy-initial-orientation", "Use legacy initial orientation (all ships face east, asymmetric)")(
+        "legacy-facing-detection", "Use legacy IsFacing (ignores toroidal shortest path)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -219,6 +223,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-initial-orientation")) {
       features["initial-orientation"] = false;  // Disable fix (false = legacy asymmetric behavior)
     }
+    if (result.count("legacy-facing-detection")) {
+      features["facing-detection"] = false;  // Disable toroidal shortest-path fix
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -258,6 +265,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["docking"] = false;            // Enable docking bug for legacy mode
     features["rangecheck-bug"] = true;      // Enable range check bug for legacy mode
     features["initial-orientation"] = false; // Enable asymmetric orientation for legacy mode
+    features["facing-detection"] = false;   // Use legacy facing for legacy mode
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;

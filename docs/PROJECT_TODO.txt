@@ -360,6 +360,16 @@ Re-enabled with --legacy-docking:
     ShipSize + ShipSize/2 away (the last ShipSize/2 is to give a
     safety margin.
 
+Re-enabled with --legacy-facing-detection:
+
+  * The legacy CThing IsFacing() method had a subtle bug which would
+  return false when either of the two things were on the closed
+  interval world boundary and the other was on the same X or Y
+  dimension as them and 512 units away. In this case there are two
+  valid intercept directions: d and d+pi which both have minimum
+  length 512 distance paths - however old IsFacing would say false
+  on one of those paths. We took care of that.
+
 Re-enabled with --legacy-laser-exploit:
 
   * Laser Power Determined Exclusively by Order Magnitude - This
@@ -588,9 +598,6 @@ context.max_beam_length which is quite handy - we shoould be using
 thatn instead of doing our own beam_lenghth = max( 512,
 mathonfuelremainig).
 
-Code cleanup - get rid of the "FUEL_EPSIOLON" or whatever thats like
-1.0
-
 Change our target collision positioning threshold to be based on the
 target size, not a hard coded constant.
 
@@ -661,25 +668,6 @@ late game.
 * Perfect navigation in Groogroo/MattMatt:
   * Phase 2 - fixes related to 0.2 micro tics between game turns.
 
-1. Navigation enhancements: Shortest distance doesn't necessarily mean
-fastest time to intercept, and/or cheapest cost. Consider the case
-where presently it is only marginally better to go left than right in
-terms of distance, however we currently have a large velocity to the
-right - we might get there in the same number of turns going right, at
-a much reduced cost.
-
-* Think deep thoughts about magic bag, whereby we want to know for N
-  turns among all possible paths which ones get to the item with the
-  least cost (also possible in the future consider which ones woudl
-  generate the least collisions).
-
-* Alternatively, add all the paths to the magic bag and magic bag can
-  have multiple things for any target with (path1, nturns, cost),
-  (path2, nturns, cost) ,etc. etc.
-
-  * could weight colisions with our station highly as we get free acceleration?
-  * Could consider alternate paths in all cases of: go to station and then launch?
-
 * Deep thoughts for future perfect navigation:
   1. Our current approach assumes if you can't reach destination D with
   one rotation and one thurst in T turns you can't reach it at all in
@@ -693,12 +681,23 @@ a much reduced cost.
   1. DEEP THINK ON OPTIMAL PATHING IN 2D:
      https://docs.google.com/document/d/1_AvkE_JgxQ920-TOI9HCcrU0C_781qOoa-mtjaHXHnM/edit?tab=t.0
 
-* Improve Groonew collision handling. As it is it iterates over the
-  world and locks orders and maybe breaks if it detects certain
-  scenarios - but really we want to consider all collisions ordered
-  from soonest to latest or something like that. The current logic
-  nondeterministically identifies one of the things we're colliding
-  with soon and plans based on that - we can do better.
+* Improve Collision handling:
+
+  * Note - we did briefly implement and back out path cancelling when
+    we detect us and/or the target will have collisions before our
+    intercept time beyond what is in the code today - this hurt our
+    performance empirically - it turns out aggresively flying towards
+    the target is a better strategy than waiting for a collision free
+    path.
+
+  * We detect the first collision with us, but don't check if that
+  thing itself collides with anything _else_before then.
+
+  * If we do this, it will probably fall under the experimental combat
+    handling idea to check for interposted things between us and our
+    shots - e.g. actually model the entire game world ticks out and
+    see what's what: note that asteroid "collisions" might occur and
+    just be no-ops with other asteroids.
 
 **************** END GROONEW PERFECT NAV ************************************
 

@@ -133,6 +133,10 @@ class CThing : public CSendable {
   bool CollideNew(CThing* pOthThing, CWorld* pWorld);
   void HandleCollisionOld(CThing* pOthThing, CWorld* pWorld);
   void HandleCollisionNew(CThing* pOthThing, CWorld* pWorld);
+
+  // Facing detection implementations (Private)
+  bool IsFacingOld(const CThing& OthThing) const;  // Legacy
+  bool IsFacingNew(const CThing& OthThing) const;  // Toroidal shortest-path aware
 };
 
 #endif  // !_THING_H_SFEFLKJEFLJESNF
