@@ -97,6 +97,26 @@ class Groonew : public CTeam {
   void ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
                                   const ViolenceTarget& target) const;
 
+  enum class StationPhase { Navigate, ExitDock, HoldPosition, LostLock };
+
+  static StationPhase DetermineStationPhase(double distance_to_station,
+                                            bool docked_at_enemy,
+                                            bool facing_station,
+                                            const CTraj& ship_velocity);
+
+  static bool EvaluateAndMaybeFire(CShip* shooter,
+                                   const CThing* target,
+                                   const ViolenceContext& ctx,
+                                   double distance,
+                                   const char* reason_if_fired,
+                                   bool require_efficiency = true);
+
+  static bool TryOpportunisticShot(CShip* shooter,
+                                   const ViolenceContext& ctx,
+                                   const CThing* target,
+                                   const char* reason,
+                                   bool require_efficiency = true);
+
   // Track the resource target each ship pursued on the prior turn so we can
   // reward plan continuity when utilities tie.
   std::map<CShip*, CThing*> last_turn_targets_;
