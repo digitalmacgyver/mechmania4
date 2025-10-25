@@ -277,12 +277,6 @@ Re-enabled with --legacy-velocity-limits:
     b. Charge an additional fuel penalty equal to the amount of thrust
     this truncation effectively gives to the ship "for free."
 
-  * Turn Clamping - The original game engine allowed any value to the
-    SetOrder for turns, and would charge fuel even though for example
-    turns of: pi/4 and 200*pi + pi/4 both leave the ship with the same
-    orientation. Now we normalize the input requested turn to
-    [-pi,pi].
-
   * Station Departure Thrust - The original engine granted free thrust
     to departing ships only on the first 0.2 second sub-tick - once
     that time elapsed the ships were no longer docked, and hence
@@ -419,6 +413,20 @@ Re-enabled with --legacy-physics:
     elastic. (Station interactions are unchanged and for asteroids
     correctly model collisions with "infinite" masses.
 
+  * Rotation angle clamping - The original game engine allowed any
+    value to the SetOrder for turns, and would charge fuel even though
+    for example turns of: pi/4 and 200*pi + pi/4 both leave the ship
+    with the same orientation. Now we normalize the input requested
+    turn to [-pi,pi].
+
+  * Rotational fuel costs - The legacy engine had a rotational cost
+    which scaled linearly with the angle turned. Now we treat the ship
+    as a disk of uniform density equal to its current mass, and model
+    the turn as being achieved by constant acceleration, and then
+    constant deceleration, to change the orientation by the desired
+    amount in the requested time period with no ending angular
+    velocity.
+
 ?? Make rotational fuel costs go here too.
 
 Not re-enableable:
@@ -464,23 +472,38 @@ Better Shooting Todo:
   shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
-Fix the convoluted ExecuteViolence methods - break them and and factor
-out common logic:
-a. They are kind of a state machine - on each call we should evaluate
-the case we're in, and execute case logic which can be broken out.
-b. Lots of the shooting logic is incredibly similar and repeated over
-and over with small variations in efficiency permissiveness, comments,
-etc. factor out the common code.
-
 Change our target collision positioning threshold to be based on the
 target size, not a hard coded constant.
+
+Look for places where code is duplicated across Team Groonew in
+various functions, and it could be refactored into a common method.
 
 --
 
 Experiment:
 
-A/B test: rather than our custom undock logic, try a turn 1 approach
-where we just launch at max velocity in an arc towards the center.
+Test whether just gunning all turn 1 launches to 60 helps (no direction changes).
+
+Won: 7
+Lost: 2
+tie: 1
+
+Fastlaunch vs accelerated:
+
+Won: 4
+Lost: 6
+
+FastAccelerated vs Accelerated
+
+Won: 8
+Lost: 2
+
+VERDICT:
+
+Multiplying thursts by 5/3 and launching at max velocity seems to help performance
+
+
+Test whether setting all (or all non-turn 1) laucnhes up by 5/3rds helps
 
 Tight packing fuel: in endgame conditions when we're not boosting
 emergency shields and about to collide with a uranium asteroid,
@@ -505,12 +528,6 @@ FOR EVOAI - Give it groogroo as a base, and then have the evoai
 compete against groonew? Once Groonew is consistently beating groogroo!
 
 TOROIDTOROIDTOROID
-  Q. General navigation / logic questions - what happens near edges -
-    if we're pursuing something and it is going to be at 513, which is
-    -511, do we follow it straight or turn around - does vector
-    operations suddenly say it is PI behind us instead of 0 ahead if
-    we were heading to it dead on?
-
 0. I definitely need to consider toroidal approaches in perfect
 navigation - getting shortest distance doesn't give shortest time to
 intercept - ESPECIALLY with a max speed.

@@ -45,6 +45,8 @@ Feature change log:
 2025-10-23: Better Potshots: no targeting data if us or them will collide with something first (excepting enemy stations)
 2025-10-23: Better emergency orders: Don't boost shields before midsize uranium collisions once the world is out of vinyl to preserve uranium in game world.
 2025-10-24: Changed pathfinding to be more forgiving of imperfect intercepts and dynamically adjust this based on target distance.
+2025-10-25: Always launch from bases with thrust 60 when doing normal navigation (free and performs better in competition).
+2025-10-25: Multiply all thrust order by 5/3rds. This will put our location after 1 game engine PhysicsModel turn in the position we calculated in Pathfinding (but with a greater velocity change).
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
@@ -60,7 +62,6 @@ static const bool DEBUG_MODE = false;
 
 Groonew::Groonew() : calculator_ship(NULL), mb(NULL), ramming_speed(false) {
   // Constructor - initialize member pointers to NULL
-  // ramming_speed defaults to true for endgame ramming tactics
 }
 
 Groonew::~Groonew() {
@@ -148,11 +149,6 @@ void Groonew::Turn() {
       continue;  // Skip dead ships
     }
 
-    CBrain* brain = pSh->GetBrain();
-    if (brain == NULL) {
-      continue;
-    }
-
     // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
     if (DEBUG_MODE && strcmp(pSh->GetName(), "Gold Leader") != 0) {
       // All the other ships do nothing, we let gold leader's brain decide.
@@ -160,9 +156,15 @@ void Groonew::Turn() {
       continue;
     }
 
+    CBrain* brain = pSh->GetBrain();
+    if (brain == NULL) {
+      continue;
+    }
+
     // GetVinyl::Decide() will now only handle tactical overrides (collisions,
     // shields)
     brain->Decide();
+
   }
 }
 
@@ -1196,11 +1198,6 @@ void Groonew::AssignShipOrders() {
     CShip* ship = GetShip(shipnum);
     if (ship == NULL || !ship->IsAlive()) {
       continue;  // Skip dead ships
-    }
-
-    if (DEBUG_MODE && strcmp(ship->GetName(), "Gold Leader") != 0) {
-      // Skip other ships in debug mode
-      continue;
     }
 
     // Verbose logging header
