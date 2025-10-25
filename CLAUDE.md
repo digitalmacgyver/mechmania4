@@ -287,13 +287,13 @@ double MyClass::PublicMethodNew(/* params */) {
    - Legacy: Buggy drift behavior with fuel double-spend
    - New: Correct drift using CalcThrustCost with dt-sized amounts
 
-4. **Turn Order Processing with Triangular Velocity Profile (Ship.C Drift() method)**
-   - Feature: `velocity-limits`
-   - Location: Inline in `Drift()` method, O_TURN handling section
+4. **Turn Order Processing with Triangular Velocity Profile (Ship.C SetOrder/IntegrateTurnOrder methods)**
+   - Feature: `physics`
+   - Location: Ship.C SetOrder(O_TURN) and IntegrateTurnOrder() methods
    - Helper functions: `GetTriangularOmega()`, `CalcTurnCostPhysical()`
    - Physics model: Ship modeled as uniform disk with triangular angular velocity profile
-   - Legacy: Linear cost model, each dt tick processes `turnamt * dt`, accelerates/decelerates 5 times
-   - New: Physically accurate model with single triangular acceleration/deceleration over full 1-second turn
+   - Legacy: No angle normalization, linear cost model (fuel ∝ |angle|)
+   - New: Angle normalized to [-π,π], quadratic cost model (fuel ∝ angle²)
 
    **Triangular Velocity Profile Physics:**
    - Ship accelerates linearly to peak angular velocity ω_max at t=0.5s

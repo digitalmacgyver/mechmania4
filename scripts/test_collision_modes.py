@@ -357,6 +357,8 @@ def main():
                         help='Maximum number of turns (default: 300)')
     parser.add_argument('--legacy-mode', action='store_true',
                         help='Run with --legacy-mode flag (enables all legacy behaviors)')
+    parser.add_argument('--test-physics', action='store_true',
+                        help='Test rotation physics modes (legacy vs new)')
     args = parser.parse_args()
 
     print("MechMania IV - Collision Handling Test Harness")
@@ -377,8 +379,41 @@ def main():
             sys.exit(1)
         print(f"Using test file: {args.test_file}")
 
+    # If --test-physics is specified, test rotation physics modes
+    if args.test_physics:
+        print("\nTesting ROTATION PHYSICS modes")
+        # For groogroo vs groogroo test, use shorter game (100 turns) unless specified
+        max_turns = args.max_turns
+        if max_turns is None and args.team1 == 'groogroo' and args.team2 == 'groogroo':
+            max_turns = 100
+
+        # Test 1: Legacy physics mode
+        results['legacy'] = run_test_game(
+            "Legacy Physics (linear rotation)",
+            ["--legacy-physics"],
+            team1=args.team1,
+            team2=args.team2,
+            test_file=test_file_path,
+            show_team_output=args.show_team_output,
+            use_stdin=args.use_stdin,
+            max_turns=max_turns
+        )
+
+        time.sleep(1)  # Brief pause between tests
+
+        # Test 2: New physics mode (default)
+        results['new'] = run_test_game(
+            "New Physics (quadratic rotation)",
+            [],  # No flags = use new mode
+            team1=args.team1,
+            team2=args.team2,
+            test_file=test_file_path,
+            show_team_output=args.show_team_output,
+            use_stdin=args.use_stdin,
+            max_turns=max_turns
+        )
     # If --legacy-mode is specified, only run one test with full legacy mode
-    if args.legacy_mode:
+    elif args.legacy_mode:
         print("\nRunning in LEGACY MODE (all legacy features enabled)")
         results['legacy'] = run_test_game(
             "Full Legacy Mode",

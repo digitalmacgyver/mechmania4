@@ -139,14 +139,16 @@ This ensures both teams have symmetric starting conditions.
 - **Launch Turn:** When launching from a station, the entire turn is free (no fuel consumed even after undocking)
 
 ### Rotation Mechanics
+- **Angle Normalization:** Turn commands are normalized to [-π, π] radians, so ships always take the shortest rotational path (controlled by `--legacy-physics`)
 - **Physics Model:** Ship modeled as uniform disk with triangular angular velocity profile (accelerates to peak at 0.5s, decelerates to zero at 1.0s)
-- **Fuel Cost:** Based on rotational kinetic energy. For a 40-ton empty hull, 1 ton of fuel provides approximately 1.42 full rotations (8.95 radians)
+- **Fuel Cost:** Quadratic formula based on rotational kinetic energy. For a 40-ton empty hull, 1 ton of fuel provides approximately 1.42 full rotations (8.95 radians)
 - **Formula:** Fuel = 2 × ship_mass × ship_radius² × angle² / (turn_duration² × energy_per_fuel_ton)
   - Where energy_per_fuel_ton = 648,000 (same energy budget as thrust physics)
   - Ship radius = 12 units
   - Turn duration = 1.0 second
 - **While Docked:** No fuel consumed for rotation
 - **No Angular Momentum:** After each turn order completes, angular velocity returns to zero (ship does not continue to spin)
+- **Legacy Mode:** Use `--legacy-physics` for linear fuel costs (fuel ∝ |angle|) and no angle normalization
 
 ### Physics
 - **Momentum:** Ships maintain velocity when not thrusting (Newtonian physics)

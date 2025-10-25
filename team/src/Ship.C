@@ -169,7 +169,7 @@ double CShip::IntegrateTurnOrder(double turnamt, double dt, double turn_phase) {
 
   double omega_result = 0.0;
 
-  if (g_pParser && !g_pParser->UseNewFeature("velocity-limits")) {
+  if (g_pParser && !g_pParser->UseNewFeature("physics")) {
     // Legacy behavior
     double fuelcons = SetOrder(O_TURN, turnamt);
     omega_result = turnamt;
@@ -956,12 +956,12 @@ double CShip::SetOrder(OrderKind ord, double value) {
         return angle;
       };
 
-      bool use_velocity_limits = true;
+      bool use_new_physics = true;
       if (g_pParser != NULL) {
-        use_velocity_limits = g_pParser->UseNewFeature("velocity-limits");
+        use_new_physics = g_pParser->UseNewFeature("physics");
       }
 
-      if (!use_velocity_limits) {
+      if (!use_new_physics) {
         // Legacy behavior: take the requested angle verbatim.
         fuelcon = fabs(value) * GetMass() /
                   (g_ship_turn_full_rotations_per_fuel * PI2 * mass);
