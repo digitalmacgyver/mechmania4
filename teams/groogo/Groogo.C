@@ -98,13 +98,13 @@ void Groogo::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("Rogue Squadron");
-  GetStation()->SetName("Tatooine");  // Base station name
+  SetName("The Scooby Gang");
+  GetStation()->SetName("The Bronze");  // Base station name
 
-  GetShip(0)->SetName("Gold Leader");
-  GetShip(1)->SetName("Aluminum Falcon");
-  GetShip(2)->SetName("Red 5");
-  GetShip(3)->SetName("Echo 3");
+  GetShip(0)->SetName("Buffy");
+  GetShip(1)->SetName("Willow");
+  GetShip(2)->SetName("Xander");
+  GetShip(3)->SetName("Cordelia");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)

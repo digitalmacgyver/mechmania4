@@ -97,13 +97,13 @@ void Groogather::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("Rogue Squadron");
-  GetStation()->SetName("Tatooine");  // Base station name
+  SetName("GrooGather");
+  GetStation()->SetName("Hollow Tree");  // Base station name
 
-  GetShip(0)->SetName("Gold Leader");
-  GetShip(1)->SetName("Aluminum Falcon");
-  GetShip(2)->SetName("Red 5");
-  GetShip(3)->SetName("Echo 3");
+  GetShip(0)->SetName("Chip");
+  GetShip(1)->SetName("Dale");
+  GetShip(2)->SetName("Donald");
+  GetShip(3)->SetName("Pluto");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
