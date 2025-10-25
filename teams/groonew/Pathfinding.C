@@ -67,6 +67,10 @@ namespace Pathfinding {
         return 0.0;
       }
 
+      if (calculator == NULL) {
+        return -1.0;
+      }
+
       // 1. Synchronize State (Apply Memento)
       // NOTE: This relies on the availability of setters (SetPos, SetVelocity, etc.).
       // Make non-const copies since SetPos/SetVel require non-const references

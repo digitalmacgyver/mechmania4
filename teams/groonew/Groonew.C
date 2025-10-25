@@ -257,7 +257,7 @@ void Groonew::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
   if (g_pParser && g_pParser->verbose) {
     CThing* target = best_e.dest;
 
-    if (target->GetKind() != ASTEROID) {
+    if (target->GetKind() == ASTEROID) {
       CAsteroid* ast = (CAsteroid*)target;
 
       // Use a distinct header for the assignment action
@@ -755,12 +755,18 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
       double radial_velocity =
           ship_velocity.rho * cos(ship_velocity.theta - angle_to_station);
 
-      if (facing_station && radial_velocity > 0.5) {
+      if (facing_station && fabs(radial_velocity) > 0.5) {
         if (g_pParser && g_pParser->verbose) {
           printf("\t→ PHASE: HoldPosition (counter drift %.2f)\n",
                  radial_velocity);
         }
-        ship->SetOrder(O_THRUST, 1.0);
+        if (radial_velocity > 0.0) {
+          // We are moving towards the station, back up.
+          ship->SetOrder(O_THRUST, -1.0);
+        } else {
+          // We are moving away from the station, move forward.
+          ship->SetOrder(O_THRUST, 1.0);
+        }
       } else if (!facing_station) {
         double angle_diff = angle_to_station - ship->GetOrient();
         while (angle_diff > PI) angle_diff -= PI2;

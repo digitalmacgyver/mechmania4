@@ -470,11 +470,33 @@ Better Shooting Todo:
   shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
+ENDGAME: * Violent ships can get stuck in our own base (probably both
+bases) if there is an enemy ship just outside - always launch.
+
 Change our target collision positioning threshold to be based on the
 target size, not a hard coded constant.
 
 Look for places where code is duplicated across Team Groonew in
 various functions, and it could be refactored into a common method.
+
+Violence vs Gatherer:
+
+OK - it seems the more aggressive strategy of 1 shooter is clearly
+better.
+
+However it's hampered by VIOLENCE mode being quite bad, lots of target
+switching, etc..
+
+So now I:
+1. Refine violence mode to be pretty good actually.
+   * Consider full interpolation modeling!
+2. Build master vs violence branch versions and bake them off.
+
+Winner plays against 2 violent 2 gatherer
+Winner plays against 3 violent 1 gatherer
+
+Winner plays against all unplayed opponents to make sure we don't have
+a rock paper scissors thing going on.
 
 --
 
