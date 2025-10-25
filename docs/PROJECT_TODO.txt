@@ -427,8 +427,6 @@ Re-enabled with --legacy-physics:
     amount in the requested time period with no ending angular
     velocity.
 
-?? Make rotational fuel costs go here too.
-
 Not re-enableable:
 
   * Create Vinyl With Jettison Bug - you could jettison any amount of
@@ -479,31 +477,6 @@ Look for places where code is duplicated across Team Groonew in
 various functions, and it could be refactored into a common method.
 
 --
-
-Experiment:
-
-Test whether just gunning all turn 1 launches to 60 helps (no direction changes).
-
-Won: 7
-Lost: 2
-tie: 1
-
-Fastlaunch vs accelerated:
-
-Won: 4
-Lost: 6
-
-FastAccelerated vs Accelerated
-
-Won: 8
-Lost: 2
-
-VERDICT:
-
-Multiplying thursts by 5/3 and launching at max velocity seems to help performance
-
-
-Test whether setting all (or all non-turn 1) laucnhes up by 5/3rds helps
 
 Tight packing fuel: in endgame conditions when we're not boosting
 emergency shields and about to collide with a uranium asteroid,
