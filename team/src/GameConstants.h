@@ -59,7 +59,12 @@ extern unsigned int g_initial_vinyl_asteroid_count;
 extern unsigned int g_initial_uranium_asteroid_count;
 
 // Default mass (in tons) for asteroids created during world setup.
+// NOTE: This is kept for legacy compatibility. Use material-specific masses below.
 extern double g_initial_asteroid_mass;
+
+// Material-specific asteroid masses (can be configured independently)
+extern double g_initial_vinyl_asteroid_mass;
+extern double g_initial_uranium_asteroid_mass;
 
 // ---------------------------------------------------------------------------
 // Ship spawn and configuration constants

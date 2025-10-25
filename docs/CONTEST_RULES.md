@@ -27,6 +27,57 @@ MechMania IV is a 2D space resource collection and combat game where two teams c
 > engine initialises them in `GameConstants.C`, so refer there if you need exact
 > numbers or plan to tweak the simulation locally.
 
+### Asteroid Configuration
+
+The server supports command-line options to customize the initial asteroid field:
+
+```bash
+./mm4serv --vinyl-num 10 --vinyl-mass 60.0 --uranium-num 8 --uranium-mass 50.0
+```
+
+**Available Options:**
+- `--vinyl-num N`: Number of initial vinyl asteroids (default: 5)
+- `--vinyl-mass M`: Mass of each vinyl asteroid in tons (default: 40.0)
+- `--uranium-num N`: Number of initial uranium asteroids (default: 5)
+- `--uranium-mass M`: Mass of each uranium asteroid in tons (default: 40.0)
+
+**Validation Rules:**
+1. **Minimum Mass:** All asteroid masses must be ≥ 3.0 tons (the minimum object size in the physics engine)
+2. **World Object Limit:** The configuration must not exceed the world's maximum object capacity (512 total objects, with 40 reserved for teams/stations = 472 available for asteroids)
+
+**Worst-Case Calculation:**
+The validation accounts for the maximum possible asteroids created through fragmentation:
+- When an asteroid is hit (by laser or ship collision), it fragments into **3 equal-mass pieces** (each 1/3 of parent mass)
+- Fragmentation continues until pieces would be < 3.0 tons (minimum mass), at which point they vaporize instead
+- **Worst case:** All asteroids reach generation N-1, then **all simultaneously fragment** to generation N
+
+For an asteroid with initial mass M:
+- Maximum generation N = floor(log₃(M / 3.0))
+- Maximum simultaneous asteroids = initial_count × (3^(N-1) + 3^N) = initial_count × 3^(N-1) × 4
+
+**Examples:**
+
+Valid configuration (default):
+```bash
+./mm4serv --vinyl-num 5 --vinyl-mass 40.0 --uranium-num 5 --uranium-mass 40.0
+# Vinyl: max 3 generations → 5 × 3² × 4 = 180 asteroids worst-case
+# Uranium: max 3 generations → 5 × 3² × 4 = 180 asteroids worst-case
+# Total: 360 asteroids (within 472 limit) ✓
+```
+
+Invalid configuration (exceeds limit):
+```bash
+./mm4serv --vinyl-num 50 --vinyl-mass 100.0
+# Vinyl: max 3 generations → 50 × 3² × 4 = 1800 asteroids worst-case
+# Error: exceeds 472 asteroid limit ✗
+```
+
+Invalid configuration (below minimum):
+```bash
+./mm4serv --vinyl-mass 2.0
+# Error: 2.0 tons < 3.0 ton minimum ✗
+```
+
 ## Ships
 
 ### Configuration

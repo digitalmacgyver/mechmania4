@@ -6,9 +6,45 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <cmath>
 
 #include "ArgumentParser.h"
+#include "GameConstants.h"
 #include "third_party/cxxopts.hpp"
+
+// Helper function to calculate worst-case asteroid count
+// Returns the maximum number of asteroids that could exist simultaneously
+// assuming all asteroids fragment to second-to-last generation, then
+// all simultaneously shatter to final generation on the same turn.
+static unsigned int CalculateMaxAsteroidCount(unsigned int initial_count,
+                                               double mass,
+                                               double min_mass) {
+  if (mass < min_mass) {
+    return 0;  // Can't create asteroids below minimum mass
+  }
+
+  // Calculate max generation N where mass/3^N >= min_mass
+  unsigned int max_gen = 0;
+  double current_mass = mass;
+  while (current_mass / 3.0 >= min_mass) {
+    current_mass /= 3.0;
+    max_gen++;
+  }
+
+  if (max_gen == 0) {
+    // No fragmentation possible - asteroids too small to split
+    return initial_count;
+  }
+
+  // Worst case: all at generation (N-1) simultaneously fragment to generation N
+  // Count = initial × (3^(N-1) + 3^N) = initial × 3^(N-1) × 4
+  unsigned int multiplier = 4;
+  for (unsigned int i = 1; i < max_gen; i++) {
+    multiplier *= 3;
+  }
+
+  return initial_count * multiplier;
+}
 
 ArgumentParser::ArgumentParser() { InitializeFeatures(); }
 
@@ -112,6 +148,21 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "Maximum thrust order magnitude (default: 60.0)",
         cxxopts::value<double>()->default_value("60.0"));
 
+    // World setup options
+    options.add_options("World Setup")(
+        "vinyl-num",
+        "Number of initial vinyl asteroids (default: 5)",
+        cxxopts::value<unsigned int>()->default_value("5"))(
+        "vinyl-mass",
+        "Mass of each vinyl asteroid in tons (default: 40.0)",
+        cxxopts::value<double>()->default_value("40.0"))(
+        "uranium-num",
+        "Number of initial uranium asteroids (default: 5)",
+        cxxopts::value<unsigned int>()->default_value("5"))(
+        "uranium-mass",
+        "Mass of each uranium asteroid in tons (default: 40.0)",
+        cxxopts::value<double>()->default_value("40.0"));
+
     auto result = options.parse(argc, argv);
 
     // Basic options
@@ -179,6 +230,72 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         std::cerr << "Error: max-thrust-order-mag must be > 0" << std::endl;
         return false;
       }
+    }
+
+    // Parse asteroid configuration
+    if (result.count("vinyl-num")) {
+      g_initial_vinyl_asteroid_count = result["vinyl-num"].as<unsigned int>();
+    }
+    if (result.count("vinyl-mass")) {
+      g_initial_vinyl_asteroid_mass = result["vinyl-mass"].as<double>();
+    }
+    if (result.count("uranium-num")) {
+      g_initial_uranium_asteroid_count = result["uranium-num"].as<unsigned int>();
+    }
+    if (result.count("uranium-mass")) {
+      g_initial_uranium_asteroid_mass = result["uranium-mass"].as<double>();
+    }
+
+    // Validate minimum mass
+    const double min_mass = 3.0;  // g_thing_minmass
+    if (g_initial_vinyl_asteroid_mass < min_mass) {
+      std::cerr << "Error: --vinyl-mass (" << g_initial_vinyl_asteroid_mass
+                << ") is below minimum object size (" << min_mass << " tons)" << std::endl;
+      exit(1);
+    }
+    if (g_initial_uranium_asteroid_mass < min_mass) {
+      std::cerr << "Error: --uranium-mass (" << g_initial_uranium_asteroid_mass
+                << ") is below minimum object size (" << min_mass << " tons)" << std::endl;
+      exit(1);
+    }
+
+    // Validate world object limits
+    const unsigned int MAX_WORLD_OBJECTS = 512;
+    const unsigned int RESERVED_FOR_TEAMS = 40;  // 2 teams × (1 station + 4 ships) = 10, with safety margin
+    const unsigned int MAX_ASTEROID_SLOTS = MAX_WORLD_OBJECTS - RESERVED_FOR_TEAMS;
+
+    unsigned int max_vinyl = CalculateMaxAsteroidCount(
+        g_initial_vinyl_asteroid_count, g_initial_vinyl_asteroid_mass, min_mass);
+    unsigned int max_uranium = CalculateMaxAsteroidCount(
+        g_initial_uranium_asteroid_count, g_initial_uranium_asteroid_mass, min_mass);
+    unsigned int total_max = max_vinyl + max_uranium;
+
+    if (total_max > MAX_ASTEROID_SLOTS) {
+      std::cerr << "Error: Asteroid configuration exceeds world object limit!" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "Worst-case asteroid count calculation:" << std::endl;
+      std::cerr << "  World limit: " << MAX_WORLD_OBJECTS << " objects" << std::endl;
+      std::cerr << "  Reserved for teams: " << RESERVED_FOR_TEAMS << " objects" << std::endl;
+      std::cerr << "  Available for asteroids: " << MAX_ASTEROID_SLOTS << " objects" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "Vinyl asteroids:" << std::endl;
+      std::cerr << "  Initial count: " << g_initial_vinyl_asteroid_count << std::endl;
+      std::cerr << "  Mass per asteroid: " << g_initial_vinyl_asteroid_mass << " tons" << std::endl;
+      std::cerr << "  Max generations: calculated from mass/" << min_mass << " threshold" << std::endl;
+      std::cerr << "  Worst-case count: " << max_vinyl << " asteroids" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "Uranium asteroids:" << std::endl;
+      std::cerr << "  Initial count: " << g_initial_uranium_asteroid_count << std::endl;
+      std::cerr << "  Mass per asteroid: " << g_initial_uranium_asteroid_mass << " tons" << std::endl;
+      std::cerr << "  Worst-case count: " << max_uranium << " asteroids" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "Total worst-case: " << total_max << " asteroids (exceeds "
+                << MAX_ASTEROID_SLOTS << " limit by " << (total_max - MAX_ASTEROID_SLOTS) << ")" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "Note: Worst case assumes all asteroids fragment to second-to-last generation," << std::endl;
+      std::cerr << "      then all simultaneously shatter to final generation on same turn." << std::endl;
+      std::cerr << "      Formula: initial_count × (3^N + 3^(N-1)) where N is max generation." << std::endl;
+      exit(1);
     }
 
     if (needhelp) {

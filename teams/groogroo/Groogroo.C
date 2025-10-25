@@ -92,8 +92,8 @@ void Groogroo::Turn() {
 }
 
 void Groogroo::PopulateMagicBag() {
-  // Create MagicBag: 4 ships × 100 potential targets each
-  mb = new MagicBag(4, 100);
+  // Create MagicBag: 4 ships × 512 potential targets each
+  mb = new MagicBag(4, 512);
   CWorld* worldp = GetWorld();
 
   // Reset global resource counters

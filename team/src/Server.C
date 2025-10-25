@@ -40,9 +40,9 @@ CServer::CServer(int numTms, int port) {
   }
 
   pmyWorld->CreateAsteroids(VINYL, g_initial_vinyl_asteroid_count,
-                            g_initial_asteroid_mass);
+                            g_initial_vinyl_asteroid_mass);
   pmyWorld->CreateAsteroids(URANIUM, g_initial_uranium_asteroid_count,
-                            g_initial_asteroid_mass);
+                            g_initial_uranium_asteroid_mass);
   pmyWorld->ResolvePendingOperations();
 
   wldbuflen = MAX_THINGS * 256;

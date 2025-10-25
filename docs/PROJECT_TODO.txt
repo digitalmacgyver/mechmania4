@@ -36,9 +36,9 @@ target position = 300, 0
 Ship velocity = 30 to the right
 Target velocity = 30 to the left
 
-We correctly figure out that the fastest intrcept is to stay on our
+We correctly figure out that the fastest intercept is to stay on our
 current path (which is closing at 60 units per second), rather than
-chase the target as it receeds from us by following the shorter (424
+chase the target as it recedes from us by following the shorter (424
 distance around the world boundary) distance (Note: the world speed
 limit for all objects is 30 units per second).
 
@@ -56,13 +56,13 @@ etc.
 says "//shoot it!" we should be issuing an O_LASER command at some
 point soon.
 
-3. General errors like: Sign errors, inqueality wrong direction
+3. General errors like: Sign errors, inequality wrong direction
 errors, extensive computations whose values are never used, etc.
 
 After we identify and fix crucial bugs I'll ask you for help
 rearchitecting and simplifying the code for improved elegance - but
 for now leave architectural or design issues for later and focus on
-bugs/errrors that will lead to bad gameplay results.
+bugs/errors that will lead to bad gameplay results.
 
 Please report a list of detected issues, and for each issue include a
 brief summary of the problem, the relevant line numbers / triggering
@@ -92,7 +92,7 @@ Review these changes and check for:
 
 We are ready for another round of code reviews.
 
-I have attached the latest requirements / design docs ihn the docs.md
+I have attached the latest requirements / design docs in the docs.md
 file, and updated project code in the .cpp files.
 
 In addition the the checks requested below, perform a standard battery
@@ -106,11 +106,11 @@ simulates a simple 2d toroidal starship exploration and combat game
 which is the basis for a coding contest.
 
 The purpose of this review is to make sure the implementation matches
-the requirements, features, and interfeaces described in docs.md.
+the requirements, features, and interfaces described in docs.md.
 
 The code path we care about begins in:
 
-Server's Simulation() method which itrerates and calls World's
+Server's Simulation() method which iterates and calls World's
 PhysicsModel()
 
 PhysicsModel() in turn calls the Drift() method on each thing in the
@@ -127,13 +127,13 @@ laser beams.
 The key point here is for this code review we are ONLY reviewing the
 Server Side implementation of the game physics, collision handling
 system, etc. to ensure it meets the specifications in the docs. We
-needent worry about client state or anything like that - we can treat
+needn't worry about client state or anything like that - we can treat
 it as a black box.
 
 The second key point is there is a default mode of operation, and a
 LEGACY mode, enabled with various --legacy command line flags. This
 review is ONLY of our default modes - consult the the default in
-ArgumentParser.C - IGGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE
+ArgumentParser.C - IGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE
 BY DEFAULT.
 
 Review this code for:
@@ -149,17 +149,17 @@ Review this code for:
 
 * Unintended race conditions Ways a duplicate collision could be
 * registered between the same two items twice on the same turn Access
-* to current/live Ship stats via GetXyZ() methods off the SHip object
+* to current/live Ship stats via GetXyZ() methods off the Ship object
 * when it should be using cached or snapshotted states Systemic biases
 * that predictably favor one team over the other
 
-3. General errors like: Sign errors, inqueality wrong direction
+3. General errors like: Sign errors, inequality wrong direction
 errors, extensive computations whose values are never used, etc.
 
 After we identify and fix crucial bugs I'll ask you for help
 rearchitecting and simplifying the code for improved elegance - but
 for now leave architectural or design issues for later and focus on
-bugs/errrors that will lead to bad gameplay results.
+bugs/errors that will lead to bad gameplay results.
 
 Please report a list of detected issues, and for each issue include a
 brief summary of the problem, the relevant line numbers / triggering
@@ -180,7 +180,7 @@ file, and updated project code in the .cpp files.
 
 The code path we care about begins in:
 
-Server's Simulation() method which itrerates and calls World's
+Server's Simulation() method which iterates and calls World's
 PhysicsModel()
 
 PhysicsModel() in turn calls the Drift() method on each thing in the
@@ -197,13 +197,13 @@ laser beams.
 The key point here is for this code review we are ONLY reviewing the
 Server Side implementation of the game physics, collision handling
 system, etc. to ensure it meets the specifications in the docs. We
-needent worry about client state or anything like that - we can treat
+needn't worry about client state or anything like that - we can treat
 it as a black box.
 
 The second key point is there is a default mode of operation, and a
 LEGACY mode, enabled with various --legacy command line flags. This
 review is ONLY of our default modes - consult the the default in
-ArgumentParser.C - IGGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE
+ArgumentParser.C - IGNORE AND DO NOT REVIEW ANY CODE PATHS NOT ACTIVE
 BY DEFAULT.
 
 Now review the system for architectural concerns:
@@ -220,7 +220,7 @@ Now review the system for architectural concerns:
 
 * Readability and maintainability concerns
 
-* Weird side effects / enforce the principle of least astonisment
+* Weird side effects / enforce the principle of least astonishment
 
 ====
 
@@ -249,19 +249,30 @@ New     : 4
 
 ===
 
+Wholly New Behaviors:
+
+  * You can set the initial numbers and sizes of Uranium and Vinyl
+    asteroids with: --uranium-num, --uranium-mass, --vinyl-num,
+    --vinyl-mass (all asteroids of a material share the same initial
+    mass). Note: These limits are constrained by the world's maximum
+    items capacity which in turn will place an upper bound of around
+    472 total asteroid items that could theoretically exist at
+    once. The original values (5 asteroids of 40 tons each) are the
+    defaults.
+
 Major old behaviors changed:
 
 These can all be reverted at once with the --legacy flag.
 
 Re-enabled with --legacy-velocity-limits:
 
-  * 5x costing error for Ship Thurst orders than documented (although
+  * 5x costing error for Ship Thrust orders than documented (although
     there is a suspicious 1/6th cost factor in allocating thrust, so
     maybe the end result was what was desired and it combined the
-    costing error with a discount elsehwere).
+    costing error with a discount elsewhere).
 
   * Velocity Clamping Error - The velocity clamping approach did
-    asymetrical things depending on the exect headings and thrust -
+    asymmetrical things depending on the exact headings and thrust -
     and could even accelerate ships above the limit! Now velocity is
     clamped to 30 by: a. Compute the total velocity vector given by
     current_v + thrust b. Truncate the vector to the region inside our
@@ -276,14 +287,14 @@ Re-enabled with --legacy-velocity-limits:
     [-pi,pi].
 
   * Station Departure Thrust - The original engine granted free thrust
-    to departing ships only on the first 0.2 second subtick - once
+    to departing ships only on the first 0.2 second sub-tick - once
     that time elapsed the ships were no longer docked, and hence
     thrust was no longer free. However since the only interface to
     players is the SetOrders method and that acts in 1 second
     increments, now all thrust for the entire duration of the O_THRUST
     order when departing a station is free of fuel costs.
 
-  * Double spend bug with Shields and Thurst, or Shields and Turn -
+  * Double spend bug with Shields and Thrust, or Shields and Turn -
     The game engine allows you to submit more orders than you have
     fuel for - only each individual order is clamped to current
     fuel. This is fine and in fact you may acquire fuel during turn
@@ -293,8 +304,8 @@ Re-enabled with --legacy-velocity-limits:
 
   * Low fuel underturn/underthrust - The original implementation
     required ships to have enough fuel for their entire turn/thrust
-    order at each subtick in the game, which caused these orders to be
-    artificually clamped in very low fuel conditions.
+    order at each sub-tick in the game, which caused these orders to be
+    artificially clamped in very low fuel conditions.
 
 Re-enabled with --legacy-asteroid-eat-damage:
 
@@ -324,26 +335,26 @@ Re-enabled with --legacy-collision-detection:
     system which:
     
      a. Fixes various bugs / unintended behaviors - including many
-     instances of "double hits" where a collision would be reigsterd
+     instances of "double hits" where a collision would be registered
      twice or more, effectively making them more damaging than
      documented.
 
      b. Resolves collisions in ascending order of overlap which
      attempts to monitor which collisions would have happened first,
-     and elimintates many systemic biases. (e.g. if a ship and a
+     and eliminates many systemic biases. (e.g. if a ship and a
      station overlay by 5, and a ship and an small asteroid overlap by
      2, the ship docks first and then the asteroid collision ends up
      not happening because you can't collide with docked things. Note
      that in this scenario the distance between the ship and the
      station is still 30+12-5=37 which is much more than the distance
-     between the asteroid and the ship - however we take the geater
+     between the asteroid and the ship - however we take the greater
      overlap to indicate the ship would have hit the station first.)
 
      c. In the cases where overlap is equal, we process the collisions
      in a random order to eliminate systemic bias.
 
      d. We do lots of clean up logic once a collision happens to
-     prevent nonsensiscal results (e.g. once an asteroid has collided
+     prevent nonsensical results (e.g. once an asteroid has collided
      with a ship and been eaten, re remove that asteroid from any
      future collision analysis this turn).
 
@@ -353,7 +364,7 @@ Re-enabled with --legacy-docking:
     distance between a ship and a station at the time it docked, and
     then added 5 to this number on undocking (with an initial distance
     of 0). This caused - especially in the initial game turns - a
-    behavior of ships launching, and being immediatly redocked, and
+    behavior of ships launching, and being immediately redocked, and
     then having to launch again as the docking distance is "walked
     out" in steps of 5 until it exceeds 42. The new behavior just
     always places launching ships a distance of: StationSize +
@@ -388,11 +399,11 @@ Re-enabled with --legacy-rangecheck-bug:
 
   * Weird Test Leads to Failed Laser Hits Depending on Floating Point
     Errors - We're not 100% sure why this test was originally
-    inserted, but we suspect it was inteded as a range check. However
+    inserted, but we suspect it was intended as a range check. However
     what the comparison actually does is compute the beam length two
     different ways, and then check of beam_computed_way_1 >
     beam_computed_way_2. Ideally this would never be true - however
-    due to floating point errors it can be. When it is true othewise
+    due to floating point errors it can be. When it is true otherwise
     valid laser targets are missed.
 
 Re-enabled with --legacy-physics:
@@ -406,9 +417,9 @@ Re-enabled with --legacy-physics:
   * Non-conservation of momentum on various collision types -
     Asteroid-Laser, Asteroid-Ship, Laser-Ship, and Ship-Ship
     collisions used to use various different physics for collisions
-    now: All laser collisions are pefectly inelastic collisions, and
+    now: All laser collisions are perfectly inelastic collisions, and
     Asteroid-Ship and Ship-Ship collisions are perfectly
-    elastic. (Station interactionns are unchanged and for asteroids
+    elastic. (Station interactions are unchanged and for asteroids
     correctly model collisions with "infinite" masses.
 
 ?? Make rotational fuel costs go here too.
@@ -443,12 +454,6 @@ Not re-enableable:
 
 * Configure number and size of initial asteroids.
 
-Add a rule that you can't set jettison orders while docked / you get
-back a zero in planning - since you can't jettison while docked why
-set the order.  * NOTE: before changing this consider the implications
-on subtuns - maybe you can issue a jettison order and then blast off
-or land or something.
-
 ####################### END ENGINE TODO #############################
 
 ========================== Groonew TODO =============================
@@ -458,21 +463,21 @@ Better Shooting Todo:
   TURN! We'll have turned by then! Are we doing that?
 * Are we calculating turn 1 distance in our distance math or do we
   fire too short sometimes?
-* For ship to ship duelling, figure out fastest time to intercetp, not
+* For ship to ship dueling, figure out fastest time to intercept, not
   shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
-Fix the convolute ExecuteViolence methods - break them and and factor
+Fix the convoluted ExecuteViolence methods - break them and and factor
 out common logic:
-a. They are kind of a state machine - on each call we should evalate
+a. They are kind of a state machine - on each call we should evaluate
 the case we're in, and execute case logic which can be broken out.
 b. Lots of the shooting logic is incredibly similar and repeated over
-and over with small variations in efficiency permissivenes, comments,
+and over with small variations in efficiency permissiveness, comments,
 etc. factor out the common code.
 
 Code cleanup - it looks like no one uses violence
-context.max_beam_length which is quite handy - we shoould be using
-thatn instead of doing our own beam_lenghth = max( 512,
+context.max_beam_length which is quite handy - we should be using
+that instead of doing our own beam_length = max( 512,
 mathonfuelremainig).
 
 Change our target collision positioning threshold to be based on the
@@ -494,7 +499,7 @@ Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.
 
 We are also pretty bad at shooting ships - look at how Chromefunk does
-htis - it's actually much btter - we might be trying to get too close,
+this - it's actually much better - we might be trying to get too close,
 or maybe we need to get onto an intercept pursuit angle and not come
 at them obliquely or something.
 
@@ -502,27 +507,27 @@ If we're done with everything else, and there's still uranium, harvest
 it.
 
 After reducing enemy base to 0 and killing all enemy ships do a little
-acrobatic manouvers.
+acrobatic maneuvers.
 
 FOR EVOAI - Give it groogroo as a base, and then have the evoai
-compete against groonew? Once Groonew is conistently beating groogroo!
+compete against groonew? Once Groonew is consistently beating groogroo!
 
 TOROIDTOROIDTOROID
-  Q. General nagivation / logic quersions - what happens near edges -
+  Q. General navigation / logic questions - what happens near edges -
     if we're pursuing something and it is going to be at 513, which is
     -511, do we follow it straight or turn around - does vector
     operations suddenly say it is PI behind us instead of 0 ahead if
     we were heading to it dead on?
 
 0. I definitely need to consider toroidal approaches in perfect
-nagivation - getting shortest distance doesn't give shortest time to
+navigation - getting shortest distance doesn't give shortest time to
 intercept - ESPECIALLY with a max speed.
 Consider the 1d case where ships are conceptually on a circle of
 circumference L:
 
 Dshort <= L/2
 Dlong >= L/2
-Best time to intecept short = Dshort / (maxspeed - vtarget)
+Best time to intercept short = Dshort / (maxspeed - vtarget)
 Best time to intercept long = Dlong / (maxspeed - vtarget)
 
 Ignoring some unit confusion above with speed and velocity, the basic
@@ -552,10 +557,10 @@ late game.
 
 * Deep thoughts for future perfect navigation:
   1. Our current approach assumes if you can't reach destination D with
-  one rotation and one thurst in T turns you can't reach it at all in
+  one rotation and one thrust in T turns you can't reach it at all in
   T turns.
       * This turns out to be false, there are plenty of times when
-      thrust-turn-thrust and maybe other approache are better (even
+      thrust-turn-thrust and maybe other approaches are better (even
       leaving aside the stuff that happens with thrust governing
       giving us the ability "turn" in the sense we rotate our velocity
       vector in a somewhat controlled manner without issuing the TURN
@@ -565,10 +570,10 @@ late game.
 
 * Improve Collision handling:
 
-  * Note - we did briefly implement and back out path cancelling when
+  * Note - we did briefly implement and back out path canceling when
     we detect us and/or the target will have collisions before our
     intercept time beyond what is in the code today - this hurt our
-    performance empirically - it turns out aggresively flying towards
+    performance empirically - it turns out aggressively flying towards
     the target is a better strategy than waiting for a collision free
     path.
 
@@ -576,7 +581,7 @@ late game.
   thing itself collides with anything _else_before then.
 
   * If we do this, it will probably fall under the experimental combat
-    handling idea to check for interposted things between us and our
+    handling idea to check for interposed things between us and our
     shots - e.g. actually model the entire game world ticks out and
     see what's what: note that asteroid "collisions" might occur and
     just be no-ops with other asteroids.
@@ -584,7 +589,7 @@ late game.
 **************** END GROONEW PERFECT NAV ************************************
 
 1. For Codex branch, check if Team Ares is using toroidal logic,
-suggest it to use the relevant thing/ship primatives which do that
+suggest it to use the relevant thing/ship primitives which do that
 correctly.
 
 ------------------- SYSTEM NOTES -----------------------------------------
@@ -615,17 +620,17 @@ CShips have:
     * Jettison costs nothing for vinyl, and the amount jettisoned for fuel.
   * Members: myNum, bDockFlag, dDockDist, dLaserDist, pBrain, arrays of: adOrders, adStatCur, atStatMax
   * Methods (among others like establish capacities):
-    * Drift - handles order proceeeing on the ships turn:
+    * Drift - handles order processing on the ships turn:
       * 1st Jettisons stuff, if any
-      * 2nd updates sields, if any
+      * 2nd updates shields, if any
       * Then turns, if any
       * Then thrusts, if any
       * Then updates position
     * AsteroidFits
-    * LaserTarget (Purportedly what laserbeam will hit if fired) - does so only if the ship is facing along the shortest straight line path - which is not a catastrophe given our 512 length max laser, but is inconsisntent in that it will report targets that can't be reached (due to short requested laser length or fuel constraints) on the shortest path as we face, but not any (definitionally unreachable due to max beam length) tarets on the longer paths that we face.
+    * LaserTarget (Purportedly what laser beam will hit if fired) - does so only if the ship is facing along the shortest straight line path - which is not a catastrophe given our 512 length max laser, but is inconsistent in that it will report targets that can't be reached (due to short requested laser length or fuel constraints) on the shortest path as we face, but not any (definitionally unreachable due to max beam length) targets on the longer paths that we face.
       * This logic may in fact be the reason for the 512 max beam length (also a 1024 or larger beam will hit yourself if it hits nothing else)
     * GetLaserBeamDistance (purportedly the distance the beam will traverse)
-    * AngleToIntercept - Seems to correctly compute the angle we need to turn to _FACE_ another target next turn taking both our velocites into account, and assuming they stay the same - but this will not do correct vector math I think.
+    * AngleToIntercept - Seems to correctly compute the angle we need to turn to _FACE_ another target next turn taking both our velocities into account, and assuming they stay the same - but this will not do correct vector math I think.
     * AstToStat
     * StatToAst
     * Reset/Get/Set Orders, and special SetJettison/GetJettison
@@ -828,7 +833,7 @@ Q. Can you cheat by setting things like ship velocity, asteroid size,
 base vinyl, etc.?
 A. You can set these things, but your team is running in a client
 which gets a private version of the world each tick from the
-server. The server recieves your orders and processes physics based on
+server. The server receives your orders and processes physics based on
 them, and resends the updated world, so you can't cheat this way.
 
 Q. Can you cheat by manipulating the raw orders set rather than using
@@ -856,10 +861,10 @@ exceeds available fuel but still get their benefits?
 A. Generally no - but there is again a special case with the Laser
 implementation. The legacy engine will effectively do this:
 1. Raise shields by full requested amount, deducting the fuel required.
-2. Do the first subtick (0.2) seconds of Thurst or Turn if one is specified, deducting the fuel required.
+2. Do the first subtick (0.2) seconds of Thrust or Turn if one is specified, deducting the fuel required.
 3. Shoot lasers based on the input command value, then figure fuel.
-4. Do the remainin subticks of Thurst/Turn.
-In step 3 you can exceed your fuel alotment - especially if you raised
+4. Do the remaining sub-ticks of Thrust/Turn.
+In step 3 you can exceed your fuel allotment - especially if you raised
 shields. Lasers are effectively "free" on any turn where you'd run out
 of fuel before the 2nd physics tick anyway.
 
@@ -888,7 +893,7 @@ Ship, Asteroid, and Station Damage Overview:
 Order Sequencing:
 * Once each team has submitted orders to the server the following occurs:
   1. Shield raising orders are processed first.
-  2. Then Thurst, Turn, Drifting and resulting collisions in one
+  2. Then Thrust, Turn, Drifting and resulting collisions in one
   sub-step of 1/5th of a full turn duration.
   3. Then laser shots are processed in full, including damage being dealt.
   4. Then Thrust, Turn, Drifting and resulting collisions in four
@@ -904,7 +909,7 @@ Ship Collision Notes:
 
 * Damage depends only on the mass of the object collided with - not
   the mass of the ship which collides
-* The maxiumum theoretical combined velocity of two colliding objects
+* The maximum theoretical combined velocity of two colliding objects
   is 60
 * Ships weigh 40 tons + their current fuel + their current vinyl cargo
   which means they lie in the range of 40-100 tons.

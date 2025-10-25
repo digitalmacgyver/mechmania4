@@ -23,7 +23,7 @@ class MagicBag {
 
  public:
   // Constructor: drones = number of ships, len = max entries per ship
-  MagicBag(unsigned int drones = 4, unsigned int len = 100);
+  MagicBag(unsigned int drones = 4, unsigned int len = 512);
   ~MagicBag();
 
   // Get specific entry for ship 'drone' at index 'elem'

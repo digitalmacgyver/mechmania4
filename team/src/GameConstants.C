@@ -18,7 +18,11 @@ const double g_fp_error_epsilon = 1e-7;
 unsigned int g_initial_team_ship_count = 4;
 unsigned int g_initial_vinyl_asteroid_count = 5;
 unsigned int g_initial_uranium_asteroid_count = 5;
-double g_initial_asteroid_mass = 40.0;
+double g_initial_asteroid_mass = 40.0;  // Legacy compatibility
+
+// Material-specific asteroid masses
+double g_initial_vinyl_asteroid_mass = 40.0;
+double g_initial_uranium_asteroid_mass = 40.0;
 
 // Ship spawn defaults
 double g_ship_spawn_size = 12.0;
