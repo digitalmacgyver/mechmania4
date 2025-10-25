@@ -1,5 +1,5 @@
-/* Groogather Eat Groogather
- * "Groogather don't eat Groogather; Groogather do."
+/* Groogo Eat Groogo
+ * "Groogo don't eat Groogo; Groogo do."
  * MechMania IV: The Vinyl Frontier
  * Team 13: Zach, Arun, Matt 10/3/1998
  * based on Sample file by Misha Voloshin 9/26/98
@@ -14,7 +14,7 @@
 #include "Asteroid.h"
 #include "GameConstants.h"
 #include "GetVinyl.h"
-#include "Groogather.h"
+#include "Groogo.h"
 #include "LaserUtils.h"
 #include "ParserModern.h"
 #include "Pathfinding.h"
@@ -36,7 +36,7 @@ Feature change log:
 2025-09-29: Reduced magic bag horizon to 21 turns. (Shouldn't reduce game outcomes, we should be able to get anywhere in around 20 turns - there are some low velocity paths but we're not optimizing for that now). 
 2025-10-01: Pathing updates to consider overthrust aware thrust-turning to get on desired trajectory as an option. 
 2025-10-09: Refactored code and used modern containers in MagicBag. 
-2025-10-10: Reorganized code: Pathfinding into its own module, most planning into Groogather, implemented basic target contention prevention.
+2025-10-10: Reorganized code: Pathfinding into its own module, most planning into Groogo, implemented basic target contention prevention.
 2025-10-12: Implemented optimal resource assignment using lightweight Brute Force Optimization (Removed LP Solver dependency). 
 2025-10-13: Fixed numerous bugs in pathfinding (incorrect max_speed calculations, don't try drift intercepts that occur after another collision, etc.)
 2025-10-13: Fleshed out opportunistic / emergency orders: taking potshots and enemy ships and stations, breaking apart asteroids we're about to collide with.
@@ -49,19 +49,19 @@ Feature change log:
 */
 
 // Factory function - tells the game to use our team class
-CTeam* CTeam::CreateTeam() { return new Groogather; }
+CTeam* CTeam::CreateTeam() { return new Groogo; }
 
 // TODO: Remove this
 static const bool DEBUG_MODE = false;
 
 //////////////////////////////////////////
-// Groogather class implementation
+// Groogo class implementation
 
-Groogather::Groogather() : calculator_ship(NULL), mb(NULL), ramming_speed(false) {
+Groogo::Groogo() : calculator_ship(NULL), mb(NULL), ramming_speed(false) {
   // Constructor - initialize member pointers to NULL
 }
 
-Groogather::~Groogather() {
+Groogo::~Groogo() {
   // Destructor - clean up ship AI brains to prevent memory leaks
   CShip* pSh;
   CBrain* pBr;
@@ -92,7 +92,7 @@ Groogather::~Groogather() {
   }
 }
 
-void Groogather::Init() {
+void Groogo::Init() {
   // Initialize random number generator for any random decisions
   srand(time(NULL));
 
@@ -130,7 +130,7 @@ void Groogather::Init() {
   calculator_ship->SetCapacity(S_CARGO, 40.0);
 }
 
-void Groogather::Turn() {
+void Groogo::Turn() {
   CShip* pSh;
 
   // PHASE 1: Calculate paths to all objects for all ships
@@ -165,7 +165,7 @@ void Groogather::Turn() {
   }
 }
 
-void Groogather::PopulateMagicBag() {
+void Groogo::PopulateMagicBag() {
   // Create new MagicBag (delete old one if exists)
   if (mb != NULL) {
     delete mb;
@@ -244,7 +244,7 @@ void Groogather::PopulateMagicBag() {
 }
 
 // Helper function to apply orders and log the decision.
-void Groogather::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
+void Groogo::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
   CWorld* pmyWorld = GetWorld();
   if (g_pParser && g_pParser->verbose) {
     CThing* target = best_e.dest;
@@ -291,7 +291,7 @@ void Groogather::ApplyOrders(CShip* pShip, const PathInfo& best_e) {
 }
 
 // Structure to hold potential targets considered during violence mode.
-struct Groogather::ViolenceTarget {
+struct Groogo::ViolenceTarget {
   CThing* thing = NULL;
   int priority_class = 0;  // 1=station with vinyl, 2=ship with vinyl, 3=other ship
   double sort_key1 = 0.0;  // For stations: 0, For ships: cargo (desc) or shields (asc)
@@ -299,7 +299,7 @@ struct Groogather::ViolenceTarget {
   double sort_key3 = 0.0;  // For ships with cargo: fuel, For others: 0
 };
 
-struct Groogather::ViolenceContext {
+struct Groogo::ViolenceContext {
   CShip* ship = NULL;
   unsigned int shipnum = 0;
   CTeam* team = NULL;
@@ -309,14 +309,14 @@ struct Groogather::ViolenceContext {
   double max_beam_length = 0.0;
   double enemy_base_vinyl = 0.0;
   PathInfo best_path;
-  double emergency_fuel_reserve = groogather::constants::FINAL_FUEL_RESERVE;
+  double emergency_fuel_reserve = groogo::constants::FINAL_FUEL_RESERVE;
   bool uranium_available = false;
   bool zero_reserve_phase = false;
-  double fuel_replenish_threshold = groogather::constants::FINAL_FUEL_RESERVE;
+  double fuel_replenish_threshold = groogo::constants::FINAL_FUEL_RESERVE;
 };
 
 
-ShipWants Groogather::DetermineShipWants(CShip* ship,
+ShipWants Groogo::DetermineShipWants(CShip* ship,
                                       double cur_fuel,
                                       double cur_cargo,
                                       double max_fuel,
@@ -327,7 +327,7 @@ ShipWants Groogather::DetermineShipWants(CShip* ship,
   (void)max_fuel;
   AsteroidKind preferred = VINYL;
   // Prioritize fuel if low and available; otherwise prefer vinyl if available.
-  if (cur_fuel <= groogather::constants::FUEL_RESERVE && uranium_available) {
+  if (cur_fuel <= groogo::constants::FUEL_RESERVE && uranium_available) {
     preferred = URANIUM;
   } else if (!vinyl_available && uranium_available) {
     preferred = URANIUM;
@@ -368,7 +368,7 @@ ShipWants Groogather::DetermineShipWants(CShip* ship,
   return VIOLENCE;
 }
 
-void Groogather::HandleGoHome(CShip* ship, double cur_cargo) {
+void Groogo::HandleGoHome(CShip* ship, double cur_cargo) {
   if (ship == NULL) {
     return;
   }
@@ -404,7 +404,7 @@ void Groogather::HandleGoHome(CShip* ship, double cur_cargo) {
   }
 }
 
-void Groogather::EvaluateResourceUtilities(
+void Groogo::EvaluateResourceUtilities(
     CShip* ship, ShipWants wants, unsigned int shipnum,
     std::vector<CShip*>* ships_seeking_resources,
     std::map<CShip*, unsigned int>* ship_ptr_to_shipnum) {
@@ -441,7 +441,7 @@ void Groogather::EvaluateResourceUtilities(
   }
 }
 
-Groogather::ViolenceContext Groogather::BuildViolenceContext(CShip* ship,
+Groogo::ViolenceContext Groogo::BuildViolenceContext(CShip* ship,
                                                        unsigned int shipnum) const {
   ViolenceContext ctx;
   ctx.ship = ship;
@@ -455,17 +455,17 @@ Groogather::ViolenceContext Groogather::BuildViolenceContext(CShip* ship,
     // No fuel reserve if: (1) turn >= GAME_NEARLY_OVER, OR (2) no uranium left in world
     ctx.zero_reserve_phase =
         ((ctx.world != NULL &&
-          ctx.world->GetGameTime() >= groogather::constants::GAME_NEARLY_OVER) ||
+          ctx.world->GetGameTime() >= groogo::constants::GAME_NEARLY_OVER) ||
          uranium_left <= g_fp_error_epsilon);
     ctx.emergency_fuel_reserve =
-        ctx.zero_reserve_phase ? groogather::constants::FINAL_FUEL_RESERVE
-                               : groogather::constants::FUEL_RESERVE;
+        ctx.zero_reserve_phase ? groogo::constants::FINAL_FUEL_RESERVE
+                               : groogo::constants::FUEL_RESERVE;
     ctx.fuel_replenish_threshold =
         ctx.zero_reserve_phase
-            ? groogather::constants::FINAL_FUEL_RESERVE
-            : groogather::constants::FUEL_RESERVE;
-    groogather::laser::LaserResources resources =
-        groogather::laser::ComputeLaserResources(ship,
+            ? groogo::constants::FINAL_FUEL_RESERVE
+            : groogo::constants::FUEL_RESERVE;
+    groogo::laser::LaserResources resources =
+        groogo::laser::ComputeLaserResources(ship,
                                               ctx.emergency_fuel_reserve);
     ctx.available_fuel = resources.available_fuel;
     ctx.max_beam_length = resources.max_beam_length;
@@ -498,7 +498,7 @@ Groogather::ViolenceContext Groogather::BuildViolenceContext(CShip* ship,
   return ctx;
 }
 
-Groogather::ViolenceTarget Groogather::PickViolenceTarget(
+Groogo::ViolenceTarget Groogo::PickViolenceTarget(
     ViolenceContext* ctx) const {
   ViolenceTarget best;
   if (ctx == NULL || ctx->ship == NULL || mb == NULL) {
@@ -601,7 +601,7 @@ Groogather::ViolenceTarget Groogather::PickViolenceTarget(
   return best;
 }
 
-Groogather::StationPhase Groogather::DetermineStationPhase(
+Groogo::StationPhase Groogo::DetermineStationPhase(
     double distance_to_station,
     bool docked_at_enemy,
     bool facing_station,
@@ -621,40 +621,40 @@ Groogather::StationPhase Groogather::DetermineStationPhase(
   return StationPhase::LostLock;
 }
 
-bool Groogather::EvaluateAndMaybeFire(CShip* shooter,
+bool Groogo::EvaluateAndMaybeFire(CShip* shooter,
                                    const CThing* target,
-                                   const Groogather::ViolenceContext& ctx,
+                                   const Groogo::ViolenceContext& ctx,
                                    double distance,
                                    const char* reason_if_fired,
                                    bool require_efficiency) {
   double beam_length = ctx.max_beam_length;
   if (target->GetKind() == STATION) {
-    const double extra_damage_per_unit = groogather::laser::DamagePerExtraUnit();
+    const double extra_damage_per_unit = groogo::laser::DamagePerExtraUnit();
     double max_useful_beam = distance + (ctx.enemy_base_vinyl / extra_damage_per_unit) + 30.0;
     beam_length = std::min(beam_length, max_useful_beam);
   }
 
-  groogather::laser::BeamEvaluation eval =
-      groogather::laser::EvaluateBeam(beam_length, distance);
+  groogo::laser::BeamEvaluation eval =
+      groogo::laser::EvaluateBeam(beam_length, distance);
   bool efficient = (!require_efficiency) ||
                    (beam_length >= 3.0 * distance);
 
   bool fired = false;
   if (ctx.current_fuel > ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
       ctx.available_fuel > g_fp_error_epsilon && efficient) {
-    groogather::laser::LogPotshotDecision(shooter, target, eval, reason_if_fired);
+    groogo::laser::LogPotshotDecision(shooter, target, eval, reason_if_fired);
     shooter->SetOrder(O_LASER, beam_length);
     fired = true;
   } else {
-    groogather::laser::LogPotshotDecision(shooter, target, eval,
+    groogo::laser::LogPotshotDecision(shooter, target, eval,
                                        efficient ? reason_if_fired : "skip (poor efficiency)");
   }
 
   return fired;
 }
 
-bool Groogather::TryOpportunisticShot(CShip* shooter,
-                                   const Groogather::ViolenceContext& ctx,
+bool Groogo::TryOpportunisticShot(CShip* shooter,
+                                   const Groogo::ViolenceContext& ctx,
                                    const CThing* target,
                                    const char* reason,
                                    bool require_efficiency) {
@@ -663,7 +663,7 @@ bool Groogather::TryOpportunisticShot(CShip* shooter,
   }
 
   double future_distance = 0.0;
-  if (!groogather::laser::FutureLineOfFire(shooter, target, &future_distance)) {
+  if (!groogo::laser::FutureLineOfFire(shooter, target, &future_distance)) {
     return false;
   }
 
@@ -672,7 +672,7 @@ bool Groogather::TryOpportunisticShot(CShip* shooter,
   }
 
   auto predictability =
-      groogather::laser::EvaluateFiringPredictability(shooter, target);
+      groogo::laser::EvaluateFiringPredictability(shooter, target);
   if (!predictability.BothReliable()) {
     return false;
   }
@@ -685,7 +685,7 @@ bool Groogather::TryOpportunisticShot(CShip* shooter,
                               require_efficiency);
 }
 
-void Groogather::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
+void Groogo::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
                                             const ViolenceTarget& target) const {
   if (ctx.ship == NULL || target.thing == NULL) {
     return;
@@ -787,7 +787,7 @@ void Groogather::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
   if (!upcoming.HasCollision() ||
       upcoming.time > g_game_turn_duration + g_fp_error_epsilon) {
     double future_distance = distance;
-    if (groogather::laser::FutureLineOfFire(ship, enemy_station,
+    if (groogo::laser::FutureLineOfFire(ship, enemy_station,
                                          &future_distance) &&
         future_distance < 100.0) {
       EvaluateAndMaybeFire(ship, enemy_station, ctx, future_distance,
@@ -796,7 +796,7 @@ void Groogather::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
   }
 }
 
-void Groogather::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
+void Groogo::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
                                          const ViolenceTarget& target) const {
   if (ctx.ship == NULL || target.thing == NULL) {
     return;
@@ -815,7 +815,7 @@ void Groogather::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
     if (world != NULL && ctx.available_fuel > 0.0) {
       double current_shields = ship->GetAmount(S_SHIELD);
       double shield_target =
-          (world->GetGameTime() >= groogather::constants::GAME_NEARLY_OVER) ? 0.0 : 13.0;
+          (world->GetGameTime() >= groogo::constants::GAME_NEARLY_OVER) ? 0.0 : 13.0;
       if (current_shields < shield_target) {
         double shield_boost =
             std::min(shield_target - current_shields, ctx.available_fuel);
@@ -829,7 +829,7 @@ void Groogather::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
 
   CShip* nearest_enemy = NULL;
   double nearest_distance =
-      groogather::constants::MAX_SHIP_ENGAGEMENT_DIST + 1.0;
+      groogo::constants::MAX_SHIP_ENGAGEMENT_DIST + 1.0;
 
   if (world != NULL && team != NULL) {
     for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
@@ -862,12 +862,12 @@ void Groogather::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
   bool issued_order = false;
 
   if (nearest_enemy != NULL &&
-      nearest_distance <= groogather::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+      nearest_distance <= groogo::constants::MAX_SHIP_ENGAGEMENT_DIST) {
     double future_distance = nearest_distance;
     bool has_line_of_fire =
-        groogather::laser::FutureLineOfFire(ship, nearest_enemy, &future_distance);
+        groogo::laser::FutureLineOfFire(ship, nearest_enemy, &future_distance);
     auto predictability =
-        groogather::laser::EvaluateFiringPredictability(ship, nearest_enemy);
+        groogo::laser::EvaluateFiringPredictability(ship, nearest_enemy);
 
     bool shot_taken = false;
     if (has_line_of_fire && predictability.BothReliable()) {
@@ -896,7 +896,7 @@ void Groogather::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
       CCoord our_future_pos = ship->PredictPosition(lookahead_time);
       double predicted_distance_t1 = our_future_pos.DistTo(enemy_future_pos);
 
-      if (predicted_distance_t1 <= groogather::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+      if (predicted_distance_t1 <= groogo::constants::MAX_SHIP_ENGAGEMENT_DIST) {
         double angle_to_target_t1 = our_future_pos.AngleTo(enemy_future_pos);
         double angle_diff = angle_to_target_t1 - ship->GetOrient();
         while (angle_diff > PI) angle_diff -= PI2;
@@ -922,7 +922,7 @@ void Groogather::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
   }
 }
 
-void Groogather::HandleViolence(
+void Groogo::HandleViolence(
     CShip* ship, unsigned int shipnum, double cur_fuel,
     bool uranium_available, std::vector<CShip*>* ships_seeking_resources,
     std::map<CShip*, unsigned int>* ship_ptr_to_shipnum) {
@@ -934,12 +934,12 @@ void Groogather::HandleViolence(
   CWorld* world = (team != NULL) ? team->GetWorld() : NULL;
   bool zero_reserve_phase =
       ((world != NULL &&
-        world->GetGameTime() >= groogather::constants::GAME_NEARLY_OVER) ||
+        world->GetGameTime() >= groogo::constants::GAME_NEARLY_OVER) ||
        uranium_left <= g_fp_error_epsilon);
   double replenish_threshold =
-      groogather::constants::FUEL_RESERVE;
+      groogo::constants::FUEL_RESERVE;
   if (zero_reserve_phase) {
-    replenish_threshold = groogather::constants::FINAL_FUEL_RESERVE;
+    replenish_threshold = groogo::constants::FINAL_FUEL_RESERVE;
   }
 
   // VIOLENCE mode: Converge on enemy ships/stations. We issue orders directly -
@@ -1072,7 +1072,7 @@ void FindMaxAssignment(int agent_idx,
 
 // Solves the assignment problem for resource collection using a lightweight
 // brute-force approach.
-void Groogather::SolveResourceAssignment(
+void Groogo::SolveResourceAssignment(
     const std::vector<CShip*>& agents,
     const std::map<CShip*, unsigned int>& ship_ptr_to_shipnum) {
   // 1. Identify Tasks (Asteroids) and build the utility matrix.
@@ -1182,7 +1182,7 @@ void Groogather::SolveResourceAssignment(
   }
 }
 
-void Groogather::AssignShipOrders() {
+void Groogo::AssignShipOrders() {
   // Data structures to map ships to the assignment problem agents.
   std::vector<CShip*> ships_seeking_resources;
   // Map Ship Ptr to the internal ship number (index in GetShip()).
@@ -1249,7 +1249,7 @@ void Groogather::AssignShipOrders() {
   }
 }
 
-double Groogather::CalculateUtility(CShip* pShip, ShipWants wants,
+double Groogo::CalculateUtility(CShip* pShip, ShipWants wants,
                                  const PathInfo& e,
                                  bool favor_previous_target) {
   double utility = 0.0;
