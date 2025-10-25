@@ -47,6 +47,7 @@ This ensures both teams have symmetric starting conditions. Without this fix, on
 ## 5. Jettison
 - Ships can eject vinyl (cargo) or uranium (fuel) as small asteroids.
 - Jettison occurs before movement. A ship can clear cargo space mid-turn and immediately collect a new asteroid in the same second.
+- You cannot jettison while docked; any request issued in that state is ignored and existing orders remain unchanged.
 
 ## 6. Lasers & Shields Timing
 - **Shields:** Applied at the start of the turn before movement. Fuel is consumed immediately.

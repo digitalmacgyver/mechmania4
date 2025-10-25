@@ -1014,6 +1014,11 @@ double CShip::SetOrder(OrderKind ord, double value) {
     }
 
     case O_JETTISON: {  // "value" is tonnage: positive for fuel, neg for cargo
+      // Jettison orders have no effect while docked; avoid clearing other orders.
+      if (IsDocked()) {
+        return 0.0;
+      }
+
       // NOTE: Use SetJettison() and GetJettison() helper functions instead of
       // calling SetOrder(O_JETTISON, ...) directly for better type safety
       double requestedAmount = fabs(value);
@@ -1119,6 +1124,11 @@ double CShip::SetOrder(OrderKind ord, double value) {
 }
 
 void CShip::SetJettison(AsteroidKind Mat, double amt) {
+  // Jettison orders while docked are ignored; bail out before mutating orders.
+  if (IsDocked()) {
+    return;
+  }
+
   switch (Mat) {
     case URANIUM:
       SetOrder(O_JETTISON, amt);

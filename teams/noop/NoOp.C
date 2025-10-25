@@ -38,6 +38,5 @@ void NoOp::Init() {
 
 void NoOp::Turn() {
   // Do absolutely nothing
-  // Ships will drift with whatever momentum they have
-  // No commands issued to any ship
+  return;
 }

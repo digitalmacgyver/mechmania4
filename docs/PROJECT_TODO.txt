@@ -419,100 +419,16 @@ Not re-enableable:
     Vinyl as the bounds check to not jettison more than you had an
     incorrect inequality.
 
+  * Jettison Order While Docked Bug - the game engine prevents you
+    from Jettisoning cargo while docked, but allowed you to
+    SetJettisonOrder, and would report incorrectly with GetJettison
+    that the order would do something (it would also clear O_TURN and
+    O_THRUST orders as a side effect). Now SetJettisonOrder will do
+    nothing if you are docked.
+
 ==================================
 
 ========================== ENGINE TODO ================================
-
-
-???????????? LASER TARGETING BUG ?????????????????????????
-
-Q. Is there a bug in LaserTarget?
-
-* We check if we are IsFacing, but we compare distance with DistTo
-  which uses toroidal aware distance, and may not be the distance in
-  the direction we're facing.
-
-* Also, the interface here seems confusing - if mindist > dlaspwr then
-  we're not actually going to hit anything - we are just aiming at
-  something too far away - so when that happens do we want to know
-  that, or do we want to get that we're not aiming at anything.
-
-* AS PHRASED TO GTP-T HIGH: Is there a subtle bug in
-  CShip::LaserTarget whereby both IsFacing and DistTo use toroid aware
-  geometry, and so will report that a Ship is facing a target only if
-  it is facing it along the shortest path to the target?  E.g. if a
-  ship is at (-400, 0) and is oriented with theta = 0 (facing
-  rightward), and an asteroid is at (400, 0), won’t LaserTarget return
-  false for that ship?
-
-Now - it just so happens in our implementation that the maximum laser
-distance is 512 units, so in practice this might not matter much -
-however the logic for LaserTarget considers the case where a laser
-can’t reach the target and reports that yes, it is facing that target
-when it believes IsFacing is true - so at the least this seems
-inconsistent.  ===END GTP-5 QUERY===
-
-=== GTP ANSWER === Short answer: Yes, that subtlety is real.
-
-What happens
-
-- Toroid-shortest facing: CThing::IsFacing uses the shortest-wrap
-vector (CCoord::AngleTo/VectTo). So a ship at (-400, 0) facing θ=0
-with a target at (400, 0) is deemed “not facing” (shortest vector is
-left, x = −224), and LaserTarget will ignore it. If the ship faces
-θ=π, IsFacing returns true and the target can be selected.  - Range
-mismatch: CShip::LaserTarget picks the nearest facing target even if
-it’s out of range; it only clamps dLaserDist for UI. It does not null
-the target when mindist > laser power.  - Flawed range check later:
-World::LaserModel then “validates” range using DistTo(ship, LasPos),
-but LasPos was constructed as ship + (L, orient). DistTo there is the
-shortest toroidal distance and will be ≤ L by construction, so the
-range check almost never rejects.  If the true shortest distance to
-the target D > L, the code still proceeds and computes laser “mass” as
-30*(L − D), which can be negative.
-
-Impact
-
-- Your example (800 along the long way) is unreachable anyway because
-max laser length is clamped to 512, so ignoring it is consistent with
-range. But the inconsistency remains: LaserTarget says “facing” based
-on shortest-path alignment, not on whether the forward ray can reach
-the target; and out‑of‑range targets can slip through to LaserModel,
-producing negative laser mass.  - Side effect: Stations subtract cargo
-by mass/1000. A negative mass would increase station cargo. That’s a
-real bug path when mindist > L but IsFacing is true.
-
-Minimal fixes (pick one)
-
-- Enforce range in target selection: In CShip::LaserTarget, skip
-targets with DistTo > current laser power (retain dLaserDist for UI).
-- Correct the range check: In CWorld::LaserModel, replace the
-DistTo(ship, LasPos) check with an along-ray test. Compute dir =
-unit(GetOrient()); for candidate target center c (consider 9 toroidal
-images c + (iW, jH)), project r = (c − ship) onto dir: t = dot(r,
-dir), d_perp = |cross(r, dir)|. Require 0 ≤ t ≤ L and d_perp ≤
-target.size; pick the smallest t. If none hit, treat as out of range.
-
-If you’d like, I can patch LaserTarget to filter by range (simple, low
-risk), or implement the proper ray-cast (robust and consistent with
-wrap-around).
-
-Q8. Question 8: LaserTarget and Toroidal Geometry Your interpretation
-is correct. CShip::LaserTarget relies on IsFacing, which uses CCoord
-subtraction to find the shortest path vector across the torus.  In
-your example (Ship at -400 facing East, Target at 400), the shortest
-path is West. IsFacing returns FALSE. The ship cannot target the "long
-way around."  This is consistent in practice because the laser range
-is capped at 512 units (half the world size).  Subtle Bug (The
-Antipode): There is an edge case bug when the target is exactly
-halfway across the world (distance 512). At this point, there are
-multiple equally valid shortest paths (e.g., East and West). CCoord
-normalization arbitrarily chooses one. If the ship is facing the
-target along one shortest path, but CCoord normalization chooses the
-opposite path, IsFacing will return FALSE, preventing the laser from
-firing despite correct alignment.
-
-????????????????? LASER BUG ???????????????????
 
 * Game option to prevent docking at enemy bases (set at start time of
   either the server or observer) (counts as collision with asteroid
@@ -527,50 +443,11 @@ firing despite correct alignment.
 
 * Configure number and size of initial asteroids.
 
-??????????????? Find the questions I asked here ?????????????????
-
-Q. Based on DeepThik's answer to Q3, it claims my two scenarios result
-in different costs. get to ground truth on that with a hello world
-type example.
-
-??????????????????????????????????????/
-
-===2===
-
 Add a rule that you can't set jettison orders while docked / you get
 back a zero in planning - since you can't jettison while docked why
 set the order.  * NOTE: before changing this consider the implications
 on subtuns - maybe you can issue a jettison order and then blast off
 or land or something.
-
-====
-
-Q. Question 6: What does the default mode of the switch statement on
-(ord) in SetOrder do? It looks like maybe it allows you to pass in
-O_ALL_ORDERS and get the combined fuel for the: shield, laser, and
-thrust operations on the assumption that they all don’t exhaust each
-others fuel (which they might in reality).  What do you think the
-purpose of this is? Is it used anywhere?
-
-Q. The max laser power in Ship.C's SetOrder seems somewhat arbitrary,
- and forces laser combat to be close up predominantly (can't shoot at
- targets at extreme range without rotating to take the closer shot
- through boundaries, can't pump lots of damage into far ranging
- targets).
-
-Q. Team based pBrain and GetBrain do nothing??!?
-
-Q. Can you mess with other team stuff in your team? Kill their ships,
-set their messages? Or is the overall loop: server maintans world,
-sends world copies to teams, teams issue orders, server updates world
-based on orders, repeat.
-
-Q. (Can you issue orders on other teams ships?  that the server will
-do)?
-
-Q. What is CWorld::SetTeam for? It seems like it's stripping out ships
-and stations of the other team? And then adding in the ones for the
-new team? Why bother with all this?
 
 ####################### END ENGINE TODO #############################
 
@@ -607,6 +484,11 @@ Experiment:
 
 A/B test: rather than our custom undock logic, try a turn 1 approach
 where we just launch at max velocity in an arc towards the center.
+
+Tight packing fuel: in endgame conditions when we're not boosting
+emergency shields and about to collide with a uranium asteroid,
+instead eject if that would help us fit the thing (and not turning /
+thrusting otherwise, can't eject less than 3.0).
 
 Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.

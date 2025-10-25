@@ -134,6 +134,7 @@ pShip->SetOrder(O_SHIELD, amount);  // Add to shields
 
 > **Order Restrictions:**
 > - **Movement orders are mutually exclusive:** Issuing `O_THRUST`, `O_TURN`, or `O_JETTISON` automatically cancels the other two. Only ONE movement order executes per turn.
+> - **Docked ships cannot jettison:** Requests issued while docked are ignored and the helper APIs return immediately; no cargo/fuel is ejected and existing thrust/turn orders are left untouched.
 > - **Combat/defense orders are combinable:** Both `O_LASER` and `O_SHIELD` can be issued every turn and can be combined with any movement order.
 
 ### Order Examples

@@ -334,6 +334,7 @@ When a ship issues `O_THRUST` while docked, it is **teleported to a safe distanc
 ### Jettison Mechanics
 - **Purpose:** Create new asteroids from ship resources, lightens ship to reduce fuel costs of maneuvering, prevent docking at enemy station with Vinyl, create obstacles or projectiles
 - **Minimum:** Must jettison at least 3 tons, specifying a lower amount will have no effect
+- **Docking:** Jettison requests issued while a ship is docked are ignored (no cargo/fuel is ejected and orders remain unchanged).
 - **Physics:** Momentum is conserved during jettison
   - **Asteroid spawn position:** Placed at distance `(ship_radius + asteroid_radius) × 1.15` along ship's **orientation** vector (not velocity vector)
   - **Asteroid velocity:** Magnitude equals ship's current speed, direction equals ship's **orientation** (the direction the ship is facing)

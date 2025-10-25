@@ -503,7 +503,6 @@ void CWorld::LaserModelNew() {
   // NEW DETERMINISTIC LASER PROCESSING
   // Uses snapshot/command pipeline instead of direct Collide() calls
   // This ensures laser collisions integrate properly with the deterministic collision engine
-
   
   unsigned int nteam, nship;
   CTeam* pTeam;
