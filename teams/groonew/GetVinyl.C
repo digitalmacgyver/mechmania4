@@ -152,7 +152,6 @@ void GetVinyl::Decide() {
     ApplyEmergencyOrders(pShip, emergency_orders);
   }
 
-  // TODO: Take potshots at enemy ships and stations.
   // PHASE 2: Opportunistic Firing (Potshots)
   // Refactored: Uses centralized utilities from TrenchRun.
   if (pShip->GetOrder(O_LASER) == 0.0) {
@@ -365,41 +364,11 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
           shield_allowed = false;
         }
       } 
-      /* We used to have logic here to shoot asteroids to break them up,
-      however the expected fuel cost to break up the asteroid is around 
-      2.2, and the expected damage to shields is around 0.6. In nearly 
-      the worst case scenario we'd take around 3 damage from a collision.
-      So it's not worth the fuel to break up the asteroid.
-      else {
-        // uranium greater than max fuel
-        if (g_pParser && g_pParser->verbose) {
-          printf("\t→ CONSIDERING Shooting %.1f uranium\n", asteroid_mass);
-        }
-        if (laser_allowed) {
-          if (g_pParser && g_pParser->verbose) {
-            printf("\t→ CONSIDERING-LASER ALLOWED Shooting %.1f uranium\n", asteroid_mass);
-          }
-          double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
-          if (FutureLineOfFire(pShip, athing, &future_distance)) {
-            if (g_pParser && g_pParser->verbose) {
-              printf("\t→ CONSIDERING-LASER ALLOWED-FACING Shooting %.1f uranium\n", asteroid_mass);
-            }
-
-            // We need 30*(beam length - distance) to be > 1000.0.
-            // We'll make it ~= 1060.0.
-            double desired_beam_length = future_distance + (1060.0 / 30.0);
-
-            if ((desired_beam_length <= 512.0) &&
-                ((fuel_allowed * g_laser_range_per_fuel_unit) >= desired_beam_length)) {
-              emergency_orders.laser_order_amount = desired_beam_length;
-              laser_allowed = false;
-              if (g_pParser && g_pParser->verbose) {
-                printf("\t→ Shooting %.1f uranium\n", asteroid_mass);
-              }
-            }
-          }
-        }
-      }*/
+      // NOTE: We used to have a case here for shooting asteroids to break them up,
+      // however the expected fuel cost to break up the asteroid is around 2.2, and
+      // the expected damage to shields is around 0.6. In nearly the worst case scenario
+      // we'd take around 3 damage from a collision. So it's not worth the fuel to break
+      // up the asteroid.
     }
 
     // TODO: For us this isn't a big deal as we can hold max size asteroid, and tend
