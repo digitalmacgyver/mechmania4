@@ -101,13 +101,13 @@ void Groonew::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("Rogue Squadron");
-  GetStation()->SetName("Tatooine");  // Base station name
+  SetName("VRogue Squadron");
+  GetStation()->SetName("VTatooine");  // Base station name
 
-  GetShip(0)->SetName("Gold Leader");
-  GetShip(1)->SetName("Aluminum Falcon");
-  GetShip(2)->SetName("Red 5");
-  GetShip(3)->SetName("Echo 3");
+  GetShip(0)->SetName("VGold Leader");
+  GetShip(1)->SetName("VAluminum Falcon");
+  GetShip(2)->SetName("VRed 5");
+  GetShip(3)->SetName("VEcho 3");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
@@ -117,6 +117,10 @@ void Groonew::Init() {
     GetShip(i)->SetCapacity(S_CARGO, 40.0);  // Large 40 ton cargo hold
     GetShip(i)->SetBrain(new GetVinyl);      // Assign GetVinyl AI brain
   }
+
+  // Red 5 goes after the enemy.
+  GetShip(2)->SetCapacity(S_FUEL, 60.0);
+  GetShip(2)->SetCapacity(S_CARGO, 0.0);
 
   // Initialize the calculator ship.
   // NOTE: We assume CShip has an accessible constructor (as suggested by
@@ -339,6 +343,14 @@ ShipWants Groonew::DetermineShipWants(CShip* ship,
     preferred = URANIUM;
   } else if (!vinyl_available && uranium_available) {
     preferred = URANIUM;
+  }
+
+  // Red 5 is the ship that goes after the enemy.
+  if (strcmp(ship->GetName(), "VRed 5") == 0) {
+    if (preferred == URANIUM && uranium_available && (cur_fuel <= 20.0)) {
+      return FUEL;
+    }
+    return VIOLENCE;
   }
 
   // E.g. if we don't have enough room for 1 more medium size asteroid.
@@ -594,14 +606,62 @@ Groonew::ViolenceTarget Groonew::PickViolenceTarget(
               return a.sort_key3 < b.sort_key3;
             });
 
-  // Find best target we can path to
-  auto& ship_paths = mb->getShipPaths(ctx->shipnum);
-  for (const auto& target : targets) {
-    // Check if we have a path to this target in MagicBag
-    auto it = ship_paths.find(target.thing);
-    if (it != ship_paths.end()) {
-      best = target;
-      ctx->best_path = it->second;
+  // A/B test flag: true = path-based, false = value-based
+  bool path_or_value = true;
+
+  if (path_or_value) {
+    // Path-based strategy: Find best target we can path to
+    auto& ship_paths = mb->getShipPaths(ctx->shipnum);
+    for (const auto& target : targets) {
+      // Check if we have a path to this target in MagicBag
+      auto it = ship_paths.find(target.thing);
+      if (it != ship_paths.end()) {
+        best = target;
+        ctx->best_path = it->second;
+        printf("DEBUG: Best target found: %s\n", target.thing->GetName());
+        return best;
+      }
+    }
+  } else {
+    // Value-based strategy: Priority class 1 first, then fastest intercept
+    auto& ship_paths = mb->getShipPaths(ctx->shipnum);
+
+    // First, look for priority class 1 (enemy station with vinyl)
+    for (const auto& target : targets) {
+      if (target.priority_class == 1) {
+        auto it = ship_paths.find(target.thing);
+        if (it != ship_paths.end()) {
+          best = target;
+          ctx->best_path = it->second;
+          printf("DEBUG: Best target found (priority 1): %s\n", target.thing->GetName());
+          return best;
+        }
+      }
+    }
+
+    // For priority class 2 and 3, find the one with fastest time_to_intercept
+    double fastest_time = 1e9;
+    ViolenceTarget* fastest_target = nullptr;
+    PathInfo* fastest_path = nullptr;
+
+    for (const auto& target : targets) {
+      if (target.priority_class == 2 || target.priority_class == 3) {
+        auto it = ship_paths.find(target.thing);
+        if (it != ship_paths.end()) {
+          if (it->second.time_to_intercept < fastest_time) {
+            fastest_time = it->second.time_to_intercept;
+            fastest_target = const_cast<ViolenceTarget*>(&target);
+            fastest_path = &(it->second);
+          }
+        }
+      }
+    }
+
+    if (fastest_target != nullptr) {
+      best = *fastest_target;
+      ctx->best_path = *fastest_path;
+      printf("DEBUG: Best target found (fastest intercept %.2f): %s\n",
+             fastest_time, best.thing->GetName());
       return best;
     }
   }
