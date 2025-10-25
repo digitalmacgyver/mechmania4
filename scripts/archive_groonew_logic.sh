@@ -29,18 +29,12 @@ docs_files=(
   "${REPO_ROOT}/docs/CONTEST_NAVIGATION_FOR_DEVS.md"
   "${REPO_ROOT}/docs/CONTEST_PHYSICS_FOR_DEVS.md"
   "${REPO_ROOT}/docs/CONTEST_RULES.md"
-  "${REPO_ROOT}/docs/NEW_COLLISION_ENGINE.md"
 )
 concat_files "${OUTPUT_DIR}/docs.md" "${docs_files[@]}"
 
 # Utils.cpp - combination of groonew and team/src files
 utils_files=(
-  "${REPO_ROOT}/teams/groonew/Collision.h"
-  "${REPO_ROOT}/teams/groonew/DumbThing.h"
-  "${REPO_ROOT}/teams/groonew/DumbThing.C"
-  "${REPO_ROOT}/teams/groonew/ReturnToBase.h"
-  "${REPO_ROOT}/teams/groonew/ReturnToBase.C"
-  "${REPO_ROOT}/teams/groonew/PathInfo.h"
+  "${REPO_ROOT}/teams/groonew/FuelTraj.h"
   "${REPO_ROOT}/team/src/Brain.h"
   "${REPO_ROOT}/team/src/Team.h"
   "${REPO_ROOT}/team/src/Team.C"

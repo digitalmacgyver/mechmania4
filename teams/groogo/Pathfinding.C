@@ -1,6 +1,6 @@
 /* Pathfinding.C
  * Implementation of pathfinding algorithms for MechMania IV
- * Extracted from Groonew team implementation for better maintainability
+ * Extracted from Groogo team implementation for better maintainability
  */
 
 #include "Pathfinding.h"
@@ -357,7 +357,7 @@ namespace Pathfinding {
 
           // 8. Success.
           const char* case_label = forward_launch ? "LaunchFwd" : "LaunchBwd";
-
+          
           // NOTE: Just override thrust_order_mag with 60.0. We've found 
           // experimentally that maximal thrust launches tend to
           // perform better in game conditions than whatever we calculated, 
@@ -1098,23 +1098,6 @@ namespace Pathfinding {
   Turn, Thrust, Drift
   Turn, Thrust, Thrust
 
-  My intuition tells me the other options are redundant other than facing (facing could set us up for optimal paths), but here Im trying to think of a quick fix that could dramatically improve groonew without going all the way to optimal paths.
+  My intuition tells me the other options are redundant other than facing (facing could set us up for optimal paths), but here Im trying to think of a quick fix that could dramatically improve groogo without going all the way to optimal paths.
   */
-
-    Collision detect_collisions_on_path(CShip* ship, CThing* thing, double time) {
-        Collision collision;
-
-        // TODO: Should check path from ship to target for:
-        // - Other ships (enemy and friendly)
-        // - Asteroids
-        // - Account for object sizes/radii
-        // - Use DetectCollisionCourse or similar method
-        // Currently returns dummy collision that needs implementation
-        collision.collision_thing = NULL;
-        collision.collision_when = -1.0;
-        collision.collision_where = CCoord(0, 0);
-
-        return collision;
-    }
-
 } // End namespace Pathfinding
