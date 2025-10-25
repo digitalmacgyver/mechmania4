@@ -693,8 +693,7 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
                distance);
       }
       ship->SetOrder(O_TURN, angle_diff);
-      double beam_length =
-          std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+      double beam_length = ctx.max_beam_length;
       // Clamp beam length to only deplete remaining station vinyl (avoid waste)
       // Add 30 units as safety margin to ensure complete depletion
       double max_useful_beam =
@@ -749,8 +748,7 @@ void Groonew::ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
       if (groonew::laser::FutureLineOfFire(ship, enemy_station,
                                            &future_distance) &&
           future_distance < 100.0) {
-        double beam_length =
-            std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        double beam_length = ctx.max_beam_length;
         // Clamp beam length to only deplete remaining station vinyl (avoid waste)
         // Add 30 units as safety margin to ensure complete depletion
         double max_useful_beam =
@@ -834,8 +832,6 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
     }
   }
 
-  const double SHOOTING_DISTANCE =
-      groonew::constants::MAX_SHIP_ENGAGEMENT_DIST;
   CShip* nearest_enemy = NULL;
   double nearest_distance =
       groonew::constants::MAX_SHIP_ENGAGEMENT_DIST + 1.0;
@@ -902,8 +898,7 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
               ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
           ctx.available_fuel > g_fp_error_epsilon &&
           engagement_distance < ctx.max_beam_length) {
-        double beam_length =
-            std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        double beam_length = ctx.max_beam_length;
 
         // End-game condition: no resources left and enemy base empty
         bool end_game = (uranium_left <= g_fp_error_epsilon &&
@@ -998,8 +993,7 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
                   : ship->GetPos().DistTo(target.thing->GetPos());
           
           if (engagement_distance < ctx.max_beam_length) {
-            double beam_length = std::min(
-                512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+            double beam_length = ctx.max_beam_length;
             bool good_efficiency = (beam_length >= 3.0 * engagement_distance);
             if (good_efficiency) {
               groonew::laser::BeamEvaluation eval =
@@ -1051,8 +1045,7 @@ void Groonew::ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
               : ship->GetPos().DistTo(target.thing->GetPos());
       
       if (engagement_distance < ctx.max_beam_length) {
-        double beam_length =
-            std::min(512.0, ctx.available_fuel * g_laser_range_per_fuel_unit);
+        double beam_length = ctx.max_beam_length;
         bool good_efficiency = (beam_length >= 3.0 * engagement_distance);
         if (good_efficiency) {
           groonew::laser::BeamEvaluation eval =

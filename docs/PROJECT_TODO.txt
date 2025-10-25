@@ -472,11 +472,6 @@ b. Lots of the shooting logic is incredibly similar and repeated over
 and over with small variations in efficiency permissiveness, comments,
 etc. factor out the common code.
 
-Code cleanup - it looks like no one uses violence
-context.max_beam_length which is quite handy - we should be using
-that instead of doing our own beam_length = max( 512,
-mathonfuelremainig).
-
 Change our target collision positioning threshold to be based on the
 target size, not a hard coded constant.
 
