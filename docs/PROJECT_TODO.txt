@@ -87,7 +87,6 @@ Review these changes and check for:
   functionally in any way as a result of these changes. Is that the
   case for these changes?
 
-
 ==
 
 We are ready for another round of code reviews.
@@ -167,9 +166,7 @@ conditions, etc.. Each issue you flag will become an issue for a
 developer to fix so include the correct level of detail that a
 developer could address it.
 
-
 ====
-
 
 We're going to conduct a code review for a portion of a codebase that
 simulates a simple 2d toroidal starship exploration and combat game
