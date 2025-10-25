@@ -232,6 +232,7 @@ void Groogather::PopulateMagicBag() {
           // Note: fueltraj.time_to_arrive is the time we expect _the ship_ to 
           // arrive at the intercept point, however the target might not be there yet.
           path.time_to_intercept = turn_i; // Time to intercept the target on fueltraj.
+          path.collision = collision;  // Obstacles (TODO: fix)
 
           // Add to this ship's list of possible targets (will be copied)
           mb->addEntry(ship_i, athing, path);

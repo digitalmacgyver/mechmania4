@@ -246,14 +246,6 @@ namespace Pathfinding {
       fj.num_orders = num_orders;
       fj.fuel_total = fuel_total;
 
-      if (kind == O_THRUST) {
-        // Quick and dirty hack for matching 0.2 second physics
-        // subticks - this will put us at the calculated position
-        //  fter turn 1, but with higher velocity.
-        fj.order_mag *= (5.0/3.0);
-        fj.order_mag = std::min(60.0, fj.order_mag);
-      }
-
       // Verbose logging of successful paths
       if (g_pParser && g_pParser->verbose) {
         const char* order_name = (kind == O_THRUST) ? "THRUST" :
@@ -358,19 +350,7 @@ namespace Pathfinding {
           // 8. Success.
           const char* case_label = forward_launch ? "LaunchFwd" : "LaunchBwd";
 
-          // NOTE: Just override thrust_order_mag with 60.0. We've found 
-          // experimentally that maximal thrust launches tend to
-          // perform better in game conditions than whatever we calculated, 
-          // and since they are free from docked position we may as well use them.
-          //
-          // This is because we reason here in our path engine in 1 second turns,
-          // and not in the 0.2 substeps the physics engine uses - so our thursts
-          // are always underperforming what is calculated.
-          //
-          // Also, in early turns of the game, getting to the big vinyl first is
-          // imperative - if we overshoot then we are probably blocking enemy
-          // ships from intercepting a spot behind us.
-          return CreateSuccessTraj(ctx, ship, O_THRUST, 60.0, fuel_used, 1, ctx.time, fuel_used, case_label);
+          return CreateSuccessTraj(ctx, ship, O_THRUST, thrust_order_mag, fuel_used, 1, ctx.time, fuel_used, case_label);
       }
 
       return FAILURE_TRAJ;
