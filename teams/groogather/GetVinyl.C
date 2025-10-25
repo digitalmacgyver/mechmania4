@@ -28,6 +28,7 @@ using groogather::laser::FutureLineOfFire;
 using groogather::laser::LaserResources;
 using groogather::laser::NormalizeAngle;
 using groogather::laser::EvaluateFiringPredictability;
+using groogather::laser::ClampBeamToRange;
 
 struct FacingTargets {
   CStation* station = NULL;
@@ -525,8 +526,8 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
           double max_useful_beam_length =
               future_distance + (enemy_cargo_amount * 1000.0 / 30.0);
 
-          double laser_order = min(512.0,
-                                   fuel_allowed * g_laser_range_per_fuel_unit);
+          double laser_order = ClampBeamToRange(
+              fuel_allowed * g_laser_range_per_fuel_unit);
           laser_order = min(laser_order, max_useful_beam_length);
           emergency_orders.laser_order_amount = laser_order;
           laser_allowed = false;

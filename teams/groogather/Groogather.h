@@ -22,15 +22,12 @@
 
 namespace groogather {
 namespace constants {
-inline constexpr double GAME_NEARLY_OVER = 280.0;
-inline constexpr double FINAL_FUEL_RESERVE = 0.0;
 inline constexpr double FUEL_RESERVE = 5.0;
-inline constexpr double MAX_SHIP_ENGAGEMENT_DIST = 160.0;
 }  // namespace constants
 }  // namespace groogather
 
 // Ship wants are a high level goal for the ship.
-enum ShipWants { HOME, POINTS, FUEL, VIOLENCE, NOTHING };
+enum ShipWants { HOME, POINTS, FUEL, NOTHING };
 
 //////////////////////////////////////
 // Main class: Groogather team
@@ -49,10 +46,6 @@ class Groogather : public CTeam {
   double uranium_left;  // Total uranium in world
   double vinyl_left;    // Total vinyl in world
 
-  // Combat mode flag: when true, ships will ram enemy ships instead of shooting
-  // Effective when enemy station has 0 vinyl (endgame VIOLENCE mode)
-  bool ramming_speed;
-
   // Scratchpad ship used for accurate fuel simulations.
   // Initialized once and reused throughout the game.
   CShip* calculator_ship;
@@ -69,9 +62,6 @@ class Groogather : public CTeam {
   void AssignShipOrders();
 
  private:
-  struct ViolenceContext;
-  struct ViolenceTarget;
-
   ShipWants DetermineShipWants(CShip* ship, double cur_fuel, double cur_cargo,
                                double max_fuel, double max_cargo,
                                bool uranium_available,
@@ -83,38 +73,6 @@ class Groogather : public CTeam {
       CShip* ship, ShipWants wants, unsigned int shipnum,
       std::vector<CShip*>* ships_seeking_resources,
       std::map<CShip*, unsigned int>* ship_ptr_to_shipnum);
-
-  void HandleViolence(CShip* ship, unsigned int shipnum, double cur_fuel,
-                      bool uranium_available,
-                      std::vector<CShip*>* ships_seeking_resources,
-                      std::map<CShip*, unsigned int>* ship_ptr_to_shipnum);
-
-  ViolenceContext BuildViolenceContext(CShip* ship, unsigned int shipnum) const;
-  ViolenceTarget PickViolenceTarget(ViolenceContext* ctx) const;
-  void ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
-                                     const ViolenceTarget& target) const;
-  void ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
-                                  const ViolenceTarget& target) const;
-
-  enum class StationPhase { Navigate, ExitDock, HoldPosition, LostLock };
-
-  static StationPhase DetermineStationPhase(double distance_to_station,
-                                            bool docked_at_enemy,
-                                            bool facing_station,
-                                            const CTraj& ship_velocity);
-
-  static bool EvaluateAndMaybeFire(CShip* shooter,
-                                   const CThing* target,
-                                   const ViolenceContext& ctx,
-                                   double distance,
-                                   const char* reason_if_fired,
-                                   bool require_efficiency = true);
-
-  static bool TryOpportunisticShot(CShip* shooter,
-                                   const ViolenceContext& ctx,
-                                   const CThing* target,
-                                   const char* reason,
-                                   bool require_efficiency = true);
 
   // Track the resource target each ship pursued on the prior turn so we can
   // reward plan continuity when utilities tie.

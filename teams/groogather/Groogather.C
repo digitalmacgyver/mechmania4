@@ -15,7 +15,6 @@
 #include "GameConstants.h"
 #include "GetVinyl.h"
 #include "Groogather.h"
-#include "LaserUtils.h"
 #include "ParserModern.h"
 #include "Pathfinding.h"
 
@@ -57,7 +56,7 @@ static const bool DEBUG_MODE = false;
 //////////////////////////////////////////
 // Groogather class implementation
 
-Groogather::Groogather() : calculator_ship(NULL), mb(NULL), ramming_speed(false) {
+Groogather::Groogather() : calculator_ship(NULL), mb(NULL) {
   // Constructor - initialize member pointers to NULL
 }
 
