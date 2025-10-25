@@ -24,6 +24,7 @@ GRAPHICS_REG = os.path.join(PROJECT_ROOT, 'team/src/graphics.reg')
 # Available team executables
 TEAM_EXECS = {
     'groogroo': os.path.join(BUILD_DIR, 'mm4team_groogroo'),
+    'groonew': os.path.join(BUILD_DIR, 'mm4team_groonew'),
     'testteam': os.path.join(BUILD_DIR, 'mm4team_testteam'),
     'noop': os.path.join(BUILD_DIR, 'mm4team_noop'),
 }

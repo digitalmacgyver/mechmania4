@@ -17,6 +17,7 @@
 #include "Ship.h"
 #include "Team.h"
 #include "Traj.h"
+#include "TrenchRun.h"
 
 #include <map>
 #include <vector>
@@ -70,9 +71,6 @@ class Groonew : public CTeam {
   void AssignShipOrders();
 
  private:
-  struct ViolenceContext;
-  struct ViolenceTarget;
-
   ShipWants DetermineShipWants(CShip* ship, double cur_fuel, double cur_cargo,
                                double max_fuel, double max_cargo,
                                bool uranium_available,
@@ -84,38 +82,6 @@ class Groonew : public CTeam {
       CShip* ship, ShipWants wants, unsigned int shipnum,
       std::vector<CShip*>* ships_seeking_resources,
       std::map<CShip*, unsigned int>* ship_ptr_to_shipnum);
-
-  void HandleViolence(CShip* ship, unsigned int shipnum, double cur_fuel,
-                      bool uranium_available,
-                      std::vector<CShip*>* ships_seeking_resources,
-                      std::map<CShip*, unsigned int>* ship_ptr_to_shipnum);
-
-  ViolenceContext BuildViolenceContext(CShip* ship, unsigned int shipnum) const;
-  ViolenceTarget PickViolenceTarget(ViolenceContext* ctx) const;
-  void ExecuteViolenceAgainstStation(const ViolenceContext& ctx,
-                                     const ViolenceTarget& target) const;
-  void ExecuteViolenceAgainstShip(const ViolenceContext& ctx,
-                                  const ViolenceTarget& target) const;
-
-  enum class StationPhase { Navigate, ExitDock, HoldPosition, LostLock };
-
-  static StationPhase DetermineStationPhase(double distance_to_station,
-                                            bool docked_at_enemy,
-                                            bool facing_station,
-                                            const CTraj& ship_velocity);
-
-  static bool EvaluateAndMaybeFire(CShip* shooter,
-                                   const CThing* target,
-                                   const ViolenceContext& ctx,
-                                   double distance,
-                                   const char* reason_if_fired,
-                                   bool require_efficiency = true);
-
-  static bool TryOpportunisticShot(CShip* shooter,
-                                   const ViolenceContext& ctx,
-                                   const CThing* target,
-                                   const char* reason,
-                                   bool require_efficiency = true);
 
   // Track the resource target each ship pursued on the prior turn so we can
   // reward plan continuity when utilities tie.

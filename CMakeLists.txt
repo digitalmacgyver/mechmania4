@@ -146,6 +146,7 @@ add_executable(mm4team_groonew
     teams/groonew/ReturnToBase.C
     teams/groonew/PathInfo.C
     teams/groonew/Pathfinding.C
+    teams/groonew/TrenchRun.C
 )
 target_link_libraries(mm4team_groonew mm4_common pthread)
 target_include_directories(mm4team_groonew PRIVATE teams/groonew)

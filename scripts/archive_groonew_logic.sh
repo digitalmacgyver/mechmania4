@@ -25,22 +25,14 @@ concat_files() {
 # Same docs as archive_server_logic.sh
 docs_files=(
   "${REPO_ROOT}/docs/TEAM_API.md"
-  "${REPO_ROOT}/docs/CONTEST_DAMAGE_FOR_DEVS.md"
-  "${REPO_ROOT}/docs/CONTEST_NAVIGATION_FOR_DEVS.md"
-  "${REPO_ROOT}/docs/CONTEST_PHYSICS_FOR_DEVS.md"
-  "${REPO_ROOT}/docs/CONTEST_RULES.md"
 )
 concat_files "${OUTPUT_DIR}/docs.md" "${docs_files[@]}"
 
 # Utils.cpp - combination of groonew and team/src files
 utils_files=(
   "${REPO_ROOT}/teams/groonew/FuelTraj.h"
-  "${REPO_ROOT}/team/src/Brain.h"
   "${REPO_ROOT}/team/src/Team.h"
-  "${REPO_ROOT}/team/src/Team.C"
   "${REPO_ROOT}/team/src/GameConstants.h"
-  "${REPO_ROOT}/team/src/World.h"
-  "${REPO_ROOT}/teams/groonew/LaserUtils.h"
 )
 concat_files "${OUTPUT_DIR}/Utils.cpp" "${utils_files[@]}"
 
@@ -50,32 +42,23 @@ coord_files=(
   "${REPO_ROOT}/team/src/Coord.C"
   "${REPO_ROOT}/team/src/Traj.h"
   "${REPO_ROOT}/team/src/Traj.C"
-  "${REPO_ROOT}/team/src/PhysicsUtils.h"
-  "${REPO_ROOT}/team/src/PhysicsUtils.C"
 )
 concat_files "${OUTPUT_DIR}/CoordsCombined.cpp" "${coord_files[@]}"
 
-# ShipCombined.cpp - same as archive_server_logic.sh
-concat_files "${OUTPUT_DIR}/ShipCombined.cpp" \
+# ThingAndShipCombined.cpp - same as archive_server_logic.sh
+concat_files "${OUTPUT_DIR}/ThingAndShipCombined.cpp" \
+  "${REPO_ROOT}/team/src/Thing.h" \
+  "${REPO_ROOT}/team/src/Thing.C" \
   "${REPO_ROOT}/team/src/Ship.h" \
   "${REPO_ROOT}/team/src/Ship.C"
 
-# ThingCombined.cpp - same as archive_server_logic.sh
-concat_files "${OUTPUT_DIR}/ThingCombined.cpp" \
-  "${REPO_ROOT}/team/src/Thing.h" \
-  "${REPO_ROOT}/team/src/Thing.C"
-
 # Groonew-specific combined files (PathInfo already in Utils.cpp, but need PathInfo.C)
 # Actually, PathInfo.h is in Utils.cpp, so we combine PathInfo.h and PathInfo.C
-concat_files "${OUTPUT_DIR}/PathInfoCombined.cpp" \
+concat_files "${OUTPUT_DIR}/PathingCombined.cpp" \
   "${REPO_ROOT}/teams/groonew/PathInfo.h" \
-  "${REPO_ROOT}/teams/groonew/PathInfo.C"
-
-concat_files "${OUTPUT_DIR}/PathfindingCombined.cpp" \
+  "${REPO_ROOT}/teams/groonew/PathInfo.C" \
   "${REPO_ROOT}/teams/groonew/Pathfinding.h" \
-  "${REPO_ROOT}/teams/groonew/Pathfinding.C"
-
-concat_files "${OUTPUT_DIR}/MagicBagCombined.cpp" \
+  "${REPO_ROOT}/teams/groonew/Pathfinding.C" \
   "${REPO_ROOT}/teams/groonew/MagicBag.h" \
   "${REPO_ROOT}/teams/groonew/MagicBag.C"
 
@@ -86,5 +69,10 @@ concat_files "${OUTPUT_DIR}/GetVinylCombined.cpp" \
 concat_files "${OUTPUT_DIR}/GroonewCombined.cpp" \
   "${REPO_ROOT}/teams/groonew/Groonew.h" \
   "${REPO_ROOT}/teams/groonew/Groonew.C"
+
+concat_files "${OUTPUT_DIR}/TrenchRunCombined.cpp" \
+  "${REPO_ROOT}/teams/groonew/TrenchRun.h" \
+  "${REPO_ROOT}/teams/groonew/TrenchRun.C" \
+  "${REPO_ROOT}/teams/groonew/LaserUtils.h"
 
 echo "Groonew archive artifacts written to ${OUTPUT_DIR}"

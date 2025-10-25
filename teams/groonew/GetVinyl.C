@@ -28,6 +28,11 @@ using groonew::laser::FutureLineOfFire;
 using groonew::laser::LaserResources;
 using groonew::laser::NormalizeAngle;
 using groonew::laser::EvaluateFiringPredictability;
+using groonew::laser::BeamLengthForExactDamage;
+using groonew::laser::ExtraLengthForDamage;
+using groonew::laser::ComputeBeamLengthFromFuel;
+using groonew::laser::ClampBeamToRange;
+using groonew::laser::IsEfficientShot;
 
 struct FacingTargets {
   CStation* station = NULL;
@@ -143,8 +148,7 @@ bool TryStationPotshot(const LaserResources& laser,
   double beam_length = laser.max_beam_length;
 
   if (max_damage >= station_vinyl) {
-    beam_length =
-        distance_to_target + (station_vinyl / laser.damage_per_unit);
+    beam_length = BeamLengthForExactDamage(distance_to_target, station_vinyl);
     BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
     LogPotshotDecision(shooter,
                        enemy_station,
@@ -155,7 +159,7 @@ bool TryStationPotshot(const LaserResources& laser,
   }
 
   BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
+  bool good_efficiency = IsEfficientShot(beam_length, distance_to_target);
 
   if (good_efficiency) {
     LogPotshotDecision(shooter,
@@ -197,8 +201,7 @@ bool TryShipPotshot(const LaserResources& laser,
 
   if (max_damage >= enemy_shield + kill_margin) {
     double damage_to_kill = enemy_shield + kill_margin;
-    double beam_length =
-        distance_to_target + (damage_to_kill / laser.damage_per_unit);
+    double beam_length = BeamLengthForExactDamage(distance_to_target, damage_to_kill);
     BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
     LogPotshotDecision(shooter, enemy_ship, eval, "fire (kill)");
     shooter->SetOrder(O_LASER, beam_length);
@@ -207,7 +210,7 @@ bool TryShipPotshot(const LaserResources& laser,
 
   double beam_length = laser.max_beam_length;
   BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-  bool good_efficiency = (beam_length >= 3.0 * distance_to_target);
+  bool good_efficiency = IsEfficientShot(beam_length, distance_to_target);
 
   if (good_efficiency) {
     LogPotshotDecision(shooter,
@@ -523,10 +526,10 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
         double future_distance = 0.0;  // Updated by FutureLineOfFire on success.
         if (FutureLineOfFire(pShip, athing, &future_distance)) {
           double max_useful_beam_length =
-              future_distance + (enemy_cargo_amount * 1000.0 / 30.0);
+              BeamLengthForExactDamage(future_distance, enemy_cargo_amount);
 
-          double laser_order = min(512.0,
-                                   fuel_allowed * g_laser_range_per_fuel_unit);
+          double laser_order = ClampBeamToRange(
+              ComputeBeamLengthFromFuel(fuel_allowed));
           laser_order = min(laser_order, max_useful_beam_length);
           emergency_orders.laser_order_amount = laser_order;
           laser_allowed = false;

@@ -27,12 +27,29 @@ inline double ComputeLaserFuelCost(double beam_length) {
   return beam_length / g_laser_range_per_fuel_unit;
 }
 
+inline double ComputeBeamLengthFromFuel(double fuel) {
+  return fuel * g_laser_range_per_fuel_unit;
+}
+
 inline double DamagePerExtraUnit() {
   return g_laser_mass_scale_per_remaining_unit / g_laser_damage_mass_divisor;
 }
 
 inline double DamageForExtraLength(double extra_length) {
   return extra_length * DamagePerExtraUnit();
+}
+
+inline double ExtraLengthForDamage(double damage) {
+  return damage / DamagePerExtraUnit();
+}
+
+inline double BeamLengthForExactDamage(double distance, double desired_damage) {
+  return distance + ExtraLengthForDamage(desired_damage);
+}
+
+inline bool IsEfficientShot(double beam_length, double distance,
+                           double efficiency_ratio = 3.0) {
+  return beam_length >= efficiency_ratio * distance;
 }
 
 inline double NormalizeAngle(double angle) {
