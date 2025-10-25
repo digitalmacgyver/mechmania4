@@ -150,6 +150,21 @@ add_executable(mm4team_groonew
 target_link_libraries(mm4team_groonew mm4_common pthread)
 target_include_directories(mm4team_groonew PRIVATE teams/groonew)
 
+# Groogather team executable
+add_executable(mm4team_groogather
+    ${SRC_DIR}/mm4team.C
+    ${CLIENT_SOURCES}
+    ${SRC_DIR}/Server.C
+    ${SRC_DIR}/ServerNet.C
+    teams/groogather/Groogather.C
+    teams/groogather/GetVinyl.C
+    teams/groogather/MagicBag.C
+    teams/groogather/PathInfo.C
+    teams/groogather/Pathfinding.C
+)
+target_link_libraries(mm4team_groogather mm4_common pthread)
+target_include_directories(mm4team_groogather PRIVATE teams/groogather)
+
 # Evo team executable
 add_executable(mm4team_evo
     ${SRC_DIR}/mm4team.C
