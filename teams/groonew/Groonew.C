@@ -607,10 +607,10 @@ Groonew::ViolenceTarget Groonew::PickViolenceTarget(
             });
 
   // A/B test flag: true = path-based, false = value-based
-  bool path_or_value = true;
+  bool path_or_value = false;
 
   if (path_or_value) {
-    // Path-based strategy: Find best target we can path to
+    // Select targets based on highest value.
     auto& ship_paths = mb->getShipPaths(ctx->shipnum);
     for (const auto& target : targets) {
       // Check if we have a path to this target in MagicBag
@@ -623,7 +623,9 @@ Groonew::ViolenceTarget Groonew::PickViolenceTarget(
       }
     }
   } else {
-    // Value-based strategy: Priority class 1 first, then fastest intercept
+    // Select targets based on:
+    // Stations first
+    // Then ships that we have the shortest time to intercept to.
     auto& ship_paths = mb->getShipPaths(ctx->shipnum);
 
     // First, look for priority class 1 (enemy station with vinyl)
@@ -641,8 +643,8 @@ Groonew::ViolenceTarget Groonew::PickViolenceTarget(
 
     // For priority class 2 and 3, find the one with fastest time_to_intercept
     double fastest_time = 1e9;
-    ViolenceTarget* fastest_target = nullptr;
-    PathInfo* fastest_path = nullptr;
+    ViolenceTarget* fastest_target = NULL;
+    PathInfo* fastest_path = NULL;
 
     for (const auto& target : targets) {
       if (target.priority_class == 2 || target.priority_class == 3) {
@@ -657,7 +659,7 @@ Groonew::ViolenceTarget Groonew::PickViolenceTarget(
       }
     }
 
-    if (fastest_target != nullptr) {
+    if (fastest_target != NULL) {
       best = *fastest_target;
       ctx->best_path = *fastest_path;
       printf("DEBUG: Best target found (fastest intercept %.2f): %s\n",
