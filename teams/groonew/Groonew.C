@@ -47,6 +47,7 @@ Feature change log:
 2025-10-24: Changed pathfinding to be more forgiving of imperfect intercepts and dynamically adjust this based on target distance.
 2025-10-25: Always launch from bases with thrust 60 when doing normal navigation (free and performs better in competition).
 2025-10-25: Multiply all thrust order by 5/3rds. This will put our location after 1 game engine PhysicsModel turn in the position we calculated in Pathfinding (but with a greater velocity change).
+2025-10-25: Increased magic bag horizon to 25 turns for theoretical maximum distance we can travel in 24 turns.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
@@ -219,13 +220,19 @@ void Groonew::PopulateMagicBag() {
         }
       }
 
-      unsigned int max_intercept_turns = 21;
+      unsigned int max_intercept_turns = 25;
 
       // Calculate optimal intercept time
       for (unsigned int turn_i = 1; turn_i <= max_intercept_turns; ++turn_i) {
         // Calculate required thrust/turn to reach target in turn_i seconds
         FuelTraj fueltraj = Pathfinding::DetermineOrders(ship, athing, turn_i,
                                                          this->calculator_ship);
+
+        // DEBUG: Log when pathfinding fails for stations
+        if (g_pParser && g_pParser->verbose && athing->GetKind() == STATION && !fueltraj.path_found) {
+          printf("DEBUG MagicBag: Pathfinding failed for station %s at turn_i=%d (ship %s)\n",
+                 athing->GetName(), turn_i, ship->GetName());
+        }
 
         // TODO: Check for obstacles on path (currently returns dummy)
         Collision collision =
@@ -238,13 +245,20 @@ void Groonew::PopulateMagicBag() {
           path.traveler = ship;
           path.dest = athing;          // Target object
           path.fueltraj = fueltraj;    // How to get there
-          // Note: fueltraj.time_to_arrive is the time we expect _the ship_ to 
+          // Note: fueltraj.time_to_arrive is the time we expect _the ship_ to
           // arrive at the intercept point, however the target might not be there yet.
           path.time_to_intercept = turn_i; // Time to intercept the target on fueltraj.
           path.collision = collision;  // Obstacles (TODO: fix)
 
           // Add to this ship's list of possible targets (will be copied)
           mb->addEntry(ship_i, athing, path);
+
+          // DEBUG: Log successful path addition for stations
+          if (g_pParser && g_pParser->verbose && athing->GetKind() == STATION) {
+            printf("DEBUG MagicBag: Added station %s to MagicBag for ship %s at turn_i=%d\n",
+                   athing->GetName(), ship->GetName(), turn_i);
+          }
+
           break;  // Found valid path, move to next object
         }
       }

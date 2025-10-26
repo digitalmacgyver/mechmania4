@@ -470,6 +470,13 @@ Better Shooting Todo:
   shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
+REMOVE:
+  // DEBUG - A/B test of different target selection methods: false = path-based, true = value-based
+  bool value_based = true;
+
+REMOVE:
+Hard coding of Red 5 as aggressive.
+
 We don't seem to always be buffing shields in cases where it's buff or
 the object is destroyed - maybe due to endgame shield management.
 
