@@ -153,13 +153,6 @@ void Groonew::Turn() {
       continue;  // Skip dead ships
     }
 
-    // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
-    if (DEBUG_MODE && strcmp(pSh->GetName(), "Gold Leader") != 0) {
-      // All the other ships do nothing, we let gold leader's brain decide.
-      pSh->ResetOrders();
-      continue;
-    }
-
     CBrain* brain = pSh->GetBrain();
     if (brain == NULL) {
       continue;
@@ -168,7 +161,12 @@ void Groonew::Turn() {
     // GetVinyl::Decide() will now only handle tactical overrides (collisions,
     // shields)
     brain->Decide();
+  }
 
+  // DEBUG: ONLY TESTING ONE SHIP FOR NOW.
+  if (DEBUG_MODE && strcmp(pSh->GetName(), "Gold Leader") != 0) {
+    // All the other ships do nothing, we let gold leader's brain decide.
+    pSh->ResetOrders();
   }
 }
 
@@ -309,30 +307,18 @@ ShipWants Groonew::DetermineShipWants(CShip* ship,
                                       double max_cargo,
                                       bool uranium_available,
                                       bool vinyl_available) const {
-  (void)ship;
-  (void)max_fuel;
-  AsteroidKind preferred = VINYL;
-  // Prioritize fuel if low and available; otherwise prefer vinyl if available.
-  if (cur_fuel <= groonew::constants::FUEL_RESERVE && uranium_available) {
-    preferred = URANIUM;
-  } else if (!vinyl_available && uranium_available) {
-    preferred = URANIUM;
-  }
 
-  // Red 5 is the ship that goes after the enemy.
-  if (strcmp(ship->GetName(), "VRed 5") == 0) {
-    if (preferred == URANIUM && uranium_available && (cur_fuel <= 20.0)) {
-      return FUEL;
-    }
-    return VIOLENCE;
-  }
+  bool low_fuel = (cur_fuel <= groonew::constants::FUEL_RESERVE);
+  // E.g. all we could hold is the smallest shattered asteroid from the initial ones.
+  // TODO: The math here breaks if we change the world asteroid sizes.
+  bool fuel_nearly_full = (cur_fuel >= (max_fuel - (40.0 / 9.0) - g_fp_error_epsilon));
 
   // E.g. if we don't have enough room for 1 more medium size asteroid.
   bool cargo_nearly_full =
-      ((max_cargo - cur_cargo) < ((g_initial_asteroid_mass / g_asteroid_split_child_count) + g_fp_error_epsilon));
+      ((max_cargo - cur_cargo) < ((g_initial_vinyl_asteroid_mass / g_asteroid_split_child_count) + g_fp_error_epsilon));
   bool has_cargo = (cur_cargo > g_fp_error_epsilon);
 
-  // TODO: As it is in the case where: we have a little vinyl, there is vinyl
+  // TODO: In the case where: we have a little vinyl, there is vinyl
   // left in the world, we're low on fuel, and there's no fuel left in the
   // world - we try to continue harvesting vinyl. Perhaps we should head home
   // instead. (NOTE: In practical gameplay this never happens - vinyl is
@@ -343,21 +329,22 @@ ShipWants Groonew::DetermineShipWants(CShip* ship,
     // available and we've got any cargo.
     return HOME;
   }
-  if (preferred == VINYL && vinyl_available) {
-    return POINTS;
-  }
-  if (preferred == URANIUM && uranium_available && vinyl_available) {
-    // While there's still vinyl we just get vinyl and fuel if we need it.
+
+  if (low_fuel && uranium_available) {
     return FUEL;
   }
-  // TODO: The math here breaks if we change the world asteroid sizes, or
-  // fuel tank sizes.
-  if (preferred == URANIUM && uranium_available && (cur_fuel <= (max_fuel - (40.0 / 9.0) - g_fp_error_epsilon))) {
+
+  if (vinyl_available) {
+    return POINTS;
+  }
+
+  if (uranium_available && !fuel_nearly_full) {
     // If there's still uranium but no vinyl, and we're low on fuel, stock up
     // for battle. This amount fills us up till all we can hold is the smallest
     // shattered asteroid from the initial ones.
     return FUEL;
   }
+
   // Those who can't create will destroy.
   return VIOLENCE;
 }
@@ -370,9 +357,22 @@ void Groonew::HandleGoHome(CShip* ship, double cur_cargo) {
   // We're heading home; clear any remembered resource target.
   last_turn_targets_.erase(ship);
 
-  // Find path home (This logic is okay as the station is unique)
+  // Check if we already have a path to the base in MagicBag.
+  unsigned int shipnum = ship->GetShipNumber();
+  const PathInfo* path = mb->getEntry(shipnum, GetStation());
+  if (path != NULL && path->fueltraj.path_found) {
+    if (g_pParser && g_pParser->verbose) {
+      printf("Returning to base on MB path: %s fuel: %.1f Pos(%.1f,%.1f) Vel(%.1f,%.2f) Orient(%.2f) (tti=%f)\n", ship->GetName(), ship->GetAmount(S_FUEL), ship->GetPos().fX, ship->GetPos().fY, ship->GetVelocity().rho, ship->GetVelocity().theta, ship->GetOrient(), path->time_to_intercept);
+    }
+
+    ApplyOrders(ship, *path);
+    return;
+  }
+
+  // Otherwise look further out for a path home (This logic is okay
+  // as the station is unique)
   // Start j at 1 turn out, as pathfinding often requires time > 0.
-  for (unsigned int j = 1; j < 50; ++j) {
+  for (unsigned int j = 1; j < 51; ++j) {
     FuelTraj ft =
         Pathfinding::DetermineOrders(ship, GetStation(), j, calculator_ship);
     if (ft.path_found) {
@@ -382,11 +382,7 @@ void Groonew::HandleGoHome(CShip* ship, double cur_cargo) {
       // DEBUG - fix this - this is a hack we're using right now when we want
       // to drift, we set the order to O_SHIELD with mag 0.
       if (g_pParser && g_pParser->verbose) {
-        printf("\t→ Returning to base (cargo=%.1f) (tti=%d) (Order=%d %.1f)\n",
-               cur_cargo,
-               j,
-               ft.order_kind,
-               ft.order_mag);
+        printf("\t→ Returning to base (cargo=%.1f) (tti=%d) (Order=%d %.1f)\n", cur_cargo, j, ft.order_kind, ft.order_mag);
       }
       // Either we set the order above, or we didn't need an order this turn
       // to achieve our goal.
@@ -394,6 +390,9 @@ void Groonew::HandleGoHome(CShip* ship, double cur_cargo) {
     }
     if (g_pParser && g_pParser->verbose) {
       printf("\t→ No path found to base for tti=%d\n", j);
+    }
+    if (j > 25) {
+      printf("ERROR: %s couldn't find path to base in under 25 turns fuel: %.1f Pos(%.1f,%.1f) Vel(%.1f,%.2f) Orient(%.2f) (tti=%d)\n", ship->GetName(), ship->GetAmount(S_FUEL), ship->GetPos().fX, ship->GetPos().fY, ship->GetVelocity().rho, ship->GetVelocity().theta, ship->GetOrient(), j);
     }
   }
 }
@@ -659,6 +658,16 @@ void Groonew::AssignShipOrders() {
     ShipWants wants = DetermineShipWants(ship, cur_fuel, cur_cargo, max_fuel,
                                          max_cargo, uranium_available,
                                          vinyl_available);
+
+    // DEBUG - Manual override here for testing purposes. 
+    // Red 5 is the ship that goes after the enemy.
+    if (strcmp(ship->GetName(), "VRed 5") == 0) {
+      if (uranium_available && (cur_fuel <= 20.0)) {
+        wants = FUEL;
+      } else {
+        wants = VIOLENCE;
+      }
+    }
 
     switch (wants) {
       case HOME:

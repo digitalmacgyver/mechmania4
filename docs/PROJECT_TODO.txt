@@ -470,29 +470,19 @@ Better Shooting Todo:
   shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
+We don't seem to always be buffing shields in cases where it's buff or
+the object is destroyed - maybe due to endgame shield management.
+
 ENDGAME: * Violent ships can get stuck in our own base (probably both
 bases) if there is an enemy ship just outside - always launch.
 
 Change our target collision positioning threshold to be based on the
 target size, not a hard coded constant.
 
-Look for places where code is duplicated across Team Groonew in
-various functions, and it could be refactored into a common method.
-
-Violence vs Gatherer:
-
-Violence fixes:
-
 1. Fuel "thermostat" e.g. look for fuel once under 20, stop once above
 40.
 
-Groonew.C before violence refactor:
-
-1414 LOC
-
-After: 795
-With 647 in trenchrun
-
+VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
 OK - it seems the more aggressive strategy of 1 shooter is clearly
 better.
 
@@ -509,16 +499,15 @@ Winner plays against 3 violent 1 gatherer
 
 Winner plays against all unplayed opponents to make sure we don't have
 a rock paper scissors thing going on.
+VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
 
---
-
+---
 2.2. Medium: Inconsistent Fuel Reserve Logic Across Modules
 File: GroonewCombined.cpp (L477), GetVinylCombined.cpp (L386)
 
 Summary: The team intends to use a dynamic fuel reserve strategy (5.0 normally, 0.0 late game, calculated in BuildViolenceContext). However, the strategic planning (DetermineShipWants) and tactical shield maintenance (GetVinyl::Decide) ignore this dynamic calculation and use a hardcoded constant (groonew::constants::FUEL_RESERVE).
 
 Impact: Late in the game, when the dynamic reserve should be zero, ships might still try to acquire fuel or preserve the hardcoded reserve instead of committing resources to combat or shields, contradicting the intended strategy.
-
 --
 
 Tight packing fuel: in endgame conditions when we're not boosting
