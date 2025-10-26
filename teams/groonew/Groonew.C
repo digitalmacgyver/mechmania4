@@ -136,6 +136,11 @@ void Groonew::Init() {
   // split). This is crucial if capacities affect mass or fuel usage rules.
   calculator_ship->SetCapacity(S_FUEL, 20.0);
   calculator_ship->SetCapacity(S_CARGO, 40.0);
+
+  // Initialize refueling state tracking (all ships start not refueling)
+  for (unsigned int i = 0; i < GetShipCount(); ++i) {
+    ships_refueling_[GetShip(i)] = false;
+  }
 }
 
 void Groonew::Turn() {
@@ -673,13 +678,55 @@ void Groonew::AssignShipOrders() {
                                          max_cargo, uranium_available,
                                          vinyl_available);
 
-    // DEBUG - Manual override here for testing purposes. 
+    // DEBUG - Manual override here for testing purposes.
     // Red 5 is the ship that goes after the enemy.
     if (strcmp(ship->GetName(), "VRed 5") == 0) {
-      if (uranium_available && (cur_fuel <= 20.0)) {
-        wants = FUEL;
-      } else {
+      // Thermostat-style fuel management to prevent ping-ponging
+      bool& refueling = ships_refueling_[ship];
+
+      if (!uranium_available) {
+        // No uranium left in world - always VIOLENCE mode
+        refueling = false;
         wants = VIOLENCE;
+        if (g_pParser && g_pParser->verbose) {
+          printf("\t→ [THERMOSTAT] No uranium available, staying in VIOLENCE mode (fuel=%.1f)\n", cur_fuel);
+        }
+      } else if (refueling) {
+        // Currently refueling - check if we've reached upper threshold
+        if (cur_fuel >= groonew::constants::VIOLENCE_REFUEL_HIGH_THRESHOLD) {
+          // Exit refueling mode
+          refueling = false;
+          wants = VIOLENCE;
+          if (g_pParser && g_pParser->verbose) {
+            printf("\t→ [THERMOSTAT] Exiting refueling mode (fuel=%.1f >= %.1f threshold)\n",
+                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_HIGH_THRESHOLD);
+          }
+        } else {
+          // Continue refueling
+          wants = FUEL;
+          if (g_pParser && g_pParser->verbose) {
+            printf("\t→ [THERMOSTAT] Continuing refueling (fuel=%.1f < %.1f threshold)\n",
+                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_HIGH_THRESHOLD);
+          }
+        }
+      } else {
+        // Not currently refueling - check if we've hit lower threshold
+        if (cur_fuel <= groonew::constants::VIOLENCE_REFUEL_LOW_THRESHOLD) {
+          // Enter refueling mode
+          refueling = true;
+          wants = FUEL;
+          if (g_pParser && g_pParser->verbose) {
+            printf("\t→ [THERMOSTAT] Entering refueling mode (fuel=%.1f <= %.1f threshold)\n",
+                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_LOW_THRESHOLD);
+          }
+        } else {
+          // Stay in VIOLENCE mode
+          wants = VIOLENCE;
+          if (g_pParser && g_pParser->verbose) {
+            printf("\t→ [THERMOSTAT] Staying in VIOLENCE mode (fuel=%.1f > %.1f threshold)\n",
+                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_LOW_THRESHOLD);
+          }
+        }
       }
     }
 

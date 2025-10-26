@@ -28,6 +28,11 @@ inline constexpr double GAME_NEARLY_OVER = 280.0;
 inline constexpr double FINAL_FUEL_RESERVE = 0.0;
 inline constexpr double FUEL_RESERVE = 5.0;
 inline constexpr double MAX_SHIP_ENGAGEMENT_DIST = 160.0;
+
+// Thermostat-style fuel management for VIOLENCE mode ships
+// Ships enter refueling at LOW threshold, continue until HIGH threshold
+inline constexpr double VIOLENCE_REFUEL_LOW_THRESHOLD = 20.0;
+inline constexpr double VIOLENCE_REFUEL_HIGH_THRESHOLD = 40.0;
 }  // namespace constants
 }  // namespace groonew
 
@@ -86,6 +91,10 @@ class Groonew : public CTeam {
   // Track the resource target each ship pursued on the prior turn so we can
   // reward plan continuity when utilities tie.
   std::map<CShip*, CThing*> last_turn_targets_;
+
+  // Thermostat-style fuel management: Track which ships are currently in
+  // "refueling mode" (applies only to VIOLENCE mode ships to prevent ping-ponging)
+  std::map<CShip*, bool> ships_refueling_;
 
   // Calculate the utility of a given path.
   double CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e,
