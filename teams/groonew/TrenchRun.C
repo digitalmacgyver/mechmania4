@@ -430,6 +430,14 @@ bool EvaluateAndMaybeFire(CShip* shooter, const CThing* target,
     }
   }
 
+  if (plan_allows_fire && (is_station || (is_ship && !is_docked))) {
+    CThing* obstructing = NULL;
+    if (!ShotIsClear(shooter, target, beam_length, &obstructing)) {
+      plan_allows_fire = false;
+      skip_reason_override = "skip (shot blocked)";
+    }
+  }
+
   groonew::laser::BeamEvaluation eval =
       groonew::laser::EvaluateBeam(beam_length, distance);
   bool efficiency_ok =
@@ -1162,6 +1170,85 @@ ShipFirePlan ComputeShipFirePlan(double max_beam_length,
   return plan;
 }
 
+bool ShotIsClear(const CShip* shooter, const CThing* target,
+                 double beam_length, CThing** obstructing) {
+  if (obstructing != nullptr) {
+    *obstructing = nullptr;
+  }
+  if (shooter == nullptr || target == nullptr) {
+    return false;
+  }
+
+  const auto* shooter_forecast = TomorrowLand::Lookup(shooter);
+  const auto* target_forecast = TomorrowLand::Lookup(target);
+
+  CCoord shooter_future =
+      (shooter_forecast != nullptr)
+          ? shooter_forecast->predicted_pos
+          : shooter->PredictPosition(g_game_turn_duration);
+  CCoord target_future =
+      (target_forecast != nullptr)
+          ? target_forecast->predicted_pos
+          : target->PredictPosition(g_game_turn_duration);
+
+  CTraj to_target = shooter_future.VectTo(target_future);
+  double target_distance = to_target.rho;
+  if (target_distance <= g_fp_error_epsilon) {
+    return false;
+  }
+  CTraj dir_unit = {1.0, to_target.theta};
+
+  double target_effective_distance =
+      std::max(0.0, target_distance - target->GetSize());
+  double max_range =
+      std::max(0.0, std::min(beam_length, target_distance + target->GetSize()));
+
+  const auto& forecasts = TomorrowLand::AllForecasts();
+  for (const auto& entry : forecasts) {
+    CThing* thing = entry.first;
+    const auto& forecast = entry.second;
+    if (thing == nullptr || thing == shooter || thing == target) {
+      continue;
+    }
+    if (!thing->IsAlive()) {
+      continue;
+    }
+
+    CCoord other_future = forecast.predicted_pos;
+    CTraj diff_traj = shooter_future.VectTo(other_future);
+    double forward = diff_traj.rho * std::cos(diff_traj.theta - dir_unit.theta);
+
+    if (forward <= g_fp_error_epsilon) {
+      continue;  // Behind shooter.
+    }
+
+    double thing_size = thing->GetSize();
+    if (forward - thing_size > max_range + g_fp_error_epsilon) {
+      continue;  // Beyond beam reach.
+    }
+
+    double lateral_sq = diff_traj.rho * diff_traj.rho - forward * forward;
+    if (lateral_sq < 0.0) {
+      lateral_sq = 0.0;  // Clamp numerical noise.
+    }
+
+    double lateral = std::sqrt(lateral_sq);
+    if (lateral > thing_size + g_fp_error_epsilon) {
+      continue;  // Misses the beam corridor.
+    }
+
+    double effective_forward = forward - thing_size;
+    if (effective_forward <= target_effective_distance + g_fp_error_epsilon) {
+      if (obstructing != nullptr) {
+        *obstructing = thing;
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool TryStationPotshot(const groonew::laser::LaserResources& laser,
                        CShip* shooter, CStation* enemy_station,
                        double distance_to_target) {
@@ -1187,6 +1274,10 @@ bool TryStationPotshot(const groonew::laser::LaserResources& laser,
   if (max_damage >= station_vinyl) {
     beam_length = BeamLengthForExactDamage(distance_to_target, station_vinyl);
     BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+    if (!ShotIsClear(shooter, enemy_station, beam_length, NULL)) {
+      LogPotshotDecision(shooter, enemy_station, eval, "skip (shot blocked)");
+      return false;
+    }
     LogPotshotDecision(shooter, enemy_station, eval,
                        "fire (destroy all vinyl)");
     shooter->SetOrder(O_LASER, beam_length);
@@ -1197,6 +1288,10 @@ bool TryStationPotshot(const groonew::laser::LaserResources& laser,
   bool good_efficiency = IsEfficientShot(beam_length, distance_to_target);
 
   if (good_efficiency) {
+    if (!ShotIsClear(shooter, enemy_station, beam_length, NULL)) {
+      LogPotshotDecision(shooter, enemy_station, eval, "skip (shot blocked)");
+      return false;
+    }
     LogPotshotDecision(shooter, enemy_station, eval, "fire (partial damage)");
     shooter->SetOrder(O_LASER, beam_length);
     return true;
@@ -1230,6 +1325,10 @@ bool TryShipPotshot(const groonew::laser::LaserResources& laser, CShip* shooter,
   const char* reason = (plan.fire_reason != NULL)
                            ? plan.fire_reason
                            : "fire (efficient damage)";
+  if (!ShotIsClear(shooter, enemy_ship, beam_length, NULL)) {
+    LogPotshotDecision(shooter, enemy_ship, eval, "skip (shot blocked)");
+    return false;
+  }
   LogPotshotDecision(shooter, enemy_ship, eval, reason);
   shooter->SetOrder(O_LASER, beam_length);
   return true;

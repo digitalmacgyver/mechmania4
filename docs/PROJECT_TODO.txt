@@ -475,29 +475,6 @@ Fightprovements:
 2. In HandleIntercept we will take potshots at non-target enemy ships
 - but we should also take potshots at stations we approach.
 
-4. What happened to our beam length vs. Ship logic of exact kills?
-
-We used to have detailed logic for shooting ships with potshots and
-ship to ship combat that calculated the beam length such that:
-
-a. We retained our emergency fuel reserve (which changes to 0 as the game gets towards the end)
-
-b.
-if (can_kill_enemy_ship) then (set_beam_to_kill distance);
-elsif (can_reduce_enemy_ship_to_below_shield_safety_threshold) then
-  if (shot_is_efficient) then (set_beam_to_max_length)
-  else (set_beam_to_take_enemy_below_shield_safety_threshold)
-elsif (shot_is_efficient) then (set_beam_to_max_length)
-
-Has this logic been retained anywhere? If so where?
-
-If not look back in commits on this branch and in master for a place
-where that logic existed - probably in GetVinyl.C, and pinpoint when
-it was removed.
-
-DO NOT MAKE ANY CHANGES AT THIS TIME - THIS IS JUST AN INVESTIGATION
-FOR INFORMATION.
-
 NEXT UP TESTING:
 
 a. 10 batches mirror match pick best target vs. pick fastest intercept

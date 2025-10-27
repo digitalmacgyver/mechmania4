@@ -18,6 +18,7 @@
 #include "LaserUtils.h"
 #include "ParserModern.h"
 #include "Pathfinding.h"
+#include "TomorrowLand.h"
 
 // NOTE: OR-Tools includes are removed as we are replacing the solver.
 // #include "ortools/linear_solver/linear_solver.h"
@@ -146,6 +147,8 @@ void Groonew::Init() {
 
 void Groonew::Turn() {
   CShip* pSh;
+
+  TomorrowLand::Rebuild(GetWorld());
 
   // PHASE 1: Calculate paths to all objects for all ships
   PopulateMagicBag();

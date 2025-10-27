@@ -11,6 +11,7 @@ struct EmergencyOrders {
   double exclusive_order_amount = 0.0;
   double shield_order_amount = 0.0;
   double laser_order_amount = 0.0;
+  CThing* laser_target = NULL;
 };
 
 class GetVinyl : public CBrain {

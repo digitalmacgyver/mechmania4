@@ -47,8 +47,14 @@ void ApplyEmergencyOrders(CShip* ship, const EmergencyOrders& orders) {
   if (orders.shield_order_amount > 0.0) {
     ship->SetOrder(O_SHIELD, orders.shield_order_amount);
   }
-  if (orders.laser_order_amount > 0.0) {
-    ship->SetOrder(O_LASER, orders.laser_order_amount);
+  if (orders.laser_order_amount > g_fp_error_epsilon) {
+    if (orders.laser_target != NULL &&
+        TrenchRun::ShotIsClear(ship, orders.laser_target,
+                               orders.laser_order_amount, NULL)) {
+      ship->SetOrder(O_LASER, orders.laser_order_amount);
+    } else if (g_pParser && g_pParser->verbose) {
+      printf("\t→ Emergency laser skipped (blocked or no target)\n");
+    }
   }
 }
 }  // namespace
@@ -337,6 +343,7 @@ EmergencyOrders GetVinyl::HandleImminentCollision(std::vector<CThing *> collisio
               ComputeBeamLengthFromFuel(fuel_allowed));
           laser_order = min(laser_order, max_useful_beam_length);
           emergency_orders.laser_order_amount = laser_order;
+          emergency_orders.laser_target = athing;
           laser_allowed = false;
         }
       }

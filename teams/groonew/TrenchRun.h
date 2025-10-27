@@ -22,6 +22,7 @@
 #include "Station.h"
 #include "Thing.h"
 #include "Traj.h"
+#include "TomorrowLand.h"
 
 namespace TrenchRun {
 
@@ -142,6 +143,11 @@ bool TryStationPotshot(const groonew::laser::LaserResources& laser,
 // shields to one-shot range.
 bool TryShipPotshot(const groonew::laser::LaserResources& laser, CShip* shooter,
                     CShip* enemy_ship, double distance_to_target);
+
+// Validates that a shot from shooter toward target with the specified beam
+// length will not intersect any other predicted object first.
+bool ShotIsClear(const CShip* shooter, const CThing* target,
+                 double beam_length, CThing** obstructing = nullptr);
 
 }  // namespace TrenchRun
 
