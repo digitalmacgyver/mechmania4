@@ -23,7 +23,7 @@ namespace Pathfinding {
   // distance between our ship and the smallest possible
   // world object - e.g. if our ship ends up within this
   // distance it will collide.
-  const double INTERCEPT_OVERLAP = 1.0;
+  const double INTERCEPT_OVERLAP = 2.0;
 
   inline double ComputePositionalTolerance(const CShip* ship,
                                            const CThing* thing) {
