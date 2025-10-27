@@ -105,11 +105,29 @@ ViolenceResult ExecuteViolence(CShip* ship, unsigned int shipnum,
 
 // Helper structure to find targets currently in the line of fire
 struct FacingTargets {
-  CStation* station = nullptr;
+  CStation* station = NULL;
   double station_dist = std::numeric_limits<double>::max();
-  CShip* ship = nullptr;
+  CShip* ship = NULL;
   double ship_dist = std::numeric_limits<double>::max();
 };
+
+// Standardized description of a ship-to-ship firing decision.
+struct ShipFirePlan {
+  bool should_fire = false;
+  double beam_length = 0.0;
+  const char* fire_reason = NULL;
+  const char* skip_reason = NULL;
+  bool bypass_efficiency_check = false;
+};
+
+// Computes how we should configure a laser shot against a ship, reusing the
+// historic kill/force-dock heuristic. Callers can inspect the returned plan to
+// decide whether to fire and which log message to use.
+ShipFirePlan ComputeShipFirePlan(double max_beam_length,
+                                 double damage_per_unit,
+                                 double distance_to_target,
+                                 double enemy_shield,
+                                 bool require_efficiency);
 
 // Scans the world for enemy targets that are predictable and in the line of
 // fire.

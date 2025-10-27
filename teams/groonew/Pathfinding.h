@@ -17,11 +17,11 @@
 
 namespace Pathfinding {
     struct CollisionInfo {
-        CThing* thing = nullptr;
+        CThing* thing = NULL;
         double time = g_no_collide_sentinel;
 
         bool HasCollision() const {
-            return thing != nullptr && time != g_no_collide_sentinel;
+            return thing != NULL && time != g_no_collide_sentinel;
         }
     };
 

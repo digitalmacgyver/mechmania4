@@ -34,10 +34,10 @@ namespace detail {
 
 // Context structure containing all data needed for violence execution
 struct ViolenceContext {
-  CShip* ship = nullptr;
+  CShip* ship = NULL;
   unsigned int shipnum = 0;
-  CTeam* team = nullptr;
-  CWorld* world = nullptr;
+  CTeam* team = NULL;
+  CWorld* world = NULL;
 
   // Fuel and Laser capabilities
   double current_fuel = 0.0;
@@ -396,40 +396,68 @@ bool EvaluateAndMaybeFire(CShip* shooter, const CThing* target,
                           const char* reason_if_fired,
                           bool require_efficiency) {
   double beam_length = ctx.max_beam_length;
+  const char* fire_reason = reason_if_fired;
+  const char* skip_reason_override = NULL;
+  bool bypass_efficiency = false;
+  bool plan_allows_fire = true;
 
   bool is_station = target->GetKind() == STATION;
   bool is_ship = target->GetKind() == SHIP;
   bool is_docked = is_ship && static_cast<const CShip*>(target)->IsDocked();
 
-  if (target->GetKind() == STATION) {
+  if (is_station) {
     // Calculate max useful beam length plus margin (30.0).
     double max_useful_beam = groonew::laser::BeamLengthForExactDamage(
                                  distance, ctx.enemy_base_vinyl) +
                              Config::STATION_BEAM_OVERKILL_MARGIN;
     beam_length = std::min(beam_length, max_useful_beam);
+  } else if (is_ship && !is_docked) {
+    const CShip* enemy_ship = static_cast<const CShip*>(target);
+    ShipFirePlan plan =
+        ComputeShipFirePlan(ctx.max_beam_length,
+                            groonew::laser::DamagePerExtraUnit(), distance,
+                            enemy_ship->GetAmount(S_SHIELD),
+                            require_efficiency);
+    if (plan.should_fire) {
+      beam_length = plan.beam_length;
+      if (plan.fire_reason != NULL) {
+        fire_reason = plan.fire_reason;
+      }
+      bypass_efficiency = plan.bypass_efficiency_check;
+    } else {
+      plan_allows_fire = false;
+      skip_reason_override = plan.skip_reason;
+    }
   }
 
   groonew::laser::BeamEvaluation eval =
       groonew::laser::EvaluateBeam(beam_length, distance);
-  bool efficient = (!require_efficiency) ||
-                   groonew::laser::IsEfficientShot(beam_length, distance) ||
-                   ctx.zero_reserve_phase;
+  bool efficiency_ok =
+      bypass_efficiency || (!require_efficiency) ||
+      groonew::laser::IsEfficientShot(beam_length, distance) ||
+      ctx.zero_reserve_phase;
 
   bool fired = false;
-  // Check fuel conditions: must be above replenish threshold AND have available
-  // fuel above reserve.
-  if (ctx.current_fuel > ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
-      ctx.available_fuel > g_fp_error_epsilon && efficient) {
-    if (is_station || (is_ship && !is_docked)) {
-      groonew::laser::LogPotshotDecision(shooter, target, eval, reason_if_fired);
-      shooter->SetOrder(O_LASER, beam_length);
-      fired = true;
-    }
+  bool has_fuel_reserve =
+      ctx.current_fuel > ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
+      ctx.available_fuel > g_fp_error_epsilon;
+
+  if (plan_allows_fire && has_fuel_reserve && efficiency_ok &&
+      (is_station || (is_ship && !is_docked))) {
+    groonew::laser::LogPotshotDecision(shooter, target, eval, fire_reason);
+    shooter->SetOrder(O_LASER, beam_length);
+    fired = true;
   } else {
-    // Log the decision to skip the shot.
-    groonew::laser::LogPotshotDecision(
-        shooter, target, eval,
-        efficient ? reason_if_fired : "skip (poor efficiency)");
+    const char* skip_reason = skip_reason_override;
+    if (skip_reason == NULL) {
+      if (!efficiency_ok && require_efficiency && !bypass_efficiency &&
+          !ctx.zero_reserve_phase) {
+        skip_reason = "skip (poor efficiency)";
+      } else {
+        skip_reason = fire_reason;
+      }
+    }
+    groonew::laser::LogPotshotDecision(shooter, target, eval, skip_reason);
   }
 
   return fired;
@@ -439,7 +467,7 @@ bool EvaluateAndMaybeFire(CShip* shooter, const CThing* target,
 bool TryOpportunisticShot(CShip* shooter, const ViolenceContext& ctx,
                           const CThing* target, const char* reason,
                           bool require_efficiency) {
-  if (target == nullptr) {
+  if (target == NULL) {
     return false;
   }
 
@@ -722,7 +750,7 @@ void ExecuteRamming(const ViolenceContext& ctx) {
 
 CShip* FindNearestUndockedEnemy(const ViolenceContext& ctx,
                                 double* distance_out) {
-  CShip* nearest_enemy = nullptr;
+  CShip* nearest_enemy = NULL;
   // Initialize slightly outside the maximum engagement range.
   double min_distance = groonew::constants::MAX_SHIP_ENGAGEMENT_DIST + 1.0;
 
@@ -733,7 +761,7 @@ CShip* FindNearestUndockedEnemy(const ViolenceContext& ctx,
   if (world == NULL || team == NULL || ship == NULL) {
     if (distance_out)
       *distance_out = min_distance;
-    return nullptr;
+    return NULL;
   }
 
   // Scan the world for the nearest enemy ship.
@@ -925,7 +953,7 @@ ViolenceResult ExecuteViolence(CShip* ship, unsigned int shipnum,
                                double cur_fuel, bool uranium_available,
                                MagicBag* mb, double uranium_left_in_world,
                                double vinyl_left_in_world, bool ramming_speed) {
-  if (ship == nullptr) {
+  if (ship == NULL) {
     return ViolenceResult::NO_TARGET_FOUND;
   }
 
@@ -1004,7 +1032,7 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
 
   // If we'll collide with something in the next turn, further reasoning would
   // be invalidated.
-  const auto self_reliability = EvaluateFiringPredictability(ship, nullptr);
+  const auto self_reliability = EvaluateFiringPredictability(ship, NULL);
   if (!self_reliability.shooter_reliable) {
     return targets;
   }
@@ -1068,6 +1096,72 @@ FacingTargets FindEnemyFacingTargets(CShip* ship) {
   return targets;
 }
 
+ShipFirePlan ComputeShipFirePlan(double max_beam_length,
+                                 double damage_per_unit,
+                                 double distance_to_target,
+                                 double enemy_shield,
+                                 bool require_efficiency) {
+  ShipFirePlan plan;
+
+  if (distance_to_target > max_beam_length + g_fp_error_epsilon) {
+    plan.skip_reason = "skip (out of range)";
+    return plan;
+  }
+
+  double max_extra = max_beam_length - distance_to_target;
+  if (max_extra <= g_fp_error_epsilon) {
+    plan.skip_reason = "skip (insufficient damage)";
+    return plan;
+  }
+
+  double max_damage = max_extra * damage_per_unit;
+  constexpr double kKillMargin = 0.1;
+  constexpr double kShieldSafetyThreshold = 6.0;
+
+  if (max_damage >= (enemy_shield + kKillMargin)) {
+    plan.should_fire = true;
+    plan.beam_length =
+        groonew::laser::BeamLengthForExactDamage(distance_to_target,
+                                                 enemy_shield + kKillMargin);
+    plan.fire_reason = "fire (kill)";
+    plan.bypass_efficiency_check = true;
+    return plan;
+  }
+
+  if (enemy_shield <= kShieldSafetyThreshold + g_fp_error_epsilon) {
+    plan.skip_reason = "skip (already vulnerable)";
+    return plan;
+  }
+
+  double beam_length = max_beam_length;
+  bool good_efficiency =
+      groonew::laser::IsEfficientShot(beam_length, distance_to_target);
+
+  double min_damage_to_cross =
+      enemy_shield - kShieldSafetyThreshold + kKillMargin;
+  if (max_damage >= min_damage_to_cross) {
+    if (!require_efficiency || good_efficiency) {
+      plan.should_fire = true;
+      plan.beam_length = beam_length;
+      plan.fire_reason = "fire (force dock)";
+      plan.bypass_efficiency_check = !good_efficiency;
+      return plan;
+    }
+    plan.skip_reason = "skip (poor efficiency)";
+    return plan;
+  }
+
+  if (!require_efficiency || good_efficiency) {
+    plan.should_fire = true;
+    plan.beam_length = beam_length;
+    plan.bypass_efficiency_check = !good_efficiency;
+    return plan;
+  }
+
+  plan.skip_reason = "skip (poor efficiency)";
+  return plan;
+}
+
 bool TryStationPotshot(const groonew::laser::LaserResources& laser,
                        CShip* shooter, CStation* enemy_station,
                        double distance_to_target) {
@@ -1117,53 +1211,28 @@ bool TryShipPotshot(const groonew::laser::LaserResources& laser, CShip* shooter,
   if (enemy_ship == NULL) {
     return false;
   }
-  if (distance_to_target > laser.max_beam_length) {
-    return false;
-  }
+  ShipFirePlan plan =
+      ComputeShipFirePlan(laser.max_beam_length, laser.damage_per_unit,
+                          distance_to_target, enemy_ship->GetAmount(S_SHIELD),
+                          /*require_efficiency=*/true);
 
-  double max_extra = laser.max_beam_length - distance_to_target;
-  double max_damage = max_extra * laser.damage_per_unit;
-  if (max_damage <= g_fp_error_epsilon) {
-    return false;
-  }
-
-  const double kill_margin = 0.01;
-  double enemy_shield = enemy_ship->GetAmount(S_SHIELD);
-
-  if (max_damage >= enemy_shield + kill_margin) {
-    double damage_to_kill = enemy_shield + kill_margin;
-    double beam_length =
-        BeamLengthForExactDamage(distance_to_target, damage_to_kill);
-    BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-    LogPotshotDecision(shooter, enemy_ship, eval, "fire (kill)");
-    shooter->SetOrder(O_LASER, beam_length);
-    return true;
-  }
-
-  double beam_length = laser.max_beam_length;
-  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
-  bool good_efficiency = IsEfficientShot(beam_length, distance_to_target);
-
-  if (good_efficiency) {
-    LogPotshotDecision(shooter, enemy_ship, eval, "fire (efficient damage)");
-    shooter->SetOrder(O_LASER, beam_length);
-    return true;
-  }
-
-  if (enemy_shield > 6.0) {
-    double min_damage_to_cross = enemy_shield - 6.0 + kill_margin;
-    if (max_damage >= min_damage_to_cross) {
-      LogPotshotDecision(shooter, enemy_ship, eval, "fire (force dock)");
-      shooter->SetOrder(O_LASER, beam_length);
-      return true;
+  if (!plan.should_fire) {
+    if (plan.skip_reason != NULL && laser.max_beam_length > g_fp_error_epsilon) {
+      BeamEvaluation eval =
+          EvaluateBeam(laser.max_beam_length, distance_to_target);
+      LogPotshotDecision(shooter, enemy_ship, eval, plan.skip_reason);
     }
-
-    LogPotshotDecision(shooter, enemy_ship, eval, "skip (insufficient damage)");
     return false;
   }
 
-  LogPotshotDecision(shooter, enemy_ship, eval, "skip (already vulnerable)");
-  return false;
+  double beam_length = plan.beam_length;
+  BeamEvaluation eval = EvaluateBeam(beam_length, distance_to_target);
+  const char* reason = (plan.fire_reason != NULL)
+                           ? plan.fire_reason
+                           : "fire (efficient damage)";
+  LogPotshotDecision(shooter, enemy_ship, eval, reason);
+  shooter->SetOrder(O_LASER, beam_length);
+  return true;
 }
 
 }  // namespace TrenchRun

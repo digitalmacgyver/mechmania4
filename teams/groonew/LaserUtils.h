@@ -76,7 +76,7 @@ inline FiringPredictability EvaluateFiringPredictability(const CShip* shooter,
                                                          double horizon =
                                                              g_game_turn_duration) {
   FiringPredictability result;
-  if (shooter == nullptr) {
+  if (shooter == NULL) {
     result.shooter_reliable = false;
     result.target_reliable = false;
     return result;
@@ -89,7 +89,7 @@ inline FiringPredictability EvaluateFiringPredictability(const CShip* shooter,
     result.shooter_reliable = false;
   }
 
-  if (target != nullptr && target->GetKind() == SHIP) {
+  if (target != NULL && target->GetKind() == SHIP) {
     const CShip* target_ship = static_cast<const CShip*>(target);
     const auto target_collision =
         Pathfinding::GetFirstCollision(const_cast<CShip*>(target_ship));
@@ -127,9 +127,9 @@ inline double ComputeLaserDamage(double beam_length, double target_distance) {
 
 inline bool FutureLineOfFire(const CShip* shooter,
                              const CThing* target,
-                             double* predicted_distance = nullptr,
+                             double* predicted_distance = NULL,
                              unsigned int turns = 1) {
-  if (shooter == nullptr || target == nullptr) {
+  if (shooter == NULL || target == NULL) {
     return false;
   }
 
@@ -150,7 +150,7 @@ inline bool FutureLineOfFire(const CShip* shooter,
     return false;
   }
 
-  if (predicted_distance != nullptr) {
+  if (predicted_distance != NULL) {
     *predicted_distance = distance;
   }
   return true;

@@ -48,6 +48,7 @@ Feature change log:
 2025-10-25: Always launch from bases with thrust 60 when doing normal navigation (free and performs better in competition).
 2025-10-25: Multiply all thrust order by 5/3rds. This will put our location after 1 game engine PhysicsModel turn in the position we calculated in Pathfinding (but with a greater velocity change).
 2025-10-25: Increased magic bag horizon to 25 turns for theoretical maximum distance we can travel in 24 turns.
+2025-10-26: Major improvements to combat logic, and testing having some ships be combat focused.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
@@ -825,7 +826,7 @@ double Groonew::CalculateUtility(CShip* pShip, ShipWants wants,
   } else if (wants == FUEL) {
     double fuel_spent = e.fueltraj.fuel_total;
 
-    // TODO: Estimating fuel utility is more tricky than vinylbecause there are
+    // TODO: Estimating fuel utility is more tricky than vinyl because there are
     // uranium asteroids we can't fit in our 20 ton hold (also because we spend
     // fuel to acquire fuel). Here we'll just assume if we hit a big one we'll
     // have access to 1/3rd of it's fragments.
