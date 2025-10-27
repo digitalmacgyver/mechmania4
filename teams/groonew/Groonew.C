@@ -684,6 +684,43 @@ void Groonew::AssignShipOrders() {
 
   CWorld* world = GetWorld();
 
+  double enemy_station_vinyl = 0.0;
+  bool enemy_station_found = false;
+  bool enemy_ship_undocked = false;
+
+  if (world != NULL) {
+    for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
+         idx = world->GetNextIndex(idx)) {
+      CThing* thing = world->GetThing(idx);
+      if (thing == NULL || !thing->IsAlive()) {
+        continue;
+      }
+
+      CTeam* thing_team = thing->GetTeam();
+      if (thing_team == NULL ||
+          thing_team->GetTeamNumber() == GetTeamNumber()) {
+        continue;
+      }
+
+      if (thing->GetKind() == STATION && !enemy_station_found) {
+        enemy_station_vinyl = static_cast<CStation*>(thing)->GetVinylStore();
+        enemy_station_found = true;
+      } else if (thing->GetKind() == SHIP) {
+        CShip* enemy_ship = static_cast<CShip*>(thing);
+        if (!enemy_ship->IsDocked()) {
+          enemy_ship_undocked = true;
+          // No need to continue scanning for this flag.
+          break;
+        }
+      }
+    }
+  }
+
+  bool force_uranium_gather = (vinyl_left <= g_fp_error_epsilon) &&
+                              (enemy_station_vinyl <= g_fp_error_epsilon) &&
+                              (uranium_left > g_fp_error_epsilon) &&
+                              !enemy_ship_undocked;
+
   // PHASE A: Determine wants, calculate utilities, and handle non-contentious
   // goals. Process each ship to determine its high-level goal.
   for (unsigned int shipnum = 0; shipnum < GetShipCount(); ++shipnum) {
@@ -718,7 +755,9 @@ void Groonew::AssignShipOrders() {
     if (role_it != ship_roles_.end()) {
       role = role_it->second;
     }
-    if (role == ShipRole::Hunter) {
+    if (force_uranium_gather) {
+      wants = FUEL;
+    } else if (role == ShipRole::Hunter) {
       wants = VIOLENCE;
     }
 
