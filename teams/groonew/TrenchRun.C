@@ -69,6 +69,30 @@ inline double NormalizeAngle(double angle) {
   return angle;
 }
 
+inline bool CanAttemptPotshot(const CShip* ship) {
+  if (ship == NULL) {
+    return false;
+  }
+
+  double thrust_order = ship->GetOrder(O_THRUST);
+  if (fabs(thrust_order) <= g_fp_error_epsilon) {
+    return true;
+  }
+
+  if (thrust_order <= g_fp_error_epsilon) {
+    return false;  // Reverse thrust or zero not caught above
+  }
+
+  CTraj velocity = ship->GetVelocity();
+  if (velocity.rho <= g_fp_error_epsilon) {
+    return true;  // Essentially stationary; thrusting forward won't change aim much
+  }
+
+  double angle_diff = NormalizeAngle(velocity.theta - ship->GetOrient());
+  constexpr double kAlignmentTolerance = 0.1;  // ~5.7 degrees
+  return fabs(angle_diff) <= kAlignmentTolerance;
+}
+
 // --- Function Prototypes (Internal Linkage) ---
 
 // --- Context Building ---
@@ -944,31 +968,98 @@ void HandleIntercept(const ViolenceContext& ctx, const ViolenceTarget& target) {
 
   // Try an opportunistic shot while intercepting/pursuing.
 
-  // Determine the appropriate reason string based on context (Intercept vs
-  // Pursuit). We approximate the original intent by checking the current
-  // distance.
+  bool allow_potshot = CanAttemptPotshot(ship);
+  bool its_away = false;
+  if (allow_potshot) {
+    // Determine the appropriate reason string based on context (Intercept vs
+    // Pursuit). We approximate the original intent by checking the current
+    // distance.
 
-  double distance = ship->GetPos().DistTo(target.thing->GetPos());
-  const char* reason;
+    double distance = ship->GetPos().DistTo(target.thing->GetPos());
+    const char* reason;
 
-  // If the target is within engagement distance, we are in "pursuit"
-  // (HandleCloseEngagement failed to issue order).
-  if (distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
-    reason = "fire (pursuit opportunist)";
-  } else {
-    // Otherwise, we are intercepting from afar.
-    reason = "fire (intercept opportunist)";
+    // If the target is within engagement distance, we are in "pursuit"
+    // (HandleCloseEngagement failed to issue order).
+    if (distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+      reason = "fire (pursuit opportunist)";
+    } else {
+      // Otherwise, we are intercepting from afar.
+      reason = "fire (intercept opportunist)";
+    }
+
+    its_away = TryOpportunisticShot(ship, ctx, target.thing, reason);
   }
 
-  bool its_away = TryOpportunisticShot(ship, ctx, target.thing, reason);
-
-  if (!its_away) {
+  if (allow_potshot && !its_away) {
     // We didn't get a shot off on our target - but let's see if there is
     // a closer enemy who happens to be in line of fire.
-    double nearest_distance;
-    CShip* nearest_enemy = FindNearestUndockedEnemy(ctx, &nearest_distance);
-    if (nearest_enemy != NULL && nearest_distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
-      TryOpportunisticShot(ship, ctx, nearest_enemy, "fire (intercept potshot)");    
+    const auto& forecasts = TomorrowLand::AllForecasts();
+    CThing* best_enemy = NULL;
+    double best_forward = groonew::constants::MAX_SHIP_ENGAGEMENT_DIST + 1.0;
+
+    for (const auto& entry : forecasts) {
+      CThing* candidate = entry.first;
+      if (candidate == NULL || candidate->GetKind() != SHIP) {
+        continue;
+      }
+      if (candidate == target.thing || candidate == ship) {
+        continue;
+      }
+      if (!candidate->IsAlive()) {
+        continue;
+      }
+      CTeam* candidate_team = candidate->GetTeam();
+      if (candidate_team == NULL ||
+          candidate_team->GetTeamNumber() == ctx.team->GetTeamNumber()) {
+        continue;
+      }
+
+      const CShip* enemy_ship = static_cast<const CShip*>(candidate);
+      if (enemy_ship->IsDocked()) {
+        continue;
+      }
+
+      const auto* enemy_forecast = TomorrowLand::Lookup(candidate);
+      if (enemy_forecast == NULL) {
+        continue;
+      }
+
+      CTraj diff_traj = ship->GetPos().VectTo(enemy_forecast->predicted_pos);
+      double forward = diff_traj.rho *
+                       std::cos(diff_traj.theta - ship->GetOrient());
+
+      if (forward <= g_fp_error_epsilon ||
+          forward > groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+        continue;
+      }
+
+      double lateral_sq = diff_traj.rho * diff_traj.rho - forward * forward;
+      if (lateral_sq < 0.0) {
+        lateral_sq = 0.0;
+      }
+      double lateral = std::sqrt(lateral_sq);
+      if (lateral > candidate->GetSize() + g_fp_error_epsilon) {
+        continue;
+      }
+
+      if (forward < best_forward) {
+        best_forward = forward;
+        best_enemy = candidate;
+      }
+    }
+
+    if (best_enemy != NULL) {
+      TryOpportunisticShot(ship, ctx, best_enemy, "fire (intercept potshot)");
+    }
+
+    // If the primary target was a ship, see if we can tag the enemy station while
+    // we're lined up for intercept. Only worthwhile if the station still has vinyl.
+    if (ctx.enemy_base_vinyl > g_fp_error_epsilon) {
+      TrenchRun::FacingTargets facing = TrenchRun::FindEnemyFacingTargets(ship);
+      if (facing.station != NULL &&
+          facing.station->GetVinylStore() > g_fp_error_epsilon) {
+        TryOpportunisticShot(ship, ctx, facing.station, "fire (intercept station potshot)");
+      }
     }
   }
 }
