@@ -470,6 +470,19 @@ Better Shooting Todo:
   shortest distance (magic bag already has this information!)
 * Somehow cancel order if something will interpose (see experimental world sim logic)
 
+Fightprovements:
+
+2. In HandleIntercept we will take potshots at non-target enemy ships
+- but we should also take potshots at stations we approach.
+
+3. We are missing a shoot order after turn in HandleCloseEngagement or
+something.
+
+4. What happened to our beam length vs. Ship logic of exact kills?
+
+
+
+
 REMOVE:
   // DEBUG - A/B test of different target selection methods: false = path-based, true = value-based
   bool value_based = true;

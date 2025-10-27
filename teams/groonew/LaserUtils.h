@@ -106,7 +106,7 @@ inline LaserResources ComputeLaserResources(const CShip* ship,
                                             double fuel_reserve) {
   LaserResources resources;
   resources.damage_per_unit = DamagePerExtraUnit();
-  resources.available_fuel = ship->GetAmount(S_FUEL) - fuel_reserve;
+  resources.available_fuel = std::max(0.0, ship->GetAmount(S_FUEL) - fuel_reserve);
   if (resources.available_fuel > g_fp_error_epsilon) {
     resources.max_beam_length = std::min(
         512.0, resources.available_fuel * g_laser_range_per_fuel_unit);

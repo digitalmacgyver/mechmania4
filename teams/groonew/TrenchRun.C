@@ -119,8 +119,8 @@ void ExecuteShipCombat(const ViolenceContext& ctx, const ViolenceTarget& target,
                        double vinyl_left_in_world);
 CShip* FindNearestUndockedEnemy(const ViolenceContext& ctx,
                                 double* distance_out);
-bool HandleCloseEngagement(const ViolenceContext& ctx, CShip* nearest_enemy,
-                           double nearest_distance, double uranium_left,
+bool HandleCloseEngagement(const ViolenceContext& ctx, const ViolenceTarget& target,
+                           double uranium_left,
                            double vinyl_left);
 void HandleIntercept(const ViolenceContext& ctx, const ViolenceTarget& target);
 
@@ -396,6 +396,11 @@ bool EvaluateAndMaybeFire(CShip* shooter, const CThing* target,
                           const char* reason_if_fired,
                           bool require_efficiency) {
   double beam_length = ctx.max_beam_length;
+
+  bool is_station = target->GetKind() == STATION;
+  bool is_ship = target->GetKind() == SHIP;
+  bool is_docked = is_ship && static_cast<const CShip*>(target)->IsDocked();
+
   if (target->GetKind() == STATION) {
     // Calculate max useful beam length plus margin (30.0).
     double max_useful_beam = groonew::laser::BeamLengthForExactDamage(
@@ -407,16 +412,19 @@ bool EvaluateAndMaybeFire(CShip* shooter, const CThing* target,
   groonew::laser::BeamEvaluation eval =
       groonew::laser::EvaluateBeam(beam_length, distance);
   bool efficient = (!require_efficiency) ||
-                   groonew::laser::IsEfficientShot(beam_length, distance);
+                   groonew::laser::IsEfficientShot(beam_length, distance) ||
+                   ctx.zero_reserve_phase;
 
   bool fired = false;
   // Check fuel conditions: must be above replenish threshold AND have available
   // fuel above reserve.
   if (ctx.current_fuel > ctx.fuel_replenish_threshold + g_fp_error_epsilon &&
       ctx.available_fuel > g_fp_error_epsilon && efficient) {
-    groonew::laser::LogPotshotDecision(shooter, target, eval, reason_if_fired);
-    shooter->SetOrder(O_LASER, beam_length);
-    fired = true;
+    if (is_station || (is_ship && !is_docked)) {
+      groonew::laser::LogPotshotDecision(shooter, target, eval, reason_if_fired);
+      shooter->SetOrder(O_LASER, beam_length);
+      fired = true;
+    }
   } else {
     // Log the decision to skip the shot.
     groonew::laser::LogPotshotDecision(
@@ -669,7 +677,8 @@ void ExecuteAgainstShip(const ViolenceContext& ctx,
                         const ViolenceTarget& target,
                         double uranium_left_in_world,
                         double vinyl_left_in_world, bool ramming_speed) {
-  if (ctx.ship == NULL || target.thing == NULL) {
+  // Most have valid ship and target and they must differ.
+  if (ctx.ship == NULL || target.thing == NULL || ctx.ship == target.thing) {
     return;
   }
 
@@ -761,19 +770,14 @@ CShip* FindNearestUndockedEnemy(const ViolenceContext& ctx,
 void ExecuteShipCombat(const ViolenceContext& ctx, const ViolenceTarget& target,
                        double uranium_left_in_world,
                        double vinyl_left_in_world) {
-  // Identify the nearest enemy ship (tactical target).
-  double nearest_distance;
-  CShip* nearest_enemy = FindNearestUndockedEnemy(ctx, &nearest_distance);
-
   // Flag to track if an order was issued during engagement logic (Original
   // logic used 'issued_order').
   bool engaged = false;
-
+  double distance_to_target = ctx.ship->GetPos().DistTo(target.thing->GetPos());
   // Close Engagement: If an enemy is within range (160.0), prioritize
   // maneuvering and firing.
-  if (nearest_enemy != NULL &&
-      nearest_distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
-    engaged = HandleCloseEngagement(ctx, nearest_enemy, nearest_distance,
+  if (distance_to_target <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+    engaged = HandleCloseEngagement(ctx, target,
                                     uranium_left_in_world, vinyl_left_in_world);
   }
 
@@ -782,42 +786,51 @@ void ExecuteShipCombat(const ViolenceContext& ctx, const ViolenceTarget& target,
   if (!engaged) {
     HandleIntercept(ctx, target);
     // HandleIntercept always issues a navigation order and potentially a laser
-    // order.
+    // order potshot if something is in line of fire.
   }
-
-  // The original code had a final fallback TryOpportunisticShot if
-  // !issued_order, which is now handled within HandleIntercept.
 }
 
-bool HandleCloseEngagement(const ViolenceContext& ctx, CShip* nearest_enemy,
-                           double nearest_distance, double uranium_left,
+bool HandleCloseEngagement(const ViolenceContext& ctx, const ViolenceTarget& target, double uranium_left,
                            double vinyl_left) {
   CShip* ship = ctx.ship;
 
+  if (!target.IsValid()) {
+    return false;
+  }
+
+  CThing *target_thing = target.thing;
+  bool is_station = target_thing->GetKind() == STATION;
+  bool is_ship = target_thing->GetKind() == SHIP;
+  bool is_docked = is_ship && static_cast<CShip*>(target_thing)->IsDocked();
+  if (is_ship && is_docked) {
+    // Can't shoot docked ships - however the logic here assumes our target isn't docked.
+    // Here we just give up if it happens, but PickTarget shouldn't send us docked
+    // targets.
+    return false;
+  }
+
+  bool end_game = false;
+  // We engage in endgame behavior if there are no resources left in the world and either:
+  // we're shooting an enemy station with vinyl, or the enemy station has no vinyl.
+  if ((uranium_left + vinyl_left) <= g_fp_error_epsilon) {
+    bool attacking_enemy_station_with_vinyl = (is_station && (ctx.enemy_base_vinyl > g_fp_error_epsilon));
+    bool enemy_station_has_no_vinyl = (ctx.enemy_base_vinyl < g_fp_error_epsilon);
+    end_game = attacking_enemy_station_with_vinyl || enemy_station_has_no_vinyl;
+  }
+
   // 1. Determine facing and firing opportunity
-  double future_distance = nearest_distance;
+  double future_distance = ship->GetPos().DistTo(target_thing->GetPos());
   // Check future line of fire.
+  // Future distance set to the distance to enemy if they will be in LoF next turn.
   bool has_line_of_fire =
-      groonew::laser::FutureLineOfFire(ship, nearest_enemy, &future_distance);
+      groonew::laser::FutureLineOfFire(ship, target_thing, &future_distance);
+
   // Check predictability.
   auto predictability =
-      groonew::laser::EvaluateFiringPredictability(ship, nearest_enemy);
+      groonew::laser::EvaluateFiringPredictability(ship, target_thing);
 
-  bool would_shoot = false;
-  if (has_line_of_fire && predictability.BothReliable()) {
-    // Use the more accurate future distance if available.
-    double engagement_distance = (future_distance > g_fp_error_epsilon)
-                                     ? future_distance
-                                     : nearest_distance;
-
-    // Determine if end-game conditions apply (no resources left anywhere)
-    bool end_game = (uranium_left <= g_fp_error_epsilon &&
-                     vinyl_left <= g_fp_error_epsilon &&
-                     ctx.enemy_base_vinyl <= g_fp_error_epsilon);
-
-    if (engagement_distance < ctx.max_beam_length) {
-      would_shoot = true;
-
+  if (predictability.BothReliable()) {
+    if (has_line_of_fire) {
       // If we're docked and would shoot, undock first (DO NOT SHOOT while docked)
       if (ship->IsDocked()) {
         HandleCombatExitDock(ctx, /*rotate_before_exit=*/false);
@@ -826,36 +839,41 @@ bool HandleCloseEngagement(const ViolenceContext& ctx, CShip* nearest_enemy,
 
       // Not docked, safe to fire
       bool shot_taken = EvaluateAndMaybeFire(
-          ship, nearest_enemy, ctx, engagement_distance,
-          end_game ? "fire (end-game full blast)" : "fire (efficient)",
+          ship, target_thing, ctx, future_distance,
+          end_game ? "fire (handle-close fire end-game full blast)" : "fire (handle-close fire efficient)",
           /*require_efficiency=*/!end_game);
 
       if (shot_taken) {
         return true;  // Fired laser, engagement handled
       }
+    } else {
+      // 2. We need to issue a turn order to face the target before we can fire.
+
+      // Predict positions for the next turn (T+1)
+      double lookahead_time = g_game_turn_duration;
+      CCoord enemy_future_pos = target_thing->PredictPosition(lookahead_time);
+      CCoord our_future_pos = ship->PredictPosition(lookahead_time);
+      double predicted_distance_t1 = our_future_pos.DistTo(enemy_future_pos);
+
+      // If we remain within engagement range (160.0), turn to face the enemy's
+      // predicted position (can turn while docked)
+      if (predicted_distance_t1 <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+        double angle_to_target_t1 = our_future_pos.AngleTo(enemy_future_pos);
+        // Calculate required turn amount using normalization helper.
+        double angle_diff = NormalizeAngle(angle_to_target_t1 - ship->GetOrient());
+
+        ship->SetOrder(O_TURN, angle_diff);
+        EvaluateAndMaybeFire(
+          ship, target_thing, ctx, predicted_distance_t1,
+          end_game ? "fire (handle-close turn-fire end-game full blast)" : "fire (handle-close turn-fire efficient)",
+          /*require_efficiency=*/!end_game);
+        return true;  // Issued turn order
+      }
     }
   }
 
-  // 2. Maneuver for position (if shot not taken)
-
-  // Predict positions for the next turn (T+1)
-  double lookahead_time = g_game_turn_duration;
-  CCoord enemy_future_pos = nearest_enemy->PredictPosition(lookahead_time);
-  CCoord our_future_pos = ship->PredictPosition(lookahead_time);
-  double predicted_distance_t1 = our_future_pos.DistTo(enemy_future_pos);
-
-  // If we remain within engagement range (160.0), turn to face the enemy's
-  // predicted position (can turn while docked)
-  if (predicted_distance_t1 <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
-    double angle_to_target_t1 = our_future_pos.AngleTo(enemy_future_pos);
-    // Calculate required turn amount using normalization helper.
-    double angle_diff = NormalizeAngle(angle_to_target_t1 - ship->GetOrient());
-    ship->SetOrder(O_TURN, angle_diff);
-    return true;  // Issued turn order
-  }
-
-  // If moving out of range, return false to signal reversion to
-  // intercept/pursuit logic.
+  // Either the scenario is too unreliable to fire, or we're moving out of range,
+  // return false to signal reversion to intercept/pursuit logic.
   return false;
 }
 
@@ -884,7 +902,17 @@ void HandleIntercept(const ViolenceContext& ctx, const ViolenceTarget& target) {
     reason = "fire (intercept opportunist)";
   }
 
-  TryOpportunisticShot(ship, ctx, target.thing, reason);
+  bool its_away = TryOpportunisticShot(ship, ctx, target.thing, reason);
+
+  if (!its_away) {
+    // We didn't get a shot off on our target - but let's see if there is
+    // a closer enemy who happens to be in line of fire.
+    double nearest_distance;
+    CShip* nearest_enemy = FindNearestUndockedEnemy(ctx, &nearest_distance);
+    if (nearest_enemy != NULL && nearest_distance <= groonew::constants::MAX_SHIP_ENGAGEMENT_DIST) {
+      TryOpportunisticShot(ship, ctx, nearest_enemy, "fire (intercept potshot)");    
+    }
+  }
 }
 
 }  // namespace detail
@@ -938,7 +966,7 @@ ViolenceResult ExecuteViolence(CShip* ship, unsigned int shipnum,
   // Dispatch to the specialized execution handlers in the detail namespace.
   if (target.thing->GetKind() == STATION) {
     detail::ExecuteAgainstStation(ctx, target);
-  } else if (target.thing->GetKind() == SHIP) {
+  } else if (target.thing->GetKind() == SHIP && !static_cast<const CShip*>(target.thing)->IsDocked()) {
     detail::ExecuteAgainstShip(ctx, target, uranium_left_in_world,
                                vinyl_left_in_world, ramming_speed);
   }
