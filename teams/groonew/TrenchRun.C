@@ -544,10 +544,22 @@ void ExecuteAgainstStation(const ViolenceContext& ctx,
   }
 
   // Opportunistic Firing (if safe from immediate collisions)
-  const auto upcoming = Pathfinding::GetFirstCollision(ship);
-  // Check if collision is more than 1 turn away.
-  if (!upcoming.HasCollision() ||
-      upcoming.time > g_game_turn_duration + g_fp_error_epsilon) {
+  bool safe_to_fire = true;
+  const auto* ship_forecast = TomorrowLand::Lookup(ship);
+  const double collision_threshold = g_game_turn_duration + g_fp_error_epsilon;
+  if (ship_forecast != NULL) {
+    if (ship_forecast->collision_predicted &&
+        ship_forecast->collision_time <= collision_threshold) {
+      safe_to_fire = false;
+    }
+  } else {
+    const auto upcoming = Pathfinding::GetFirstCollision(ship);
+    if (upcoming.HasCollision() && upcoming.time <= collision_threshold) {
+      safe_to_fire = false;
+    }
+  }
+
+  if (safe_to_fire) {
     double future_distance = distance;
     // Check line of fire for the next turn and ensure we remain within
     // engagement range (100.0).
@@ -885,10 +897,20 @@ bool HandleCloseEngagement(const ViolenceContext& ctx, const ViolenceTarget& tar
     } else {
       // 2. We need to issue a turn order to face the target before we can fire.
 
-      // Predict positions for the next turn (T+1)
-      double lookahead_time = g_game_turn_duration;
-      CCoord enemy_future_pos = target_thing->PredictPosition(lookahead_time);
-      CCoord our_future_pos = ship->PredictPosition(lookahead_time);
+      // Predict positions for the next turn (T+1). Prefer the cached TomorrowLand
+      // forecast and fall back to direct prediction if absent.
+      const auto* our_forecast = TomorrowLand::Lookup(ship);
+      const auto* enemy_forecast = TomorrowLand::Lookup(target_thing);
+      const double lookahead_time = g_game_turn_duration;
+
+      CCoord enemy_future_pos =
+          (enemy_forecast != NULL)
+              ? enemy_forecast->predicted_pos
+              : target_thing->PredictPosition(lookahead_time);
+      CCoord our_future_pos =
+          (our_forecast != NULL)
+              ? our_forecast->predicted_pos
+              : ship->PredictPosition(lookahead_time);
       double predicted_distance_t1 = our_future_pos.DistTo(enemy_future_pos);
 
       // If we remain within engagement range (160.0), turn to face the enemy's

@@ -4,6 +4,7 @@
 #include "GameConstants.h"
 #include "ParserModern.h"
 #include "Pathfinding.h"
+#include "TomorrowLand.h"
 #include "Ship.h"
 #include "Thing.h"
 
@@ -82,19 +83,44 @@ inline FiringPredictability EvaluateFiringPredictability(const CShip* shooter,
     return result;
   }
 
-  const auto shooter_collision = Pathfinding::GetFirstCollision(
-      const_cast<CShip*>(shooter));
-  if (shooter_collision.HasCollision() &&
-      shooter_collision.time <= horizon + g_fp_error_epsilon) {
+  const double collision_threshold = horizon + g_fp_error_epsilon;
+
+  auto has_imminent_collision = [&](const CShip* ship) -> bool {
+    if (ship == NULL) {
+      return true;
+    }
+    bool collision_detected = false;
+    bool used_forecast = false;
+    if (horizon <= g_game_turn_duration + g_fp_error_epsilon) {
+      const auto* forecast = TomorrowLand::Lookup(ship);
+      if (forecast != NULL) {
+        used_forecast = true;
+        if (forecast->collision_predicted &&
+            forecast->collision_time <= collision_threshold) {
+          collision_detected = true;
+        }
+      }
+    }
+
+    if (!used_forecast || horizon > g_game_turn_duration + g_fp_error_epsilon) {
+      const auto collision =
+          Pathfinding::GetFirstCollision(const_cast<CShip*>(ship));
+      if (collision.HasCollision() &&
+          collision.time <= collision_threshold) {
+        collision_detected = true;
+      }
+    }
+
+    return collision_detected;
+  };
+
+  if (has_imminent_collision(shooter)) {
     result.shooter_reliable = false;
   }
 
   if (target != NULL && target->GetKind() == SHIP) {
     const CShip* target_ship = static_cast<const CShip*>(target);
-    const auto target_collision =
-        Pathfinding::GetFirstCollision(const_cast<CShip*>(target_ship));
-    if (target_collision.HasCollision() &&
-        target_collision.time <= horizon + g_fp_error_epsilon) {
+    if (has_imminent_collision(target_ship)) {
       result.target_reliable = false;
     }
   }
