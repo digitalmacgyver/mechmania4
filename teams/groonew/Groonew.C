@@ -50,6 +50,8 @@ Feature change log:
 2025-10-25: Multiply all thrust order by 5/3rds. This will put our location after 1 game engine PhysicsModel turn in the position we calculated in Pathfinding (but with a greater velocity change).
 2025-10-25: Increased magic bag horizon to 25 turns for theoretical maximum distance we can travel in 24 turns.
 2025-10-26: Major improvements to combat logic, and testing having some ships be combat focused.
+2025-10-26: Added TomorrowLand module for predicting collisions and predicting positions of things in the world.
+2025-10-26: Allow for two different ship profiles: Hunter and Gatherer.
 TBD: Change magic bag population to gracefully handle floating point rounding errors when reasoning about how many "turns" we have left to get our orders in for intercept.
 
 */
