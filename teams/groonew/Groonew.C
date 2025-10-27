@@ -623,24 +623,43 @@ void Groonew::SolveResourceAssignment(
           pmyWorld->GetGameTime(), result.max_utility);
     }
 
+    // Even if there are fewer viable asteroids than ships, keep everyone moving.
+    // We optimally assign as many ships as there are distinct targets, then let
+    // the remainder pursue their own best target so we have multiple chances if
+    // the initial picker gets disrupted mid-flight.
     for (int i = 0; i < num_agents; ++i) {
       int task_idx = result.best_assignments[i];
+      CShip* pShip = agents[i];
+      unsigned int shipnum = ship_ptr_to_shipnum.at(pShip);
 
       if (task_idx != -1) {
-        CShip* pShip = agents[i];
         CThing* target = tasks[task_idx];
-
-        // Retrieve the pre-calculated path info from the MagicBag.
-        unsigned int shipnum = ship_ptr_to_shipnum.at(pShip);
-        // We use .at() for safe access as the entry must exist if the solver
-        // chose it.
         const PathInfo& best_e = mb->getShipPaths(shipnum).at(target);
-
-        // Apply the orders and log the decision.
         ApplyOrders(pShip, best_e);
         last_turn_targets_[pShip] = target;
+        continue;
+      }
+
+      // Fallback: pick the highest-utility target for this ship alone.
+      const auto& ship_paths = mb->getShipPaths(shipnum);
+      const PathInfo* best_path = nullptr;
+      CThing* best_target = nullptr;
+      for (const auto& entry : ship_paths) {
+        CThing* candidate_target = entry.first;
+        const PathInfo& path = entry.second;
+        if (path.utility <= 0.0) {
+          continue;
+        }
+        if (best_path == nullptr || path.utility > best_path->utility) {
+          best_path = &path;
+          best_target = candidate_target;
+        }
+      }
+
+      if (best_path != nullptr) {
+        ApplyOrders(pShip, *best_path);
+        last_turn_targets_[pShip] = best_target;
       } else {
-        CShip* pShip = agents[i];
         last_turn_targets_.erase(pShip);
       }
     }

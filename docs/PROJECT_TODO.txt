@@ -444,6 +444,25 @@ Not re-enableable:
 
 ========================== ENGINE TODO ================================
 
+* Add SC music:
+  * Default music is battle music, but rotate it randomly among that, hyperspace and quazi space - eval other themes (aliens)
+  * Effects for:
+    * Laser shot
+    * Laser hit base no vinyl
+    * Laser hit base vinyl
+    * Laser hit ship
+    * Ship destroyed
+    * Station reaches 0 vinyl due to laser
+    * Collide with asteroid
+    * Station land
+    * Station launch (Launch fighters?)
+    * Shields up (Mhnrmrnrhn sound?)
+    * Ship-ship collision
+    * Ship eats asteroid
+    * Ship spacedusts asteroid
+    * Ship splits asteroid
+    * Asteroid hits station
+
 * Game option to prevent docking at enemy bases (set at start time of
   either the server or observer) (counts as collision with asteroid
   for damage?)

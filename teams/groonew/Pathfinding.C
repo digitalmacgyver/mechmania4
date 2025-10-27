@@ -23,7 +23,18 @@ namespace Pathfinding {
   // distance between our ship and the smallest possible
   // world object - e.g. if our ship ends up within this
   // distance it will collide.
-  const double POSITIONAL_TOLERANCE = 8.9;
+  const double INTERCEPT_OVERLAP = 1.0;
+
+  inline double ComputePositionalTolerance(const CShip* ship,
+                                           const CThing* thing) {
+    double ship_size = (ship != NULL) ? ship->GetSize() : 0.0;
+    double thing_size = (thing != NULL) ? thing->GetSize() : 0.0;
+    double tol = ship_size + thing_size - INTERCEPT_OVERLAP;
+    if (tol < g_fp_error_epsilon) {
+      tol = g_fp_error_epsilon;
+    }
+    return tol;
+  }
 
   // Internal namespace for implementation details
   namespace {
@@ -216,9 +227,9 @@ namespace Pathfinding {
     // dist: the distance traveled along vtraj in one turn (e.g. the ship's
     // velocity magnitude)
     //
-    // epsilon: our POSITIONAL_TOLERANCE / time_to_get_there (e.g. after our whole
-    // time to get there has elapsed our combined error will be <= POSITIONAL_TOLERANCE)
-    bool on_target(CTraj vtraj, CTraj vtarget, double dist=724.1, double epsilon = POSITIONAL_TOLERANCE) {
+    // epsilon: caller-provided tolerance for positional error after travelling
+    // the specified distance. Defaults to 8.9 (legacy ship/asteroid overlap).
+    bool on_target(CTraj vtraj, CTraj vtarget, double dist=724.1, double epsilon = 8.9) {
       vtraj.rho = dist;
       vtarget.rho = dist;
       CCoord traj_end = vtraj.ConvertToCoord();
@@ -321,9 +332,12 @@ namespace Pathfinding {
           // 4. Determine the sign of the thrust and ensure it aligns with orientation.
           bool thrust_is_forward;
 
-          if (on_target(thrust_vec, ctx.ship_orient_vec_t0, thrust_vec.rho, POSITIONAL_TOLERANCE / ctx.time)) {
+          double positional_tolerance = ComputePositionalTolerance(ctx.ship, ctx.thing);
+          if (on_target(thrust_vec, ctx.ship_orient_vec_t0, thrust_vec.rho,
+                        positional_tolerance / ctx.time)) {
               thrust_is_forward = true;
-          } else if (on_target(-thrust_vec, ctx.ship_orient_vec_t0, thrust_vec.rho, POSITIONAL_TOLERANCE / ctx.time)) {
+          } else if (on_target(-thrust_vec, ctx.ship_orient_vec_t0, thrust_vec.rho,
+                               positional_tolerance / ctx.time)) {
               thrust_is_forward = false;
           } else {
               // Thrust required is off-axis. Cannot achieve this with O_THRUST alone.
@@ -462,8 +476,11 @@ namespace Pathfinding {
       const CTraj& intercept_vec_t0 = ctx.intercept_vec_t0;
       CShip* ship = ctx.ship;
 
-      bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, intercept_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
-      bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, intercept_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
+      double positional_tolerance = ComputePositionalTolerance(ctx.ship, ctx.thing);
+      bool correct_heading = mostly_parallel(ship_trajectory_t0, dest_vec_t0, intercept_vec_t0.rho,
+                                             positional_tolerance / ctx.time);
+      bool correct_facing = mostly_parallel(ship_orient_vec_t0, dest_vec_t0, intercept_vec_t0.rho,
+                                            positional_tolerance / ctx.time);
 
       if (correct_heading && correct_facing) {
         // Calculate required thrust (Required change in velocity).
@@ -616,6 +633,7 @@ namespace Pathfinding {
       double ship_orient_t0 = ctx.ship_orient_t0;
       const CTraj& dest_vec_t0 = ctx.dest_vec_t0;
       const CCoord& destination = ctx.destination;
+      double positional_tolerance = ComputePositionalTolerance(ctx.ship, ctx.thing);
 
       // Via trigonometry we can figure out the thrust amount on our current
       // orientation that would convert our current trajectory onto our desired
@@ -672,7 +690,7 @@ namespace Pathfinding {
           //           => O_THRUST
 
           // Check if we'll reach the target next turn due to this thrust.
-          bool thrust_reaches_target = (t_dest_vec_t1.rho < (ship->GetSize() + thing->GetSize() - g_fp_error_epsilon));
+          bool thrust_reaches_target = (t_dest_vec_t1.rho < positional_tolerance);
 
           // TODO: It is logically possible, if perhaps not geometrically possible,
           // that our thrust would push us through the position of the destination -
@@ -692,7 +710,8 @@ namespace Pathfinding {
           // might arrive earlier than the requested time.
           double time_to_arrive = t_dest_vec_t1.rho / t_ship_vel_t1.rho;
           bool thrust_and_drift = (
-            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho / time_to_arrive, POSITIONAL_TOLERANCE / time_to_arrive)
+            on_target(t_ship_vel_t1, t_dest_vec_t1, t_dest_vec_t1.rho / time_to_arrive,
+                      positional_tolerance / time_to_arrive)
             && time_left > 0.0
             && t_ship_vel_t1.rho >= (t_dest_vec_t1.rho / time_left)
           );
@@ -730,7 +749,9 @@ namespace Pathfinding {
             // Note - we have 2 turns less to arrive on this order because we'll
             // have issued a thrust and a turn to get into this position.
             t_intercept_vec_t2.rho /= (time - 2*g_game_turn_duration);  
-            if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_intercept_vec_t2.rho, POSITIONAL_TOLERANCE / (time - 2*g_game_turn_duration))
+            double positional_tolerance = ComputePositionalTolerance(ctx.ship, ctx.thing);
+            if (mostly_parallel(t_ship_vel_t1, t_intercept_vec_t2, t_intercept_vec_t2.rho,
+                                positional_tolerance / (time - 2*g_game_turn_duration))
                 && t_intercept_vec_t2.rho <= g_game_max_speed) {
 
               double fuel_used = CalculateAccurateFuelCost(ctx.calculator_ship, ctx.state_t0, O_THRUST, k, ship->IsDocked());
@@ -988,7 +1009,9 @@ namespace Pathfinding {
     // Determine if we are currently on an intercept trajectory.
     // If our ship isn't moving, consider our trajectory for the purposes of
     // this check to be along the direction of our orientation.
-    bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.intercept_vec_t0.rho, POSITIONAL_TOLERANCE / ctx.time);
+    double positional_tolerance = ComputePositionalTolerance(ctx.ship, ctx.thing);
+    bool on_intercept_trajectory = mostly_parallel(ctx.ship_trajectory_t0, ctx.dest_vec_t0, ctx.intercept_vec_t0.rho,
+                                                   positional_tolerance / ctx.time);
 
     fj = FAILURE_TRAJ;
     if (on_intercept_trajectory) {
