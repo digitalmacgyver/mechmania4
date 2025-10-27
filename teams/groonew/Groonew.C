@@ -107,6 +107,8 @@ void Groonew::Init() {
   SetName("VRogue Squadron");
   GetStation()->SetName("VTatooine");  // Base station name
 
+  ship_roles_.clear();
+
   GetShip(0)->SetName("VGold Leader");
   GetShip(1)->SetName("VAluminum Falcon");
   GetShip(2)->SetName("VRed 5");
@@ -116,14 +118,22 @@ void Groonew::Init() {
   // Total: 60 tons (20 fuel + 40 cargo)
   // Strategy: Aggressive collection, rely on uranium asteroids for refueling
   for (unsigned int i = 0; i < GetShipCount(); ++i) {
-    GetShip(i)->SetCapacity(S_FUEL, 20.0);   // Only 20 tons fuel
-    GetShip(i)->SetCapacity(S_CARGO, 40.0);  // Large 40 ton cargo hold
-    GetShip(i)->SetBrain(new GetVinyl);      // Assign GetVinyl AI brain
+    CShip* ship = GetShip(i);
+    if (ship == NULL) {
+      continue;
+    }
+    ship->SetCapacity(S_FUEL, 20.0);   // Only 20 tons fuel
+    ship->SetCapacity(S_CARGO, 40.0);  // Large 40 ton cargo hold
+    ship->SetBrain(new GetVinyl);      // Assign GetVinyl AI brain
+    ship_roles_[ship] = ShipRole::Gatherer;
   }
 
   // Red 5 goes after the enemy.
   GetShip(2)->SetCapacity(S_FUEL, 60.0);
   GetShip(2)->SetCapacity(S_CARGO, 0.0);
+  if (GetShip(2) != NULL) {
+    ship_roles_[GetShip(2)] = ShipRole::Hunter;
+  }
 
   // Initialize the calculator ship.
   // NOTE: We assume CShip has an accessible constructor (as suggested by
@@ -682,56 +692,56 @@ void Groonew::AssignShipOrders() {
                                          max_cargo, uranium_available,
                                          vinyl_available);
 
-    // DEBUG - Manual override here for testing purposes.
-    // Red 5 is the ship that goes after the enemy.
-    if (strcmp(ship->GetName(), "VRed 5") == 0) {
-      // Thermostat-style fuel management to prevent ping-ponging
-      bool& refueling = ships_refueling_[ship];
+    ShipRole role = ShipRole::Gatherer;
+    auto role_it = ship_roles_.find(ship);
+    if (role_it != ship_roles_.end()) {
+      role = role_it->second;
+    }
+    if (role == ShipRole::Hunter) {
+      wants = VIOLENCE;
+    }
+
+    bool& refueling = ships_refueling_[ship];
+
+    if (wants == VIOLENCE) {
+      double fuel_ratio = (max_fuel > g_fp_error_epsilon)
+                              ? (cur_fuel / max_fuel)
+                              : 0.0;
 
       if (!uranium_available) {
-        // No uranium left in world - always VIOLENCE mode
+        if (refueling && g_pParser && g_pParser->verbose) {
+          printf("\t→ [THERMOSTAT] Uranium depleted; leaving refuel mode (fuel=%.1f, ratio=%.2f)\n",
+                 cur_fuel, fuel_ratio);
+        }
         refueling = false;
-        wants = VIOLENCE;
-        if (g_pParser && g_pParser->verbose) {
-          printf("\t→ [THERMOSTAT] No uranium available, staying in VIOLENCE mode (fuel=%.1f)\n", cur_fuel);
-        }
-      } else if (refueling) {
-        // Currently refueling - check if we've reached upper threshold
-        if (cur_fuel >= groonew::constants::VIOLENCE_REFUEL_HIGH_THRESHOLD) {
-          // Exit refueling mode
-          refueling = false;
-          wants = VIOLENCE;
-          if (g_pParser && g_pParser->verbose) {
-            printf("\t→ [THERMOSTAT] Exiting refueling mode (fuel=%.1f >= %.1f threshold)\n",
-                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_HIGH_THRESHOLD);
-          }
-        } else {
-          // Continue refueling
-          wants = FUEL;
-          if (g_pParser && g_pParser->verbose) {
-            printf("\t→ [THERMOSTAT] Continuing refueling (fuel=%.1f < %.1f threshold)\n",
-                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_HIGH_THRESHOLD);
-          }
-        }
       } else {
-        // Not currently refueling - check if we've hit lower threshold
-        if (cur_fuel <= groonew::constants::VIOLENCE_REFUEL_LOW_THRESHOLD) {
-          // Enter refueling mode
+        if (refueling) {
+          if (fuel_ratio >= 0.66) {
+            refueling = false;
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ [THERMOSTAT] Refuel complete (fuel=%.1f, ratio=%.2f ≥ 0.66)\n",
+                     cur_fuel, fuel_ratio);
+            }
+          } else {
+            wants = FUEL;
+            if (g_pParser && g_pParser->verbose) {
+              printf("\t→ [THERMOSTAT] Continuing refuel (fuel=%.1f, ratio=%.2f < 0.66)\n",
+                     cur_fuel, fuel_ratio);
+            }
+          }
+        }
+
+        if (!refueling && fuel_ratio <= 0.33) {
           refueling = true;
           wants = FUEL;
           if (g_pParser && g_pParser->verbose) {
-            printf("\t→ [THERMOSTAT] Entering refueling mode (fuel=%.1f <= %.1f threshold)\n",
-                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_LOW_THRESHOLD);
-          }
-        } else {
-          // Stay in VIOLENCE mode
-          wants = VIOLENCE;
-          if (g_pParser && g_pParser->verbose) {
-            printf("\t→ [THERMOSTAT] Staying in VIOLENCE mode (fuel=%.1f > %.1f threshold)\n",
-                   cur_fuel, groonew::constants::VIOLENCE_REFUEL_LOW_THRESHOLD);
+            printf("\t→ [THERMOSTAT] Entering refuel mode (fuel=%.1f, ratio=%.2f ≤ 0.33)\n",
+                   cur_fuel, fuel_ratio);
           }
         }
       }
+    } else {
+      refueling = false;
     }
 
     switch (wants) {

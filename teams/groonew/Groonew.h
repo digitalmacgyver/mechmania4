@@ -39,6 +39,8 @@ inline constexpr double VIOLENCE_REFUEL_HIGH_THRESHOLD = 40.0;
 // Ship wants are a high level goal for the ship.
 enum ShipWants { HOME, POINTS, FUEL, VIOLENCE, NOTHING };
 
+enum class ShipRole { Gatherer, Hunter };
+
 //////////////////////////////////////
 // Main class: Groonew team
 // Uses centralized planning with biological/hive-mind naming theme
@@ -95,6 +97,9 @@ class Groonew : public CTeam {
   // Thermostat-style fuel management: Track which ships are currently in
   // "refueling mode" (applies only to VIOLENCE mode ships to prevent ping-ponging)
   std::map<CShip*, bool> ships_refueling_;
+
+  // Tag each ship as a hunter (combat focus) or gatherer (resource focus).
+  std::map<CShip*, ShipRole> ship_roles_;
 
   // Calculate the utility of a given path.
   double CalculateUtility(CShip* pShip, ShipWants wants, const PathInfo& e,

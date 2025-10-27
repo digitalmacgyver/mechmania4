@@ -461,20 +461,6 @@ Not re-enableable:
 
 ========================== Groonew TODO =============================
 
-Better Shooting Todo:
-* If we turn to get a better firing solution WE CAN FIRE THE SAME
-  TURN! We'll have turned by then! Are we doing that?
-* Are we calculating turn 1 distance in our distance math or do we
-  fire too short sometimes?
-* For ship to ship dueling, figure out fastest time to intercept, not
-  shortest distance (magic bag already has this information!)
-* Somehow cancel order if something will interpose (see experimental world sim logic)
-
-Fightprovements:
-
-2. In HandleIntercept we will take potshots at non-target enemy ships
-- but we should also take potshots at stations we approach.
-
 NEXT UP TESTING:
 
 a. 10 batches mirror match pick best target vs. pick fastest intercept
@@ -485,49 +471,17 @@ b. Then 10 batches of logic with:
   * 1 aggressive ship
   * 2 aggressive ships
   * 3 aggressive ships
+Winner plays against all unplayed opponents to make sure we don't have
+a rock paper scissors thing going on.
 
 If 3 is the best, consider 4 aggressive ships with 2 in a 40/20 and 2
 in a 60/0 config maybe (this would involve changing violence override
 to fallback to vinyl once there are no enemies?)
 
 
-REMOVE:
-  // DEBUG - A/B test of different target selection methods: false = path-based, true = value-based
-  bool value_based = true;
-
-REMOVE:
-Hard coding of Red 5 as aggressive.
-
-We don't seem to always be buffing shields in cases where it's buff or
-the object is destroyed - maybe due to endgame shield management.
-
-ENDGAME: * Violent ships can get stuck in our own base (probably both
-bases) if there is an enemy ship just outside - always launch.
-
 Change our target collision positioning threshold to be based on the
 target size, not a hard coded constant.
 
-1. Fuel "thermostat" e.g. look for fuel once under 20, stop once above
-40.
-
-VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-OK - it seems the more aggressive strategy of 1 shooter is clearly
-better.
-
-However it's hampered by VIOLENCE mode being quite bad, lots of target
-switching, etc..
-
-So now I:
-1. Refine violence mode to be pretty good actually.
-   * Consider full interpolation modeling!
-2. Build master vs violence branch versions and bake them off.
-
-Winner plays against 2 violent 2 gatherer
-Winner plays against 3 violent 1 gatherer
-
-Winner plays against all unplayed opponents to make sure we don't have
-a rock paper scissors thing going on.
-VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
 
 ---
 2.2. Medium: Inconsistent Fuel Reserve Logic Across Modules
@@ -545,11 +499,6 @@ thrusting otherwise, can't eject less than 3.0).
 
 Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.
-
-We are also pretty bad at shooting ships - look at how Chromefunk does
-this - it's actually much better - we might be trying to get too close,
-or maybe we need to get onto an intercept pursuit angle and not come
-at them obliquely or something.
 
 If we're done with everything else, and there's still uranium, harvest
 it.
