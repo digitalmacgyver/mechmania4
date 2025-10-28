@@ -107,15 +107,15 @@ void Groonew::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("V4Rogue Squadron");
-  GetStation()->SetName("V4Tatooine");  // Base station name
+  SetName("S2Rogue Squadron");
+  GetStation()->SetName("P4Tatooine");  // Base station name
 
   ship_roles_.clear();
 
-  GetShip(0)->SetName("V4Gold Leader");
-  GetShip(1)->SetName("V4Aluminum Falcon");
-  GetShip(2)->SetName("V4Red 5");
-  GetShip(3)->SetName("V4Echo 3");
+  GetShip(0)->SetName("S2Gold Leader");
+  GetShip(1)->SetName("S2Aluminum Falcon");
+  GetShip(2)->SetName("S2Red 5");
+  GetShip(3)->SetName("S2Echo 3");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
@@ -132,6 +132,7 @@ void Groonew::Init() {
   }
 
   // Change some ships to hunters.
+  
   GetShip(2)->SetCapacity(S_FUEL, 60.0);
   GetShip(2)->SetCapacity(S_CARGO, 0.0);
   if (GetShip(2) != NULL) {
@@ -142,17 +143,18 @@ void Groonew::Init() {
   if (GetShip(3) != NULL) {
     ship_roles_[GetShip(3)] = ShipRole::Hunter;
   }
-  GetShip(1)->SetCapacity(S_FUEL, 60.0);
-  GetShip(1)->SetCapacity(S_CARGO, 0.0);
+  /*
+  GetShip(1)->SetCapacity(S_FUEL, 55.55);
+  GetShip(1)->SetCapacity(S_CARGO, 4.45);
   if (GetShip(1) != NULL) {
     ship_roles_[GetShip(1)] = ShipRole::Hunter;
   }
-  GetShip(0)->SetCapacity(S_FUEL, 46.66);
-  GetShip(0)->SetCapacity(S_CARGO, 13.34);
+  GetShip(0)->SetCapacity(S_FUEL, 55.55);
+  GetShip(0)->SetCapacity(S_CARGO, 4.45);
   if (GetShip(0) != NULL) {
     ship_roles_[GetShip(0)] = ShipRole::Hunter;
   }
-
+  */
   // Initialize the calculator ship.
   // NOTE: We assume CShip has an accessible constructor (as suggested by
   // PathInfo.C).

@@ -45,6 +45,68 @@ namespace Pathfinding {
       return angle;
     }
 
+    // Bias toroidal displacement so ties prefer paths that swing through the origin.
+    CTraj ComputeCenterBiasedVector(const CCoord& start, const CCoord& goal) {
+      CCoord delta(goal);
+      delta -= start;  // Shortest toroidal vector by default.
+
+      // Generate candidate displacements, expanding tie cases on each axis.
+      const double half_world_x = kWorldSizeX * 0.5;
+      const double half_world_y = kWorldSizeY * 0.5;
+      const double tie_tolerance = 0.5;  // Allow small floating error on antipodal checks.
+
+      CCoord candidates[4];
+      int candidate_count = 0;
+      candidates[candidate_count++] = delta;
+
+      if (fabs(fabs(delta.fX) - half_world_x) <= tie_tolerance) {
+        CCoord alt = delta;
+        alt.fX = (delta.fX < 0.0) ? (delta.fX + kWorldSizeX) : (delta.fX - kWorldSizeX);
+        candidates[candidate_count++] = alt;
+      }
+
+      int existing = candidate_count;
+      if (fabs(fabs(delta.fY) - half_world_y) <= tie_tolerance) {
+        for (int i = 0; i < existing; ++i) {
+          CCoord alt = candidates[i];
+          alt.fY = (alt.fY < 0.0) ? (alt.fY + kWorldSizeY) : (alt.fY - kWorldSizeY);
+          candidates[candidate_count++] = alt;
+        }
+      }
+
+      double best_length_sq = DBL_MAX;
+      double best_mid_dist_sq = DBL_MAX;
+      CCoord best_delta = candidates[0];
+
+      for (int i = 0; i < candidate_count; ++i) {
+        const CCoord& cand = candidates[i];
+        double length_sq = cand.fX * cand.fX + cand.fY * cand.fY;
+
+        double mid_x = start.fX + 0.5 * cand.fX;
+        double mid_y = start.fY + 0.5 * cand.fY;
+        CCoord mid(mid_x, mid_y);
+        mid.Normalize();
+        double mid_dist_sq = mid.fX * mid.fX + mid.fY * mid.fY;
+
+        if (length_sq < best_length_sq - g_fp_error_epsilon) {
+          best_length_sq = length_sq;
+          best_mid_dist_sq = mid_dist_sq;
+          best_delta = cand;
+          continue;
+        }
+
+        if (fabs(length_sq - best_length_sq) <= g_fp_error_epsilon &&
+            mid_dist_sq < best_mid_dist_sq - g_fp_error_epsilon) {
+          best_mid_dist_sq = mid_dist_sq;
+          best_delta = cand;
+        }
+      }
+
+      double rho = hypot(best_delta.fX, best_delta.fY);
+      double theta = atan2(best_delta.fY, best_delta.fX);
+      return CTraj(rho, theta);
+    }
+
     // Represents a failure case for pathfinding
     const FuelTraj FAILURE_TRAJ = FuelTraj(false, O_SHIELD, 0.0, -1.0, 0.0, 0, 0.0);
 

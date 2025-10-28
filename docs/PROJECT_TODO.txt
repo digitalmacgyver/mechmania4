@@ -528,7 +528,69 @@ Station 2: 4
 Station 4:
 Ties: 1
 Edge: (4)
+Testing curtailed, S2 is just kicking the ass completely of s4.
 
+Now compare with:
+Station s2 vs: Ship s0, s1, s2, s3, s4
+
+s2, p0:
+Station 2: 9
+Ship 0: 1
+Ties:
+Edge:
+
+s2, p1:
+Station 2: 6
+Ship 1:
+Ties:
+Edge:
+Testing curtailed, s2 seems nearly unbeatable here.
+
+s2, p2:
+Station 2: 6
+Ship 2:
+Ties:
+Edge: 
+Testing curtailed, s2 seems nearly unbeatable here.
+
+s2, p3:
+Station 2: 7
+Ship 3: 2
+Ties: 1
+Edge: (3)
+
+s2, p4:
+Station 2: 6
+Ship 4:
+Ties: 1
+Edge: (4)
+
+?? p4, ship first, time to intercept math, each has room for 1/9th cargo. ??
+s2: p4:
+Station 2: 6
+Ship 4 with adjustments above:
+Ties:
+Edge: 
+Testing curtailed, p2 seems unbratable.
+
+Redo mirror match to make sure I haven't fucked up the logc in the mean time.
+Station 2 old: 3
+Station 2 new:
+Ties: 7
+Edge: (old)(new)(old)(old)(new)(new)
+
+NOTE - WE SEEM TO HAVE A SYSTEMIC BIAS FOR THE OLD TEAM:
+a. Check if it's code changes that are relevant.
+b. If not it's probably launch criteria towards the origin instead of
+the long way around on arbitrary pathing choices.
+
+Last commit before 17:13 PM today and the current code base.
+
+Let's try switching order of combat:
+Station 2 new:
+Station 2 old:
+Ties: 9
+Edge: (old)(old)(old)(new)(new)(new)(new)(old)
 
 
 
