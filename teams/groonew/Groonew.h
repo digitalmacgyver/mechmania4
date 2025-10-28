@@ -22,6 +22,8 @@
 #include <map>
 #include <vector>
 
+extern const bool PRIORITISE_ENEMY_SHIPS;
+
 namespace groonew {
 namespace constants {
 inline constexpr double GAME_NEARLY_OVER = 280.0;

@@ -241,6 +241,10 @@ std::vector<ViolenceTarget> IdentifyAndPrioritizeTargets(
   std::vector<ViolenceTarget> targets;
   CWorld* world = ctx.world;
   CTeam* team = ctx.team;
+  const int station_with_vinyl_priority =
+      PRIORITISE_ENEMY_SHIPS ? 4 : 1;
+  const int station_without_vinyl_priority =
+      PRIORITISE_ENEMY_SHIPS ? 5 : 4;
 
   // Scan world for enemy targets
   for (unsigned int idx = world->UFirstIndex; idx != BAD_INDEX;
@@ -267,10 +271,10 @@ std::vector<ViolenceTarget> IdentifyAndPrioritizeTargets(
     if (kind == STATION) {
       double vinyl = static_cast<CStation*>(thing)->GetVinylStore();
       if (vinyl > g_fp_error_epsilon) {
-        target.priority_class = 1;
+        target.priority_class = station_with_vinyl_priority;
       } else {
         // If we couldn't find any other targets, just hang around the enemy base.
-        target.priority_class = 4;
+        target.priority_class = station_without_vinyl_priority;
       }
     } else {
       CShip* enemy = static_cast<CShip*>(thing);

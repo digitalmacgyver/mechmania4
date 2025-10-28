@@ -54,7 +54,8 @@ constexpr double STATION_LOW_VELOCITY_THRESHOLD = 1.0;
 struct ViolenceTarget {
   CThing* thing = NULL;
 
-  // 1=station with vinyl, 2=ship with vinyl, 3=other ship
+  // 1=station with vinyl, 2=ship with vinyl, 3=other ship (station priorities
+  // shift to 4/5 when PRIORITISE_ENEMY_SHIPS is enabled)
   int priority_class = 0;  
   // For stations: 0, For ships: cargo (desc) or shields (asc)
   double sort_key1 = 0.0;  

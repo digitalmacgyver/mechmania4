@@ -519,8 +519,15 @@ For the case where we engage stations first, 2 hunters is better than 1 hunter.
 s2, s3:
 Station 2: 2
 Station 3:
-Ties: 7
-Edge: (3)(2)(2)(3)(2)(2)
+Ties: 8
+Edge: (3)(2)(2)(3)(2)(2)(2)
+For the fase where we engage stations first, 2 hunters is better than 3 hunters.
+
+s2, s4:
+Station 2: 4
+Station 4:
+Ties: 1
+Edge: (4)
 
 
 

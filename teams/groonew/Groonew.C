@@ -61,6 +61,7 @@ CTeam* CTeam::CreateTeam() { return new Groonew; }
 
 // TODO: Remove this
 static const bool DEBUG_MODE = false;
+const bool PRIORITISE_ENEMY_SHIPS = false;
 
 //////////////////////////////////////////
 // Groonew class implementation
@@ -106,15 +107,15 @@ void Groonew::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("V3Rogue Squadron");
-  GetStation()->SetName("V3Tatooine");  // Base station name
+  SetName("V4Rogue Squadron");
+  GetStation()->SetName("V4Tatooine");  // Base station name
 
   ship_roles_.clear();
 
-  GetShip(0)->SetName("V3Gold Leader");
-  GetShip(1)->SetName("V3Aluminum Falcon");
-  GetShip(2)->SetName("V3Red 5");
-  GetShip(3)->SetName("V3Echo 3");
+  GetShip(0)->SetName("V4Gold Leader");
+  GetShip(1)->SetName("V4Aluminum Falcon");
+  GetShip(2)->SetName("V4Red 5");
+  GetShip(3)->SetName("V4Echo 3");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
@@ -145,6 +146,11 @@ void Groonew::Init() {
   GetShip(1)->SetCapacity(S_CARGO, 0.0);
   if (GetShip(1) != NULL) {
     ship_roles_[GetShip(1)] = ShipRole::Hunter;
+  }
+  GetShip(0)->SetCapacity(S_FUEL, 46.66);
+  GetShip(0)->SetCapacity(S_CARGO, 13.34);
+  if (GetShip(0) != NULL) {
+    ship_roles_[GetShip(0)] = ShipRole::Hunter;
   }
 
   // Initialize the calculator ship.
