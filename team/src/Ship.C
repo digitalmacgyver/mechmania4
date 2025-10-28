@@ -67,6 +67,43 @@ static double IntegrateTriangularOmega(double time_start,
 
 namespace {
 
+bool UseNewCargoCalculation() {
+  if (g_pParser == NULL) {
+    return true;
+  }
+  return g_pParser->UseNewFeature("cargo-calc");
+}
+
+bool FitsWithinCapacity(double current_amount,
+                        double max_capacity,
+                        double addition) {
+  if (max_capacity <= 0.0) {
+    return false;
+  }
+  if (addition <= 0.0) {
+    return true;
+  }
+
+  double remaining = max_capacity - current_amount;
+  if (UseNewCargoCalculation()) {
+    return remaining + g_fp_error_epsilon >= addition;
+  }
+  return remaining >= addition;
+}
+
+double ClampToCapacity(double amount, double max_capacity) {
+  if (max_capacity <= 0.0) {
+    return 0.0;
+  }
+  if (amount < 0.0) {
+    return 0.0;
+  }
+  if (amount > max_capacity) {
+    return max_capacity;
+  }
+  return amount;
+}
+
 bool AsteroidFitsSnapshot(const CollisionState* ship_state,
                           const CollisionState* asteroid_state) {
   if (ship_state == NULL || asteroid_state == NULL) {
@@ -80,20 +117,14 @@ bool AsteroidFitsSnapshot(const CollisionState* ship_state,
   AsteroidKind material = asteroid_state->asteroid_material;
 
   if (material == VINYL) {
-    double max_cargo = ship_state->ship_cargo_capacity;
-    if (max_cargo <= 0.0) {
-      return false;
-    }
-    double projected_cargo = ship_state->ship_cargo + asteroid_mass;
-    return projected_cargo <= max_cargo;
+    return FitsWithinCapacity(ship_state->ship_cargo,
+                              ship_state->ship_cargo_capacity,
+                              asteroid_mass);
   }
   if (material == URANIUM) {
-    double max_fuel = ship_state->ship_fuel_capacity;
-    if (max_fuel <= 0.0) {
-      return false;
-    }
-    double projected_fuel = ship_state->ship_fuel + asteroid_mass;
-    return projected_fuel <= max_fuel;
+    return FitsWithinCapacity(ship_state->ship_fuel,
+                              ship_state->ship_fuel_capacity,
+                              asteroid_mass);
   }
   return false;
 }
@@ -1224,15 +1255,13 @@ bool CShip::AsteroidFits(const CAsteroid *pAst) {
   double othmass = pAst->GetMass();
   switch (pAst->GetMaterial()) {
     case VINYL:
-      if ((othmass + GetAmount(S_CARGO)) > GetCapacity(S_CARGO)) {
-        return false;
-      }
-      return true;
+      return FitsWithinCapacity(GetAmount(S_CARGO),
+                                GetCapacity(S_CARGO),
+                                othmass);
     case URANIUM:
-      if ((othmass + GetAmount(S_FUEL)) > GetCapacity(S_FUEL)) {
-        return false;
-      }
-      return true;
+      return FitsWithinCapacity(GetAmount(S_FUEL),
+                                GetCapacity(S_FUEL),
+                                othmass);
     default:
       return false;
   }
@@ -1534,11 +1563,19 @@ void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
       // Add asteroid mass to ship's cargo
       switch (((CAsteroid *)pOthThing)->GetMaterial()) {
         case VINYL:
-          adStatCur[(unsigned int)S_CARGO] += othmass;
+        {
+          unsigned int cargo_index = static_cast<unsigned int>(S_CARGO);
+          double desired = adStatCur[cargo_index] + othmass;
+          adStatCur[cargo_index] = ClampToCapacity(desired, GetCapacity(S_CARGO));
           break;
+        }
         case URANIUM:
-          adStatCur[(unsigned int)S_FUEL] += othmass;
+        {
+          unsigned int fuel_index = static_cast<unsigned int>(S_FUEL);
+          double desired = adStatCur[fuel_index] + othmass;
+          adStatCur[fuel_index] = ClampToCapacity(desired, GetCapacity(S_FUEL));
           break;
+        }
         default:
           break;
       }
@@ -1809,11 +1846,19 @@ void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
       // Add asteroid mass to ship's cargo
       switch (((CAsteroid *)pOthThing)->GetMaterial()) {
         case VINYL:
-          adStatCur[(unsigned int)S_CARGO] += othmass;
+        {
+          unsigned int cargo_index = static_cast<unsigned int>(S_CARGO);
+          double desired = adStatCur[cargo_index] + othmass;
+          adStatCur[cargo_index] = ClampToCapacity(desired, GetCapacity(S_CARGO));
           break;
+        }
         case URANIUM:
-          adStatCur[(unsigned int)S_FUEL] += othmass;
+        {
+          unsigned int fuel_index = static_cast<unsigned int>(S_FUEL);
+          double desired = adStatCur[fuel_index] + othmass;
+          adStatCur[fuel_index] = ClampToCapacity(desired, GetCapacity(S_FUEL));
           break;
+        }
         default:
           break;
       }

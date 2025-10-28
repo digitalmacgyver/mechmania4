@@ -449,6 +449,16 @@ The new collision system coexists with legacy behavior via runtime feature flags
 ./mm4serv --legacy-asteroid-eat-damage  # Ships damaged when eating
 ```
 
+### `cargo-calc` (default: true)
+
+- **New**: Allow slightly overweight asteroids (within floating-point epsilon) to be collected and clamp stored cargo/fuel to capacity.
+- **Legacy**: Use strict remaining-capacity comparisons; any overweight asteroid is rejected.
+
+**Command-line**:
+```bash
+./mm4serv --legacy-cargo-calc  # Strict cargo/fuel fit check
+```
+
 ### `docking` (default: true)
 
 - **New**: Fixed safe launch distance = 48 units (station_radius + ship_radius + ship_radius/2)
@@ -472,6 +482,7 @@ Equivalent to:
 ./mm4serv --legacy-collision-handling \
           --legacy-physics \
           --legacy-asteroid-eat-damage \
+          --legacy-cargo-calc \
           --legacy-docking
 ```
 

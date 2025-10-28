@@ -60,6 +60,7 @@ void ArgumentParser::InitializeFeatures() {
   features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
   features["physics"] = true;              // New: correct collision physics and momentum conservation
   features["collision-handling"] = true;   // New: deterministic snapshot/command collision pipeline (fixes multi-hit bugs)
+  features["cargo-calc"] = true;           // New: tolerant cargo capacity checks for asteroid ingestion
 
   // Security features
   features["laser-exploit"] = false;       // New: TOCTOU vulnerability patched (validate before firing)
@@ -120,6 +121,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-rangecheck-bug", "Use buggy laser range check (floating-point comparison dLasRng > dLasPwr)")(
         "legacy-initial-orientation", "Use legacy initial orientation (all ships face east, asymmetric)")(
         "legacy-facing-detection", "Use legacy IsFacing (ignores toroidal shortest path)")(
+        "legacy-cargo-calc", "Use strict cargo capacity check when collecting asteroids (legacy behavior)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -343,6 +345,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-facing-detection")) {
       features["facing-detection"] = false;  // Disable toroidal shortest-path fix
     }
+    if (result.count("legacy-cargo-calc")) {
+      features["cargo-calc"] = false;  // Use strict legacy cargo capacity comparisons
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -368,6 +373,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-detection"] = true;
     features["velocity-limits"] = true;
     features["asteroid-eat-damage"] = true;
+    features["cargo-calc"] = true;
     features["physics"] = true;              // Enable correct collision physics and momentum
     features["collision-handling"] = true;   // Enable improved collision processing
     features["laser-exploit"] = false;      // Patch exploit
@@ -376,6 +382,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
     features["asteroid-eat-damage"] = false;
+    features["cargo-calc"] = false;
     features["physics"] = false;            // Use legacy collision physics (no laser momentum)
     features["collision-handling"] = false; // Use legacy collision processing (with multi-hit bugs)
     features["laser-exploit"] = true;       // Enable exploit for legacy mode
@@ -455,8 +462,12 @@ bool ArgumentParser::ParseConfigJson(const std::string& content) {
           features["collision-detection"] = !(value == "true");
         } else if (key == "legacy-velocity-limits") {
           features["velocity-limits"] = !(value == "true");
+        } else if (key == "legacy-cargo-calc") {
+          features["cargo-calc"] = !(value == "true");
         } else if (key == "announcer-velocity-clamping") {
           features[key] = (value == "true");
+        } else if (key == "cargo-calc") {
+          features["cargo-calc"] = (value == "true");
         }
       }
     } else if (inOptions && line.find(":") != std::string::npos) {
