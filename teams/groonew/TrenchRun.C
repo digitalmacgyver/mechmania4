@@ -320,7 +320,12 @@ std::vector<ViolenceTarget> IdentifyAndPrioritizeTargets(
 ViolenceTarget SelectTarget(ViolenceContext* ctx,
                             const std::vector<ViolenceTarget>& targets,
                             MagicBag* mb) {
-  // DEBUG - A/B test of different target selection methods: false = path-based, true = value-based
+  // This controls target selection based on our value heuristics, or
+  // fastest time to intercept. In limited testing the performance is
+  // similar in mirror matches, so we enable value based targeting
+  // on the premise it _should_ be better, but keep the minimum intercetp
+  // logic around for future testing against better opponents to see if
+  // a clear winner emerges.
   bool value_based = true;
 
   const auto& ship_paths = mb->getShipPaths(ctx->shipnum);
@@ -430,6 +435,13 @@ bool EvaluateAndMaybeFire(CShip* shooter, const CThing* target,
   bool is_docked = is_ship && static_cast<const CShip*>(target)->IsDocked();
 
   if (is_station) {
+    if (ctx.enemy_base_vinyl <= g_fp_error_epsilon) {
+      groonew::laser::BeamEvaluation eval =
+          groonew::laser::EvaluateBeam(0.0, distance);
+      groonew::laser::LogPotshotDecision(shooter, target, eval,
+                                         "skip (station empty)");
+      return false;
+    }
     // Calculate max useful beam length plus margin (30.0).
     double max_useful_beam = groonew::laser::BeamLengthForExactDamage(
                                  distance, ctx.enemy_base_vinyl) +

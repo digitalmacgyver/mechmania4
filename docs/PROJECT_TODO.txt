@@ -485,6 +485,16 @@ NEXT UP TESTING:
 a. 10 batches mirror match pick best target vs. pick fastest intercept
 target. Winner defines our strategy.
 
+Value based: L
+Fast intercept: V
+
+Value: 1
+Fast: 1
+Ties: 8
+Edge: LLLVLVVV
+
+We'll use Value for now
+
 b. Then 10 batches of logic with:
   * 0 aggressive ships
   * 1 aggressive ship
@@ -497,10 +507,25 @@ If 3 is the best, consider 4 aggressive ships with 2 in a 40/20 and 2
 in a 60/0 config maybe (this would involve changing violence override
 to fallback to vinyl once there are no enemies?)
 
+ALSO CONSIDER SHIP -> STATION INSTEAD OF STATION -> SHIP
 
-Change our target collision positioning threshold to be based on the
-target size, not a hard coded constant.
+s1, s2:
+Station 1:
+Station 2: 4
+Ties: 6
+Edge: (2)(2)(1)(2)(1)
+For the case where we engage stations first, 2 hunters is better than 1 hunter.
 
+s2, s3:
+Station 2: 2
+Station 3:
+Ties: 7
+Edge: (3)(2)(2)(3)(2)(2)
+
+
+
+
+===
 
 ---
 2.2. Medium: Inconsistent Fuel Reserve Logic Across Modules
@@ -518,9 +543,6 @@ thrusting otherwise, can't eject less than 3.0).
 
 Add fun announcer quotes - commence primary ignition, let's blow this
 thing and go home, Asteroids to not concern the empire, etc.
-
-If we're done with everything else, and there's still uranium, harvest
-it.
 
 After reducing enemy base to 0 and killing all enemy ships do a little
 acrobatic maneuvers.

@@ -106,15 +106,15 @@ void Groonew::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("VRogue Squadron");
-  GetStation()->SetName("VTatooine");  // Base station name
+  SetName("V3Rogue Squadron");
+  GetStation()->SetName("V3Tatooine");  // Base station name
 
   ship_roles_.clear();
 
-  GetShip(0)->SetName("VGold Leader");
-  GetShip(1)->SetName("VAluminum Falcon");
-  GetShip(2)->SetName("VRed 5");
-  GetShip(3)->SetName("VEcho 3");
+  GetShip(0)->SetName("V3Gold Leader");
+  GetShip(1)->SetName("V3Aluminum Falcon");
+  GetShip(2)->SetName("V3Red 5");
+  GetShip(3)->SetName("V3Echo 3");
 
   // Configure all ships with high cargo, low fuel strategy
   // Total: 60 tons (20 fuel + 40 cargo)
@@ -130,11 +130,21 @@ void Groonew::Init() {
     ship_roles_[ship] = ShipRole::Gatherer;
   }
 
-  // Red 5 goes after the enemy.
+  // Change some ships to hunters.
   GetShip(2)->SetCapacity(S_FUEL, 60.0);
   GetShip(2)->SetCapacity(S_CARGO, 0.0);
   if (GetShip(2) != NULL) {
     ship_roles_[GetShip(2)] = ShipRole::Hunter;
+  }
+  GetShip(3)->SetCapacity(S_FUEL, 60.0);
+  GetShip(3)->SetCapacity(S_CARGO, 0.0);
+  if (GetShip(3) != NULL) {
+    ship_roles_[GetShip(3)] = ShipRole::Hunter;
+  }
+  GetShip(1)->SetCapacity(S_FUEL, 60.0);
+  GetShip(1)->SetCapacity(S_CARGO, 0.0);
+  if (GetShip(1) != NULL) {
+    ship_roles_[GetShip(1)] = ShipRole::Hunter;
   }
 
   // Initialize the calculator ship.
