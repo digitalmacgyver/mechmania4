@@ -257,6 +257,16 @@ Wholly New Behaviors:
     once. The original values (5 asteroids of 40 tons each) are the
     defaults.
 
+  * You can use the NormalizeCentered and NormalizeEdges methods to
+  coordinate utilities which will bias equivalent distance
+  calculations to head through the center of the map, or the edges of
+  the map, respectively. This is needed because hips starting in some
+  stations will tend to find paths to enemy stations through the
+  center of the map, and some through the edge of the map, which is
+  not a tactically symmetric situation. Without using this function
+  some nagivation logic will end up tending more towards the center or
+  more towards the edges which are not tactically symmetric.
+
 Major old behaviors changed:
 
 These can all be reverted at once with the --legacy flag.
@@ -618,8 +628,27 @@ Bottom: 1
 Ties: 7
 Edge: (top)(bottom)(bottom)(top)(bottom)(top)
 
+Seems fair.
 
+REDO S2 S3 TEST TO MAKE SURE CENTERING DIDN'T MATTER:
 
+S2: 3
+S3: 1
+Tie: 6
+Edge: (s3)(s3)
+
+OK - s2 mirror but full hunter or small asteroid hunter:
+
+s2:
+s2 small asteroid: 1
+Tie: 9
+Edge: (s2)(hgs)(s2)(hgs)(hgs)(s2)(s2)
+
+OK - now sm vs med
+med:
+small:
+tie: 5
+edge: (med)(small)(med)
 
 ===
 

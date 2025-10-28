@@ -131,6 +131,20 @@ double ComputeRelativeSpeedAlongNormal(const CollisionState* self_state,
 
 }  // namespace
 
+void CShip::AnnounceOutOfFuel() const {
+  CTeam* team = GetTeam();
+  if (team == NULL) {
+    return;
+  }
+  CWorld* world = team->GetWorld();
+  if (world == NULL) {
+    return;
+  }
+  char msg[256];
+  snprintf(msg, sizeof(msg), "%s ran out of fuel", GetName());
+  world->AddAnnouncerMessage(msg);
+}
+
 void CShip::ProcessShieldOrder(double shieldamt) {
   if (shieldamt <= 0.0) {
     return;
@@ -155,6 +169,7 @@ void CShip::ProcessShieldOrder(double shieldamt) {
   if (oldFuel > 0.01 && newFuel <= 0.01) {
     printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
            GetTeam() ? GetTeam()->GetName() : "Unknown");
+    AnnounceOutOfFuel();
   }
 }
 
@@ -181,6 +196,7 @@ double CShip::IntegrateTurnOrder(double turnamt, double dt, double turn_phase) {
     if (oldFuel > 0.01 && newFuel <= 0.01) {
       printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
              GetTeam() ? GetTeam()->GetName() : "Unknown");
+      AnnounceOutOfFuel();
     }
   } else {
     // Modern behavior with triangular angular velocity profile
@@ -235,6 +251,7 @@ double CShip::IntegrateTurnOrder(double turnamt, double dt, double turn_phase) {
     if (oldFuel > 0.01 && newFuel <= 0.01) {
       printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
              GetTeam() ? GetTeam()->GetName() : "Unknown");
+      AnnounceOutOfFuel();
     }
   }
 
@@ -662,13 +679,6 @@ CollisionOutcome CShip::HandleShipCollision(const CollisionContext& ctx,
   }
 
   outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
-
-  if (ctx.world && damage > 0.1) {
-    char msg[256];
-    snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
-             self_state->thing->GetName(), other_state->thing->GetName(), damage);
-    outcome.AddCommand(CollisionCommand::Announce(msg));
-  }
 
   if ((self_state->ship_shield - damage) <= 0.0 && ctx.world) {
     char msg[256];
@@ -1167,19 +1177,7 @@ void CShip::Drift(double dt, double turn_phase) {
 
   // Check for velocity clamping before applying it
   if (Vel.rho > g_game_max_speed) {
-    double originalSpeed = Vel.rho;
     Vel.rho = g_game_max_speed;
-
-    // Announce when velocity gets clamped (if enabled)
-    if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
-      CWorld* pWorld = GetTeam()->GetWorld();
-      if (pWorld) {
-        char msg[256];
-        snprintf(msg, sizeof(msg), "%s velocity clamped %.1f -> %.1f",
-                 GetName(), originalSpeed, g_game_max_speed);
-        pWorld->AddAnnouncerMessage(msg);
-      }
-    }
   }
   // From CThing::Drift
 
@@ -1493,19 +1491,6 @@ void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
     dshield -= damage;
     SetAmount(S_SHIELD, dshield);
 
-    // Announce collision even if ship survives
-    if (pWorld && damage > 0.1) {  // Only announce significant collisions
-      char msg[256];
-      const char *targetName = "unknown";
-      if (pOthThing->GetKind() == SHIP) {
-        targetName = pOthThing->GetName();
-      } else if (pOthThing->GetKind() == ASTEROID) {
-        targetName = "asteroid";
-      }
-      snprintf(msg, sizeof(msg), "%s hit %s, %.1f damage",
-               GetName(), targetName, damage);
-      pWorld->AddAnnouncerMessage(msg);
-    }
     if (dshield < 0.0) {
       const char *causeType = "unknown";
       if (pOthThing->GetKind() == SHIP) {
@@ -1769,7 +1754,6 @@ void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
     dshield -= damage;
     SetAmount(S_SHIELD, dshield);
 
-    // Announce collision even if ship survives
     if (pWorld && damage > 0.1) {  // Only announce significant collisions
       char msg[256];
       const char *targetName = "unknown";
@@ -2328,6 +2312,7 @@ void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
   if (fuel_avail > 0.01 && GetAmount(S_FUEL) <= 0.01) {
     printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
            GetTeam() ? GetTeam()->GetName() : "Unknown");
+    AnnounceOutOfFuel();
   }
 
   // Special Docking Departure Positional Adjustment.
@@ -2397,24 +2382,13 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
   if (oldFuel > 0.01 && newFuel <= 0.01) {
     printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
            GetTeam() ? GetTeam()->GetName() : "Unknown");
+    AnnounceOutOfFuel();
   }
 
   CTraj Accel(thrustamt, orient);
   Vel += (Accel * dt);
   if (Vel.rho > g_game_max_speed) {
-    double originalSpeed = Vel.rho;
     Vel.rho = g_game_max_speed;
-
-    // Announce when thrusting causes velocity clamping (if enabled)
-    if (g_pParser && g_pParser->UseNewFeature("announcer-velocity-clamping")) {
-      CWorld* pWorld = GetTeam()->GetWorld();
-      if (pWorld) {
-        char msg[256];
-        snprintf(msg, sizeof(msg), "%s thrust clamped %.1f -> %.1f",
-                 GetName(), originalSpeed, g_game_max_speed);
-        pWorld->AddAnnouncerMessage(msg);
-      }
-    }
   }
 
   if (bDockFlag == true) {

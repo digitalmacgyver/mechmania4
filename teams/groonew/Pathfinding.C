@@ -53,9 +53,12 @@ namespace Pathfinding {
     // the variant that brings the ship closer to the world origin midflight.
     CTraj ComputeCenterBiasedVector(const CCoord& start, const CCoord& goal) {
       CCoord delta(goal);
-      delta -= start;
+      delta.fX -= start.fX;
+      delta.fY -= start.fY;
       delta.NormalizeCentered(start);
-      return CTraj(delta);
+      double rho = hypot(delta.fX, delta.fY);
+      double theta = atan2(delta.fY, delta.fX);
+      return CTraj(rho, theta);
     }
 
     // Represents a failure case for pathfinding

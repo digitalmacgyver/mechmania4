@@ -142,6 +142,8 @@ class CShip : public CThing {
                                        const CollisionState* self_state,
                                        const CollisionState* other_state) const;
 
+  void AnnounceOutOfFuel() const;
+
 };
 
 #endif  // ! _SHIP_H_FKJEKJWEJFWEKJWEKJEFKKF

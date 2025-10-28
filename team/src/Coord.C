@@ -392,7 +392,6 @@ void NormalizeWithBias(CCoord* value, const CCoord& reference,
   }
 
   *value = candidates[best_index];
-  value->Normalize();
 }
 }  // namespace
 
