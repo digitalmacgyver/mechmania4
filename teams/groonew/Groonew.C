@@ -726,10 +726,12 @@ void Groonew::AssignShipOrders() {
     }
   }
 
+  bool enemy_station_empty = (enemy_station_vinyl <= g_fp_error_epsilon);
+  bool no_enemy_ships_active = !enemy_ship_undocked;
   bool force_uranium_gather = (vinyl_left <= g_fp_error_epsilon) &&
-                              (enemy_station_vinyl <= g_fp_error_epsilon) &&
+                              enemy_station_empty &&
                               (uranium_left > g_fp_error_epsilon) &&
-                              !enemy_ship_undocked;
+                              no_enemy_ships_active;
 
   // PHASE A: Determine wants, calculate utilities, and handle non-contentious
   // goals. Process each ship to determine its high-level goal.
@@ -765,15 +767,28 @@ void Groonew::AssignShipOrders() {
     if (role_it != ship_roles_.end()) {
       role = role_it->second;
     }
+
+    bool treat_as_gatherer = false;
+    if (role == ShipRole::Hunter) {
+      bool can_carry_vinyl =
+          (ship->GetCapacity(S_CARGO) >=
+               (g_thing_minmass - g_fp_error_epsilon) &&
+           vinyl_left > g_fp_error_epsilon) ||
+          (ship->GetAmount(S_CARGO) > g_fp_error_epsilon);
+      if (can_carry_vinyl && enemy_station_empty && no_enemy_ships_active) {
+        treat_as_gatherer = true;
+      }
+    }
+
     if (force_uranium_gather) {
       wants = FUEL;
-    } else if (role == ShipRole::Hunter) {
+    } else if (role == ShipRole::Hunter && !treat_as_gatherer) {
       wants = VIOLENCE;
     }
 
     bool& refueling = ships_refueling_[ship];
 
-    if (wants == VIOLENCE) {
+    if (wants == VIOLENCE && !(role == ShipRole::Hunter && treat_as_gatherer)) {
       double fuel_ratio = (max_fuel > g_fp_error_epsilon)
                               ? (cur_fuel / max_fuel)
                               : 0.0;
