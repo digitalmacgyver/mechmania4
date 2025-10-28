@@ -19,6 +19,8 @@
 - **Facing vs motion:** Orientation is independent of velocity. A ship can drift sideways relative to its nose.
 - **Angles:** Radians, increasing counter-clockwise. 0 radians points right, π/2 points “up” in mathematical terms. The observer UI renders +Y downward, so visuals appear inverted.
 
+> **Tip:** New helpers `CCoord::NormalizeCentered(reference)` and `CCoord::NormalizeEdges(reference)` let you decide how toroidal “half-world” ties are broken. If you do nothing, some stations naturally pick centre-crossing routes to the enemy base while their mirrored counterparts favour the outer rim, which can skew interception plans. Call the centred version when you want equidistant options to go through mid-map; call the edge version when you prefer the wraparound lane. Pass the coordinate the displacement originates from (usually your ship’s position) as the reference.
+
 ## 3. Movement Fundamentals
 - **Velocity clamping:** Ship speed is limited to 30 units/second. If cumulative thrust would exceed that, the engine trims the change to stay on the 30-unit circle. Excess thrust still consumes fuel (see developer guide).
 - **Thrust range:** ±60 units/second of Δv per turn along the ship’s nose.

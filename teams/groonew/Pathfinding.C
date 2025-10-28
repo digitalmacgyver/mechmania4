@@ -46,65 +46,16 @@ namespace Pathfinding {
     }
 
     // Bias toroidal displacement so ties prefer paths that swing through the origin.
+    // Historically, toroidal tie-breaking meant some stations launched hunters through
+    // the center while others wrapped around the outer edge even when both routes were
+    // the same distance. In testing the center-crossing path keeps hunters nearer to
+    // potential follow-up targets if priorities change, so when distances tie we prefer
+    // the variant that brings the ship closer to the world origin midflight.
     CTraj ComputeCenterBiasedVector(const CCoord& start, const CCoord& goal) {
       CCoord delta(goal);
-      delta -= start;  // Shortest toroidal vector by default.
-
-      // Generate candidate displacements, expanding tie cases on each axis.
-      const double half_world_x = kWorldSizeX * 0.5;
-      const double half_world_y = kWorldSizeY * 0.5;
-      const double tie_tolerance = 0.5;  // Allow small floating error on antipodal checks.
-
-      CCoord candidates[4];
-      int candidate_count = 0;
-      candidates[candidate_count++] = delta;
-
-      if (fabs(fabs(delta.fX) - half_world_x) <= tie_tolerance) {
-        CCoord alt = delta;
-        alt.fX = (delta.fX < 0.0) ? (delta.fX + kWorldSizeX) : (delta.fX - kWorldSizeX);
-        candidates[candidate_count++] = alt;
-      }
-
-      int existing = candidate_count;
-      if (fabs(fabs(delta.fY) - half_world_y) <= tie_tolerance) {
-        for (int i = 0; i < existing; ++i) {
-          CCoord alt = candidates[i];
-          alt.fY = (alt.fY < 0.0) ? (alt.fY + kWorldSizeY) : (alt.fY - kWorldSizeY);
-          candidates[candidate_count++] = alt;
-        }
-      }
-
-      double best_length_sq = DBL_MAX;
-      double best_mid_dist_sq = DBL_MAX;
-      CCoord best_delta = candidates[0];
-
-      for (int i = 0; i < candidate_count; ++i) {
-        const CCoord& cand = candidates[i];
-        double length_sq = cand.fX * cand.fX + cand.fY * cand.fY;
-
-        double mid_x = start.fX + 0.5 * cand.fX;
-        double mid_y = start.fY + 0.5 * cand.fY;
-        CCoord mid(mid_x, mid_y);
-        mid.Normalize();
-        double mid_dist_sq = mid.fX * mid.fX + mid.fY * mid.fY;
-
-        if (length_sq < best_length_sq - g_fp_error_epsilon) {
-          best_length_sq = length_sq;
-          best_mid_dist_sq = mid_dist_sq;
-          best_delta = cand;
-          continue;
-        }
-
-        if (fabs(length_sq - best_length_sq) <= g_fp_error_epsilon &&
-            mid_dist_sq < best_mid_dist_sq - g_fp_error_epsilon) {
-          best_mid_dist_sq = mid_dist_sq;
-          best_delta = cand;
-        }
-      }
-
-      double rho = hypot(best_delta.fX, best_delta.fY);
-      double theta = atan2(best_delta.fY, best_delta.fX);
-      return CTraj(rho, theta);
+      delta -= start;
+      delta.NormalizeCentered(start);
+      return CTraj(delta);
     }
 
     // Represents a failure case for pathfinding
@@ -230,7 +181,7 @@ namespace Pathfinding {
       }
 
       // T0 Calculations
-      ctx.dest_vec_t0 = ctx.ship_pos_t0.VectTo(ctx.destination);  // Vector to target
+      ctx.dest_vec_t0 = ComputeCenterBiasedVector(ctx.ship_pos_t0, ctx.destination);  // Vector to target
       ctx.intercept_vec_t0 = ctx.dest_vec_t0;
       ctx.intercept_vec_t0.rho /= time;  // Velocity needed to reach target in time
       // So now intercep_vec_t0 represents the ideal velocity starting now.
@@ -238,7 +189,7 @@ namespace Pathfinding {
       // T1 Calculations
       // NOTE: THESE APPLY ONLY IF THE SHIP HAS NOT THURSTED IN TURN 0!
       CCoord ship_pos_t1 = ship->PredictPosition(g_game_turn_duration);
-      CTraj dest_vec_t1 = ship_pos_t1.VectTo(ctx.destination);
+      CTraj dest_vec_t1 = ComputeCenterBiasedVector(ship_pos_t1, ctx.destination);
       ctx.intercept_vec_t1 = dest_vec_t1;
       // TODO: This condition is really trying to represent "we have at least 2
       // game turns to intercept - because we wish to issue 2 orders to arrive on
@@ -382,8 +333,8 @@ namespace Pathfinding {
           launch_pos.Normalize(); // Ensure position is wrapped correctly
 
           // 2. Calculate required velocity from the LAUNCH position.
-          // This correctly uses toroidal VectTo.
-          CTraj dest_vec = launch_pos.VectTo(ctx.destination);
+          // Bias tie cases toward the world center to avoid long wrap paths.
+          CTraj dest_vec = ComputeCenterBiasedVector(launch_pos, ctx.destination);
           CTraj intercept_vec = dest_vec;
           intercept_vec.rho /= ctx.time;
 
@@ -745,7 +696,7 @@ namespace Pathfinding {
             t_ship_vel_t1.rho = g_game_max_speed;
           }
           CCoord t_ship_pos_t1 = ship_pos_t0 + t_ship_vel_t1.ConvertToCoord();
-          CTraj t_dest_vec_t1 = t_ship_pos_t1.VectTo(destination);
+          CTraj t_dest_vec_t1 = ComputeCenterBiasedVector(t_ship_pos_t1, destination);
 
           // Case 2ai: We can issue a single thrust order with a resulting
           //           velocity such that we'll either arrive on time or early.
@@ -806,7 +757,7 @@ namespace Pathfinding {
           // an intercept course."
           if (time > (2*g_game_turn_duration + g_fp_error_epsilon)) {
             CCoord t_ship_pos_t2 = t_ship_pos_t1 + t_ship_vel_t1.ConvertToCoord();
-            CTraj t_dest_vec_t2 = t_ship_pos_t2.VectTo(destination);
+            CTraj t_dest_vec_t2 = ComputeCenterBiasedVector(t_ship_pos_t2, destination);
             CTraj t_intercept_vec_t2 = t_dest_vec_t2;
             // Note - we have 2 turns less to arrive on this order because we'll
             // have issued a thrust and a turn to get into this position.

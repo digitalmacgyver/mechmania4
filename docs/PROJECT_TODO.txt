@@ -480,6 +480,8 @@ Not re-enableable:
 
 ========================== Groonew TODO =============================
 
+SHOOT BETTER - WE ROTATE AND NEVER SHOOT - NO COLLISION - MAYBE EFFICIENCY CHECK????
+
 NEXT UP TESTING:
 
 a. 10 batches mirror match pick best target vs. pick fastest intercept
@@ -587,10 +589,35 @@ the long way around on arbitrary pathing choices.
 Last commit before 17:13 PM today and the current code base.
 
 Let's try switching order of combat:
-Station 2 new:
+Station 2 new: 1
 Station 2 old:
 Ties: 9
 Edge: (old)(old)(old)(new)(new)(new)(new)(old)
+
+So yes - the launch difference matters!!!
+
+Station 2 old: 1
+Station 2 new center:
+Ties: 8
+Edge: (old)(old)(old)(old)(old)(old)(old)(old)
+
+--
+
+OK... Let's just do a good old mirror match of old:
+
+NOTE - for old there is an asymmetry - top lauches around the edge of the map.
+Top:
+Bottom: 1
+Ties: 9
+Edge: (bottom)(top)(top)(bottom)(bottom)(bottom)(bottom)(bottom)(bottom)
+
+Now let's try our theoretically symmetrical competitors:
+
+Top: 2
+Bottom: 1
+Ties: 7
+Edge: (top)(bottom)(bottom)(top)(bottom)(top)
+
 
 
 

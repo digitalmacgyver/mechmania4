@@ -406,6 +406,10 @@ The shortest path automatically wraps through the right edge because 24 units < 
 - No need to manually check for wrapping or calculate alternate paths
 - Maximum distance between any two points is ~724 units (corner to opposite corner)
 
+> **Strategic Tie-Breaking (NEW):** The toroidal tie between two equidistant routes is no longer left to the default edge-biased normalization. Use `CCoord::NormalizeCentered(reference)` to bias displacement vectors toward the world centre when the "go through the middle" and "go around the edge" options are tied. Use `CCoord::NormalizeEdges(reference)` when you intentionally want the opposite behaviour. The reference coordinate should be the point the displacement originates from (e.g. your ship's position before launch).
+>
+> Without calling these helpers, ships starting from some bases naturally select centre-crossing launches, while the mirrored bases favour edge launches. That asymmetry cascades into combat: hunters from one base reach the enemy hub via the centre lanes while their mirrors sweep the outer rim. If you're designing symmetric navigation or interception logic, choose the tie-breaker explicitly to avoid unintended bias.
+
 **Testing toroidal calculations:** Run `./build/test_toroidal_coordinates` to see comprehensive examples of toroidal distance and angle calculations, including:
 - Simple non-wrapping cases
 - Single-edge wrapping (through top/bottom/left/right)

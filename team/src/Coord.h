@@ -58,6 +58,11 @@ class CCoord : public CSendable {
 
   void Normalize();  // Clips coordinates to game field
 
+  // Normalizes using center-biased or edge-biased tie breaking. Reference is
+  // the coordinate from which this displacement originates.
+  void NormalizeCentered(const CCoord& reference);
+  void NormalizeEdges(const CCoord& reference);
+
   // Serialization routines
   unsigned GetSerialSize() const;
   unsigned SerialPack(char* buf, unsigned buflen) const;

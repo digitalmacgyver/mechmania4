@@ -53,6 +53,8 @@
 - Angles: 0 radians = +X, π/2 = +Y. All physics use the standard mathematical orientation.
 - Observer UI: renders +Y downward for display purposes. Internal math remains unchanged.
 
+> **Tie-breaking utilities (NEW):** `CCoord::NormalizeCentered(reference)` and `CCoord::NormalizeEdges(reference)` expose explicit control over toroidal half-world ties. Both functions accept the coordinate that generated the displacement (typically the ship position). Use the centred variant when you want equidistant routes to pass through the middle of the map; use the edge variant to bias toward wraparound routes. Relying on the legacy normalization creates a strategic asymmetry: some stations launch toward the enemy via the centre, while mirrored stations default to the rim. Explicitly selecting a tie-breaker keeps mirrored playbooks tactically symmetric.
+
 ## 6. Fuel Accounting
 - `SetOrder` returns the estimated fuel cost actually scheduled (after clamping to available fuel). Callers should rely on the returned value for planning.
 - During execution, fuel is re-validated. If remaining fuel is insufficient for a slice, the engine scales the impulse proportionally.

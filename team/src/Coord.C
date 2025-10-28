@@ -5,8 +5,10 @@
  * 4/29/98 by Misha Voloshin
  */
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <limits>
 
 #include "Coord.h"
 #include "GameConstants.h"
@@ -303,6 +305,103 @@ unsigned CCoord::SerialPack(char* buf, unsigned buflen) const {
   vpb += BufWrite(vpb, fY);
 
   return vpb - buf;
+}
+
+namespace {
+inline double Square(double value) { return value * value; }
+
+inline double MidpointDistanceSquared(const CCoord& reference,
+                                      const CCoord& delta) {
+  double mid_x = reference.fX + 0.5 * delta.fX;
+  double mid_y = reference.fY + 0.5 * delta.fY;
+  CCoord mid(mid_x, mid_y);
+  mid.Normalize();
+  return Square(mid.fX) + Square(mid.fY);
+}
+
+void NormalizeWithBias(CCoord* value, const CCoord& reference,
+                       bool prefer_center) {
+  if (value == NULL) {
+    return;
+  }
+
+  const double half_x = kWorldSizeX * 0.5;
+  const double half_y = kWorldSizeY * 0.5;
+  const double tie_eps = std::max(1e-6, g_fp_error_epsilon * 10.0);
+
+  CCoord candidates[4];
+  int count = 0;
+  candidates[count++] = *value;
+
+  auto nearly_equal = [&](double a, double b) {
+    return fabs(a - b) <= tie_eps;
+  };
+
+  bool tie_x =
+      nearly_equal(fabs(candidates[0].fX), half_x);
+  bool tie_y =
+      nearly_equal(fabs(candidates[0].fY), half_y);
+
+  if (tie_x) {
+    CCoord alt = candidates[0];
+    alt.fX += (alt.fX >= 0.0) ? -kWorldSizeX : kWorldSizeX;
+    candidates[count++] = alt;
+  }
+
+  int base_for_y = count;
+  if (tie_y) {
+    for (int i = 0; i < base_for_y; ++i) {
+      CCoord alt = candidates[i];
+      alt.fY += (alt.fY >= 0.0) ? -kWorldSizeY : kWorldSizeY;
+      candidates[count++] = alt;
+    }
+  }
+
+  if (count == 1) {
+    *value = candidates[0];
+    value->Normalize();
+    return;
+  }
+
+  double best_length_sq = std::numeric_limits<double>::infinity();
+  double best_mid_metric = prefer_center
+                               ? std::numeric_limits<double>::infinity()
+                               : -std::numeric_limits<double>::infinity();
+  int best_index = 0;
+
+  for (int i = 0; i < count; ++i) {
+    const CCoord& candidate = candidates[i];
+    double length_sq = Square(candidate.fX) + Square(candidate.fY);
+
+    if (length_sq < best_length_sq - tie_eps) {
+      best_length_sq = length_sq;
+      best_mid_metric = MidpointDistanceSquared(reference, candidate);
+      best_index = i;
+      continue;
+    }
+
+    if (fabs(length_sq - best_length_sq) <= tie_eps) {
+      double mid_metric = MidpointDistanceSquared(reference, candidate);
+      bool better = prefer_center ? (mid_metric < best_mid_metric - tie_eps)
+                                  : (mid_metric > best_mid_metric + tie_eps);
+      if (better) {
+        best_mid_metric = mid_metric;
+        best_index = i;
+      }
+    }
+  }
+
+  *value = candidates[best_index];
+  value->Normalize();
+}
+}  // namespace
+
+void CCoord::NormalizeCentered(const CCoord& reference) {
+  NormalizeWithBias(this, reference, true);
+}
+
+void CCoord::NormalizeEdges(const CCoord& reference) {
+  NormalizeWithBias(this, reference, false);
 }
 
 unsigned CCoord::SerialUnpack(char* buf, unsigned buflen) {
