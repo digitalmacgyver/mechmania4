@@ -1,0 +1,83 @@
+# Default sound configuration for MechMania IV Observer
+game:
+  soundtrack:
+    songs:
+      - track_one.wav
+      - track_two.wav
+      - track_three.wav
+
+teams:
+  team1:
+    laser:
+      default:
+      laser_asteroid:
+        default:
+        laser_asteroid_break:
+        laser_asteroid_nobreak:
+    col_ship_asteroid:
+      default:
+      col_ship_asteroid_eat:
+      col_ship_asteroid_break:
+      col_ship_asteroid_destroy:
+    col_ship_laser:
+    col_ship_ship:
+      default:
+      col_ship_friendly_ship:
+    col_station_asteroid:
+    launch:
+      default:
+      launch_from_friendly:
+      launch_from_enemy:
+    dock:
+      default:
+      dock_at_friendly:
+      dock_at_enemy:
+    deliver_vinyl:
+      default:
+      deliver_vinyl_friendly:
+      deliver_vinyl_enemy:
+    raise_shields:
+    jettison:
+      default:
+      jettison_vinyl:
+      jettison_uranium:
+    ship_destroyed:
+    ship_out_of_fuel:
+    game_won:
+  team2:
+    laser:
+      default:
+      laser_asteroid:
+        default:
+        laser_asteroid_break:
+        laser_asteroid_nobreak:
+    col_ship_asteroid:
+      default:
+      col_ship_asteroid_eat:
+      col_ship_asteroid_break:
+      col_ship_asteroid_destroy:
+    col_ship_laser:
+    col_ship_ship:
+      default:
+      col_ship_friendly_ship:
+    col_station_asteroid:
+    launch:
+      default:
+      launch_from_friendly:
+      launch_from_enemy:
+    dock:
+      default:
+      dock_at_friendly:
+      dock_at_enemy:
+    deliver_vinyl:
+      default:
+      deliver_vinyl_friendly:
+      deliver_vinyl_enemy:
+    raise_shields:
+    jettison:
+      default:
+      jettison_vinyl:
+      jettison_uranium:
+    ship_destroyed:
+    ship_out_of_fuel:
+    game_won:
