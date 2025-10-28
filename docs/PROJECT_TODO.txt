@@ -316,6 +316,14 @@ Re-enabled with --legacy-asteroid-eat-damage:
     the default behavior is eaten asteroids deal no damage to the
     ship.
 
+Re-enabled with --legacy-cargo-calc:
+
+  * Today we allow small floating point errors when deciding if an
+    asteroid fits within a ships cargo. Historically exact comparisons
+    of the form (cargo_capacity - current_carg) >= asteroid_mass were
+    checked, which would cause problems for cargo sizes that were
+    trying to be exact multiples of common asteroid sizes (e.g. 40/3).
+
 Re-enabled with --legacy-collision-detection:
 
   * Collision Detection - Proper minimal time to intercept
@@ -473,49 +481,122 @@ Not re-enableable:
     * Ship splits asteroid
     * Asteroid hits station
 
-* Check for fitting asteroids on fp error - we want to be able to
-  configure our cargo like 60-40/3 and 40/3 and not have to worry
-  we'll get messe dup on the FP math.
+==
+
+We wish the game to have a sound track and sound effects for various
+game events. We will provide defaults, however the user is allowed to
+override the defaults via a configuraion file (in some good config
+language that is text based, maybe markdown, maybe JSON, you decide).
+
+Features:
+
+1. The default configuration file will life in sound/defaults.txt
+
+2. By default the observer (which I assume will play the sounds, will
+read that file, however if --sound-config a/b/c.foo is passed it will
+try to read the sound config in a/b/c.foo instead.
+
+3. All the logic for the sound system, except for things which must
+necessarily be included in other files like command parameter passing,
+should be kept in newly created .C/.h files under teams/src (or
+vendor/ if third party code is used).
+
+4. the configuration file has sound configuration for these events:
+
+team1:
+  laser:
+    laser_asteroid:
+      laser_asteroid_break:
+      laser_asteroid_nobreak:
+  col_ship_asteroid:
+    col_ship_asteroid_eat:
+    col_ship_asteroid_break:
+    col_ship_asteroid_destroy:
+  col_ship_laser:
+  col_ship_ship:
+    col_ship_friendly_ship:
+  col_station_asteroid:
+  launch:
+    launch_from_friendly:
+    launch_from_enemy:
+  dock:
+    dock_at_friendly:
+    dock_at_enemy:
+  deliver_vinyl:
+    deliver_vinyl_friendly:
+    deliver_vinyl_enemy:
+  raise_shields:
+  jettison:
+    jettison_vinyl:
+    jettison_uranium: 
+  ship_destroyed:
+  ship_out_of_fuel:
+  game_won:
+
+4a. This configuration structure exists of 2 teams: team1 and team2. 
+4b. All sounds are optional, if no sound file is provided no sound is played for the event in question.
+4c. Parent items with indented children provide the default sound for all unconfigured children.
+4d. Indented items override the sound for their parents, when present.
+4e. The sound file goes after the :
+4f. The special value "-" may be provided which indicates nothing is to be played for this sound (and its non-overriden children)
+4g. Example:
+
+...
+  col_ship_asteroid: foo.wav
+    col_ship_asteroid_eat:
+    col_ship_asteroid_break: bar.wav
+...
+
+In this example:
+col_ship_asteroid (collision between ship and asteroid) plays foo.wav.
+col_ship_asteroid_eat (collision between ship and asteroid when the asteroid is eaten) plays foo.wav since no override is present.
+col_ship_asteroid_break plays bar.wav since it overrides col_ship_asteroid
+col_ship_asteroid_destroy plays foo.wav since it is not present and does not override foo.wav
+
+5. There is also a game soundtrack configuration:
+
+game: list.wav, of.wav, songs.wav
+
+A comma separated list of songs. At the start of each match, or the end of a prior song, a new song not yet played is selected at random. Once all songs have been played once this process begins again.
+
+5a. The user may override the song with --sountrack path/to/file.wav in which case that is the only song that will be played, or --soundtrack none with the special word "none" in which case no soundtrack will be playued.
+
+6. Keyboard shortcuts
+
+==
+
+Let's move onto actually playing
 
 
-Does the game engine's current asteroid fitting "eat asteroid" logic
-handle small floating point differences?
+==
 
-e.g. if (max_capacity - current_cargo)+g_fp_error_epsilon >=
-asteroid_mass then do we consume the asteroid, or is it strictly if:
-(max_capacity - current_cargo) >= asteroid_mass
+At some point our non-legacy mode code stopped showing the collision graphics for things like:
 
-If it is strict today we want to:
+  Ship to asteroid collisions where the asteroid isn't eaten
+  Ship to ship collisions
+  Ship to laser collisions
+  Station to laser collisions
+  Station to Asteroid collisions (maybe)
 
-a. Make a new command line paramter called --legacy-cargo-calc, and
-put the current logic behind that (and also in --legacy-mode enable
-that flag).
+  Look into why these files (described in team/src/graphics.reg)
+  aren't being displayed by dafault anymore and fix that.
 
-b. Update the logic for this to be as descirbed below, enabled by default:
+Also check for any other missing graphics / spirtes - e.g. the bonk
+sprite which I think was for headon ship-ship collisions.
 
-Logic: Make the asteroid consumption logic more permissive and eat
-asteroids which are within g_fp_error_epsilon too big.  b. However,
-the final cargo total must still be capped by mass capacity
-(e.g. truncate after eat if necessary).
-
-The purpose of this is common asteroid sizes in our game are 40.0/9.0
-and 40.0/3.0, and so if a user sets up their ship cargo for vinyl as
-size 40.0/9.0 we don't want them to fail to "eat" midsize asteroids
-due to floating point issues.
-
+==
 
 * Game option to prevent docking at enemy bases (set at start time of
   either the server or observer) (counts as collision with asteroid
   for damage?)
 
 * Game option to create uranium and vinyl equal to fuel and vinyl
-  carried when a ship is blown up.
+  carried when a ship is blown up, so long as that amount is greater
+  than or equal to the smallest world item mass.
 
 * Game option to prevent asteroid dust due to collision - if a
   collision happens and you can't pick up and it would result in too
   small due to break, no break.
-
-* Configure number and size of initial asteroids.
 
 ####################### END ENGINE TODO #############################
 
