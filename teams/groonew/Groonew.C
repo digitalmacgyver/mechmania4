@@ -107,15 +107,15 @@ void Groonew::Init() {
 
   // Set team identity
   SetTeamNumber(14);
-  SetName("hgm2Rogue Squadron");
-  GetStation()->SetName("hgm2Tatooine");  // Base station name
+  SetName("Rogue Squadron");
+  GetStation()->SetName("Tatooine");  // Base station name
 
   ship_roles_.clear();
 
-  GetShip(0)->SetName("hgm2Aluminum Falcon");
-  GetShip(1)->SetName("hgm2Gold Leader");
-  GetShip(2)->SetName("hgm2Red 5");
-  GetShip(3)->SetName("hgm2Echo 3");
+  GetShip(0)->SetName("Aluminum Falcon");
+  GetShip(1)->SetName("Gold Leader");
+  GetShip(2)->SetName("Red 5");
+  GetShip(3)->SetName("Echo 3");
 
 
   // Configure all ships with high cargo, low fuel strategy
@@ -134,13 +134,13 @@ void Groonew::Init() {
 
   // Change some ships to hunters.
   
-  GetShip(2)->SetCapacity(S_FUEL, 46.66);
-  GetShip(2)->SetCapacity(S_CARGO, 13.34);
+  GetShip(2)->SetCapacity(S_FUEL, 55.55);
+  GetShip(2)->SetCapacity(S_CARGO, 4.45);
   if (GetShip(2) != NULL) {
     ship_roles_[GetShip(2)] = ShipRole::Hunter;
   }
-  GetShip(3)->SetCapacity(S_FUEL, 46.66);
-  GetShip(3)->SetCapacity(S_CARGO, 13.34);
+  GetShip(3)->SetCapacity(S_FUEL, 55.55);
+  GetShip(3)->SetCapacity(S_CARGO, 4.45);
   if (GetShip(3) != NULL) {
     ship_roles_[GetShip(3)] = ShipRole::Hunter;
   }
@@ -790,7 +790,7 @@ void Groonew::AssignShipOrders() {
       }
     }
 
-    if (force_uranium_gather) {
+    if (force_uranium_gather && wants != HOME) {
       wants = FUEL;
     } else if (role == ShipRole::Hunter && !treat_as_gatherer) {
       wants = VIOLENCE;

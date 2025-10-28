@@ -645,10 +645,17 @@ Tie: 9
 Edge: (s2)(hgs)(s2)(hgs)(hgs)(s2)(s2)
 
 OK - now sm vs med
-med:
-small:
-tie: 5
-edge: (med)(small)(med)
+med: 1
+small: 1
+tie: 8
+edge: (med)(small)(med)(small)(med)(small)
+
+So now we see who did better against default.
+
+s2: 2
+med: 
+tie: 6
+Edge: (s2)(med)(s2)(s2)
 
 ===
 
