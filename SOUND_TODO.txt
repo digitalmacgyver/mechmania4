@@ -1,0 +1,90 @@
+Sound System Roadmap (SDL_mixer Integration)
+===========================================
+
+Overall Goal
+------------
+Migrate the MechMania observer to an SDL_mixer-based audio stack that can:
+- decode WAV/MP3/MOD (optionally Ogg) via a single cross-platform API,
+- respect advanced playback behaviors (queue, delay, scale) configured in sound/defaults.txt,
+- keep music running continuously while enforcing per-tick rules for sound effects.
+
+Current Status
+--------------
+- ✅ Build now tolerates missing system SDL_mixer by stubbing playback and warning at configure time.
+- ✅ Vendoring script updated to capture SDL2_mixer alongside other SDL deps for offline installs.
+- ✅ AudioSystem scaffolding present (initialization, request buffering, logging).
+- ✅ SoundLibrary parses defaults.txt using a custom indentation parser; it captures file paths, queue/delay/scale metadata, and supports per-event fallback lookups.
+- ✅ AudioEventTracker emits effect requests with quantities and team-local logical IDs (e.g. team1.launch.default).
+- ✅ defaults.txt demonstrates new schema (file + behavior with queue/delay/scale) and inherit semantics.
+- ✅ Default soundtrack now seeds assets/star_control/music/hyper.mod to exercise SDL_mixer playback.
+- ✅ EffectRequest delay/loop hints now come from SoundLibrary descriptors when enqueuing playback requests, and queue-mode flags reach the buffer.
+- ✅ Observer footer exposes audio mute (M) and effects (E) toggles with real-time status indicators.
+- ✅ AudioSystem scheduler enforces delay/queue semantics with Mix channel dispatch and logs scheduling when SDL_mixer is unavailable.
+
+To-Do / Next Steps
+------------------
+1. ~~**Populate EffectRequest behavior hints**~~ (done)
+   - Handled during AudioSystem queuing: descriptor lookups set delay ticks, compute loop counts from scale rules, and mark queue-mode events so downstream schedulers can differentiate.
+
+2. ~~**Enhance SoundRequestBuffer**~~ (done)
+   - Buffer tracks per-request metadata, keeps queue-mode events in arrival order without collapsing, and preserves requested loop counts while coalescing simultaneous effects.
+
+3. ~~**Implement AudioSystem scheduler**~~ (done)
+   - Scheduler now caches descriptors, computes delay-aware start ticks, sequences queue-mode events, and enforces duration windows when dispatching Mix channels (with logging fallback when SDL_mixer is absent).
+
+4. ~~**Asset management**~~ (done)
+   - Effect chunks are cached per asset path and music playback now prefers the configured default soundtrack, using SDL_mixer loop counts for repetition.
+
+5. ~~**Observer integration**~~ (done)
+   - ObserverSDL pumps scheduler ticks each update and now surfaces keyboard toggles plus footer status for music/effects mute state.
+
+6. **Testing & validation**
+   - Add targeted tests or debug logging to validate queue/delay/scale flows (possibly gated by verbose flag).
+   - Document run instructions for ensuring SDL_mixer pkg-config paths are present (via vendor script or manual build).
+
+Open Questions
+--------------
+- Decide whether YAML parsing should move to a third-party library (yaml-cpp) or keep the current indent-based parser long-term.
+- Determine default duration_ticks when unspecified (current behavior treats 0 as "play to completion").
+- Clarify how inheritance should behave when behavior attributes are omitted in the child.
+
+Immediate Diagnostics (Audio Pipeline Gaps)
+------------------------------------------
+We currently have three blocking issues surfaced in `build/obs.log`. Tackle them in this order so we gain confidence that lower-level plumbing works before chasing codec support.
+
+**(c) Manual heartbeat effect never fires**
+- Instrument `ObserverSDL` to inject a diagnostics effect (e.g. `manual.audio.ping`) every 5 seconds *only when* the observer is launched with `--verbose` audio.
+- Add a guard in `AudioSystem::QueueEffect` that logs receipt of this diagnostics event before any early return.
+- Verify `AudioSystem::FlushPending` schedules and dispatches the chunk; expect `[audio] schedule event=manual.audio.ping` followed by `[audio] effect playing event=manual.audio.ping`.
+- Testing: new `teams/testteam/tests/test7.sh` (see below) must run `scripts/test_collision_modes.py` with `--observer-verbose --observer-assets-root ..` and fail if the observer log is missing these manual ping entries.
+
+**(b) Launch undock events never reach audio**
+- Extend `AudioEventTracker` verbose logging (guarded by the same `--verbose`) to dump docked→undocked transitions per ship so we can see if the world state fires.
+- In `ObserverSDL::Update`, log the number of gathered audio events each turn when verbose. If zero during known launch actions, dump the relevant ship IDs.
+- Ensure `SoundRequestBuffer` actually sees launch events by writing unit-style assertions in the diagnostics mode (e.g. increment a counter and print `[audio] launch event emitted ...`).
+- Testing: `test7.sh` should script two undocks via `test7_ship_launches.txt`. Success requires both the launch event log and the effect playback log to appear in the captured observer log.
+
+**(a) MOD soundtrack fails to load**
+- Confirm vendored SDL_mixer build bundles `libmodplug` (or an equivalent module decoder). During CMake configure, explicitly check for `libmodplug.so` under `vendor/local/lib` and trigger the vendor build if missing.
+- After a clean configure, log the actual `Mix_Init` result along with the list of enabled decoders (call `Mix_GetChunkDecoder`/`Mix_GetMusicDecoder` when verbose).
+- Extend diagnostics to attempt loading a tiny `.mod` shipped in `assets/star_control/music` and log success/failure immediately on observer start; this separates codec problems from runtime playback issues.
+- Testing: once (c) and (b) pass, re-run `test7.sh` and expect `[audio] music loaded` followed by `[audio] music start`. Add a follow-up smoke test that greps for those lines when soundtrack assets are present.
+
+Automation & Tooling Updates
+----------------------------
+- `teams/testteam/tests/test7.sh`: clone from `test3.sh`, but update success criteria to require the manual ping log, launch event log, and launch effect log. Source the new moves file `test7_ship_launches.txt` (two undocks on turn 1) and ensure we emit the observer log path to stdout for the shell script to locate.
+- `scripts/test_collision_modes.py`: accept `--observer-verbose` and `--observer-assets-root` (already parsed) and feed them into the observer command for both legacy and new runs. While there, print the observer log file path so shell tests can grep it reliably.
+- Observer must honor `--assets-root` when resolving audio paths; diagnostics should state the resolved absolute path so log triage is easier.
+
+Validation Workflow
+-------------------
+1. `cmake -S . -B build` (no extra flags once vendoring auto-runs) then `cmake --build build`.
+2. `teams/testteam/tests/test7.sh` – fails if manual ping, launch event, or launch playback logs are missing.
+3. Once (c) and (b) pass, add a dedicated MOD codec smoke test (future) that plays `hyper.mod` and asserts `[audio] music start`.
+
+Upcoming Debugging Tasks
+------------------------
+- Implement the `manual.audio.ping` diagnostics trigger inside the observer (5s cadence, verbose mode only) and ensure `AudioSystem::QueueEffect` logs its receipt.
+- Trace the launch/undock flow: instrument `AudioEventTracker` and `ObserverSDL::Update` to log dock state transitions when verbose, then confirm the requests reach `SoundRequestBuffer`.
+- Add a temporary verbose dump of `SoundRequestBuffer::QueueEffect` so we can see the launch events arriving while tests run.
+- Extend `AudioSystem::FlushPending` verbose logs to show pending queue contents each tick when troubleshooting is active.

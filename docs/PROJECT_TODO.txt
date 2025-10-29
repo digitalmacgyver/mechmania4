@@ -1,6 +1,50 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+== EVO Combat ==
+
+For our next improvements:
+
+1. Consider "laser efficiency" when planning laser shots. Lasers have
+a maximum beam length of 512. Note that a laser of beam length B
+consumes fuel of B/50 to create. When it strikes a target D distance
+away it deals: 30*(B-D) damage units to that target. For target ships
+their shields are depleted at a rate of 1/1000th of a shield per that
+damage unit. For target stations their vinyl reserves are deleted at a
+rate of 1/1000th of a ton of vinyl per that unit of damage.  Note that
+ships can restore shields by X per X tons of fuel consumed. This means
+that when computing whether a shot beam costs more fuel to shoot than
+it does for an enemy ship to regenerate shields, we can consider the
+math above to come up with an efficiency ratio. This works out to
+roughly that a beam B should be at least 3*D long in order that it not
+cost the shooter more fuel to generate the beam than it does for the
+target ship to regenerate shields.  There are of course other
+conditions - but generally we should be aware that, for example, the
+fuel cost to reduce 1 unit of shields from an enemy ship or 1 ton of
+vinyl from an enemy station is highly dependent on our distance D from
+the target.
+
+2. Add logic to avoid "overkill" with lasers. A ship with X shields is
+destroyed when its shields reach 0 - so there is no point in deling
+much, much more than X damage to it (it is OK to deal a little bit
+more to account for imprecision in our plans versus reality when the
+game engine simulates the physics results). Similarly a station with X
+vinyl on it can not be taken below 0 vinyl - it is wasteful to shoot
+it with much more power than would reduce the vinyl reserves to 0.
+
+2. Consider dynamically switching between hunter and gatherer mode for
+ships depending on world state information.
+
+Here are some relevant world state variable to consider:
+
+a. (no undocked enemy ships && ! enemy station has vinyl ) ; we might call this case "no hunting targets"
+b. (no living enemy ships && ! enemy station has vinyl ) ; we might call this condition "there will never be hunting targets )
+c. (no living enemy ships with current fuel && ! enemy station has vinyl ) ; we might call this condition "there will probably never be hunting targets"
+d. (no vinyl free in the world && ! friendly ships have vinyl cargo ) ; we might call this condition "probably no more points" (in theory an emeny ship could have vinyl and jettison it back into the world, but this is unlikely).
+e. (no uranium free in the world) ; we might call this condition "fuel constrained" - at this point ships will never get more fuel - so logic around fuel reserves might need to be changed so we don't end the game with unused fuel we refused to touch.
+f. (no uraniam free in the world && no vinul free in the world ) ; For friendly ships that don't have vinyl cargo - the only useful thing to do is most likely to attack enemy ships or ensure vinyl in friendly ships makes it back to the station
+
+
 == Evo Combat ==
 
 Great work, now we turn to putting some knobs into our system for

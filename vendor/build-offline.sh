@@ -16,7 +16,7 @@ mkdir -p "$BUILD_DIR"
 mkdir -p "$PREFIX"
 
 build_dep() {
-  local archive="$1"
+  local archive=$1
   local dir_name
   dir_name=$(tar -tzf "$archive" | head -1 | cut -f1 -d"/")
   rm -rf "$BUILD_DIR/$dir_name"
@@ -31,10 +31,6 @@ build_dep() {
 build_dep "$VENDOR_DIR/source-packages/SDL2-"*.tar.gz
 build_dep "$VENDOR_DIR/source-packages/SDL2_image-"*.tar.gz
 build_dep "$VENDOR_DIR/source-packages/SDL2_ttf-"*.tar.gz
-build_dep "$VENDOR_DIR/source-packages/libmodplug-"*.tar.gz
-
-# Ensure pkg-config can locate newly installed libraries when building mixer
-export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 build_dep "$VENDOR_DIR/source-packages/SDL2_mixer-"*.tar.gz
 
 touch "$PREFIX/.mm4_vendor_complete"

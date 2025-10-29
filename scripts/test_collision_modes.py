@@ -12,6 +12,7 @@ import sys
 import time
 import socket
 import argparse
+import tempfile
 
 
 # Paths to executables (relative to project root)
@@ -56,7 +57,8 @@ def check_executables(team_names):
 
 
 def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', test_file=None,
-                  show_team_output=False, use_stdin=False, max_turns=None):
+                  show_team_output=False, use_stdin=False, max_turns=None,
+                  observer_verbose=False, observer_assets_root=None):
     """
     Run a single test game with specified server flags.
 
@@ -92,7 +94,6 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         popen_kwargs['preexec_fn'] = os.setsid
 
     # Determine test name from test file path
-    import tempfile
     test_name = "unknown"
     if test_file:
         test_basename = os.path.basename(test_file)
@@ -120,7 +121,17 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         )
         os.close(testteam_log_fd)
 
+    observer_log_file = None
+    server_log_file = None
     try:
+        # Prepare observer log
+        observer_log_fd, observer_log_path = tempfile.mkstemp(
+            prefix=f"mm4obs-{test_name}-{mode_suffix}-",
+            suffix=".log",
+            dir="/tmp"
+        )
+        os.close(observer_log_fd)
+
         # 1. Start server with --verbose flag
         server_cmd = [SERVER_EXEC, f"-p{port}", "-T2", "--verbose"]
         if max_turns is not None:
@@ -226,6 +237,11 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
             OBSERVER_EXEC, f"-p{port}", "-hlocalhost",
             "-G", "-g", GRAPHICS_REG
         ]
+        if observer_verbose:
+            observer_cmd.append("--verbose")
+        if observer_assets_root:
+            observer_cmd.extend(["--assets-root", observer_assets_root])
+        print(f"Observer log: {observer_log_path}")
         print(f"Starting observer (headless)...")
         observer_env = os.environ.copy()
         observer_env["SDL_VIDEODRIVER"] = "dummy"
@@ -233,6 +249,10 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
 
         observer_kwargs = popen_kwargs.copy()
         observer_kwargs["env"] = observer_env
+        observer_log_file = open(observer_log_path, 'w')
+        observer_kwargs["stdout"] = observer_log_file
+        observer_kwargs["stderr"] = observer_log_file
+        observer_kwargs["text"] = True
         p_obs = subprocess.Popen(observer_cmd, **observer_kwargs)
         processes.append(p_obs)
 
@@ -313,10 +333,16 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
 
     finally:
         # Close log files if still open
-        try:
-            server_log_file.close()
-        except:
-            pass
+        if server_log_file:
+            try:
+                server_log_file.close()
+            except:
+                pass
+        if observer_log_file:
+            try:
+                observer_log_file.close()
+            except:
+                pass
         try:
             if testteam_log_file:
                 testteam_log_file.close()
@@ -360,6 +386,10 @@ def main():
                         help='Run with --legacy-mode flag (enables all legacy behaviors)')
     parser.add_argument('--test-physics', action='store_true',
                         help='Test rotation physics modes (legacy vs new)')
+    parser.add_argument('--observer-verbose', action='store_true',
+                        help='Run observer with --verbose for audio diagnostics')
+    parser.add_argument('--observer-assets-root', type=str,
+                        help='Override assets root passed to observer (--assets-root)')
     args = parser.parse_args()
 
     print("MechMania IV - Collision Handling Test Harness")
@@ -397,7 +427,9 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=max_turns
+            max_turns=max_turns,
+            observer_verbose=args.observer_verbose,
+            observer_assets_root=args.observer_assets_root
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -411,7 +443,9 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=max_turns
+            max_turns=max_turns,
+            observer_verbose=args.observer_verbose,
+            observer_assets_root=args.observer_assets_root
         )
     # If --legacy-mode is specified, only run one test with full legacy mode
     elif args.legacy_mode:
@@ -424,7 +458,9 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=args.max_turns
+            max_turns=args.max_turns,
+            observer_verbose=args.observer_verbose,
+            observer_assets_root=args.observer_assets_root
         )
     else:
         # For groogroo vs groogroo test, use shorter game (100 turns) unless specified
@@ -441,7 +477,9 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=max_turns
+            max_turns=max_turns,
+            observer_verbose=args.observer_verbose,
+            observer_assets_root=args.observer_assets_root
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -455,7 +493,9 @@ def main():
             test_file=test_file_path,
             show_team_output=args.show_team_output,
             use_stdin=args.use_stdin,
-            max_turns=max_turns
+            max_turns=max_turns,
+            observer_verbose=args.observer_verbose,
+            observer_assets_root=args.observer_assets_root
         )
 
     # Summary

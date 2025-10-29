@@ -404,6 +404,9 @@ void AudioSystem::DispatchEffect(const ScheduledEffect& pending) {
   state.channel = channel;
   channels_.push_back(state);
 
+  std::cout << "[audio] effect playing event=" << pending.request.logicalEvent
+            << " channel=" << channel << std::endl;
+
   if (verbose_) {
     auto now = std::chrono::steady_clock::now();
     if (lastEffectLog_ == std::chrono::steady_clock::time_point::min() ||

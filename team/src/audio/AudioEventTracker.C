@@ -110,6 +110,8 @@ std::vector<EffectRequest> AudioEventTracker::GatherEvents(const CWorld& world) 
           req.teamWorldIndex = teamWorldIndex;
           req.metadata = ship->GetName();
           events.push_back(req);
+          std::cout << "[audio] launch event emitted for " << req.metadata
+                    << " team=" << teamTag << std::endl;
         }
       }
 

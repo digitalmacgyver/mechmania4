@@ -8,6 +8,10 @@ game:
       - track_three.wav
 
 teams:
+  team:
+    launch:
+      default:
+        file: ../assets/star_control/effects/ur-quan-launch.wav
   team1:
     laser:
       default:
