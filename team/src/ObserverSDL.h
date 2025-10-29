@@ -6,12 +6,14 @@
 #ifndef _OBSERVERSDL_H_
 #define _OBSERVERSDL_H_
 
+#include <limits>
 #include <string>
 #include <vector>
 
 #include "SDL2Graphics.h"
 #include "Ship.h"
 #include "SpriteManager.h"
+#include "audio/AudioEventTracker.h"
 #include "Team.h"
 #include "Thing.h"
 #include "World.h"
@@ -50,6 +52,14 @@ class ObserverSDL {
     int seconds;     // game time (whole seconds) when captured
   };
   std::vector<Message> messageBuffer;
+  int audioControlsY;
+  int audioControlsHeight;
+  int audioControlsGap;
+
+  // Audio integration
+  mm4::audio::AudioEventTracker audioEventTracker;
+  bool audioInitialized;
+  unsigned int lastAudioTurnProcessed;
 
   // Drawing helpers
   void DrawSpace();
@@ -64,6 +74,8 @@ class ObserverSDL {
   void DrawTeamInfo(CTeam* team, int x, int y);
   void DrawAnnouncerMessages();
   void DrawMessages();
+  void DrawAudioControlsPanel();
+  void DrawSpeakerIcon(int x, int y, bool muted, const Color& accent);
   void DrawTimeDisplay();
   void DrawStarfield();
   void DrawHelpFooter();
@@ -91,7 +103,13 @@ class ObserverSDL {
   bool HandleEvents();
 
   // World management
-  void SetWorld(CWorld* world) { myWorld = world; }
+  void SetWorld(CWorld* world) {
+    if (myWorld != world) {
+      myWorld = world;
+      audioEventTracker.Reset();
+      lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
+    }
+  }
   CWorld* GetWorld() { return myWorld; }
 
   // Settings
@@ -99,7 +117,7 @@ class ObserverSDL {
   void SetDrawNames(int val) { drawnames = val; }
   void ToggleVelVectors() { useVelVectors = !useVelVectors; }
   void ToggleSpriteMode() { useSpriteMode = !useSpriteMode; }
-  void TogglePause() { isPaused = !isPaused; }
+  void TogglePause();
   bool IsPaused() const { return isPaused; }
 
   // Message system

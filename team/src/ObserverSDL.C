@@ -4,8 +4,10 @@
 
 #include <algorithm>  // For std::min
 #include <cmath>      // For cos, sin
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 #include "Asteroid.h"
@@ -16,6 +18,7 @@
 #include "Thing.h"      // Provides ship/thing state and sentinel constants
 #include "World.h"      // For BAD_INDEX
 #include "XPMLoader.h"  // For loading logo
+#include "audio/AudioSystem.h"
 
 ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag)
     : graphics(nullptr),
@@ -23,13 +26,18 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag)
       myWorld(nullptr),
       logoTexture(nullptr),
       useSpriteMode(gfxFlag == 1),
-      attractor(0) {  // Enable sprite mode when -G is used
+      attractor(0),
+      audioInitialized(false),
+      lastAudioTurnProcessed(std::numeric_limits<unsigned int>::max()) {  // Enable sprite mode when -G is used
   (void)regFileName;
 
   drawnames = 1;
   isPaused = false;
   showStarfield = true;
   useVelVectors = false;
+  audioControlsY = 0;
+  audioControlsHeight = 40;
+  audioControlsGap = 8;
 
   if (gfxFlag == 1) {
     useXpm = true;
@@ -39,6 +47,7 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag)
     useVelVectors = true;  // Tactical display
   }
 
+  audioEventTracker.Reset();
   graphics = new SDL2Graphics();
 }
 
@@ -51,6 +60,10 @@ ObserverSDL::~ObserverSDL() {
   }
   if (spriteManager) {
     delete spriteManager;
+  }
+  if (audioInitialized) {
+    mm4::audio::AudioSystem::Instance().Shutdown();
+    audioInitialized = false;
   }
 }
 
@@ -116,8 +129,47 @@ bool ObserverSDL::Initialize() {
   msgWidth = rightPanelWidth;
   msgHeight = spaceHeight - (msgPosY - borderY);
 
+  int availableForMessages = msgHeight;
+  audioControlsGap = std::max(6, charH / 2);
+  int desiredPanelHeight = std::max(2 * lineHeight + 8, 36);
+
+  if (availableForMessages > desiredPanelHeight + audioControlsGap) {
+    audioControlsHeight = desiredPanelHeight;
+    msgHeight = availableForMessages - audioControlsHeight - audioControlsGap;
+  } else {
+    audioControlsGap = std::max(4, std::min(audioControlsGap, availableForMessages / 6));
+    audioControlsHeight = std::max(20, availableForMessages - audioControlsGap);
+    if (audioControlsHeight > availableForMessages) {
+      audioControlsHeight = availableForMessages;
+    }
+    msgHeight = std::max(0, availableForMessages - audioControlsHeight - audioControlsGap);
+  }
+  audioControlsY = msgPosY + msgHeight + audioControlsGap;
+
   // Initialize message buffer (start empty; we keep full history)
   messageBuffer.clear();
+
+  std::string soundConfigPath = "sound/defaults.txt";
+  if (!std::filesystem::exists(soundConfigPath)) {
+    const char* candidates[] = {"../sound/defaults.txt",
+                                "../../sound/defaults.txt",
+                                "../../../sound/defaults.txt"};
+    for (const char* candidate : candidates) {
+      if (std::filesystem::exists(candidate)) {
+        soundConfigPath = candidate;
+        break;
+      }
+    }
+  }
+
+  audioInitialized =
+      mm4::audio::AudioSystem::Instance().Initialize(soundConfigPath);
+  if (!audioInitialized) {
+    std::cerr << "Warning: Audio system failed to initialize" << std::endl;
+  } else {
+    audioEventTracker.Reset();
+    lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
+  }
 
   return true;
 }
@@ -125,7 +177,20 @@ bool ObserverSDL::Initialize() {
 void ObserverSDL::Update() {
   // Only update world state if not paused
   if (!isPaused && myWorld) {
-    // World update would happen here
+    if (audioInitialized) {
+      unsigned int currentTurn = myWorld->GetCurrentTurn();
+      if (currentTurn != lastAudioTurnProcessed) {
+        auto& audioSystem = mm4::audio::AudioSystem::Instance();
+        audioSystem.BeginSubtick();
+        auto events = audioEventTracker.GatherEvents(*myWorld);
+        for (const auto& event : events) {
+          audioSystem.QueueEffect(event);
+        }
+        audioSystem.EndSubtick();
+        audioSystem.FlushPending(static_cast<int>(currentTurn));
+        lastAudioTurnProcessed = currentTurn;
+      }
+    }
   }
 }
 
@@ -198,6 +263,7 @@ void ObserverSDL::Draw() {
   }
 
   DrawMessages();
+  DrawAudioControlsPanel();
   DrawTimeDisplay();
 
   // Draw logo overlay if attractor mode is active
@@ -209,6 +275,21 @@ void ObserverSDL::Draw() {
 
   // Present everything
   graphics->Present();
+}
+
+void ObserverSDL::TogglePause() {
+  isPaused = !isPaused;
+  if (!audioInitialized) {
+    return;
+  }
+
+  auto& audioSystem = mm4::audio::AudioSystem::Instance();
+  if (isPaused) {
+    audioSystem.PauseEffects();
+  } else {
+    audioSystem.ResumeEffects();
+    lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
+  }
 }
 
 bool ObserverSDL::HandleEvents() {
@@ -233,6 +314,23 @@ bool ObserverSDL::HandleEvents() {
             std::cout << "Starfield: " << (showStarfield ? "ON" : "OFF")
                       << std::endl;
             break;
+          case SDLK_m: {
+            auto& audioSystem = mm4::audio::AudioSystem::Instance();
+            bool mute = !audioSystem.MusicMuted();
+            audioSystem.SetMusicMuted(mute);
+            std::cout << "Soundtrack: " << (mute ? "MUTED" : "ON") << std::endl;
+            AddMessage(mute ? "Soundtrack muted" : "Soundtrack unmuted", -1);
+            break;
+          }
+          case SDLK_e: {
+            auto& audioSystem = mm4::audio::AudioSystem::Instance();
+            bool mute = !audioSystem.EffectsMuted();
+            audioSystem.SetEffectsMuted(mute);
+            std::cout << "Effects: " << (mute ? "MUTED" : "ON") << std::endl;
+            AddMessage(mute ? "Sound effects muted" : "Sound effects unmuted",
+                       -1);
+            break;
+          }
           case SDLK_v:
             ToggleVelVectors();
             break;
@@ -905,6 +1003,104 @@ void ObserverSDL::DrawMessages() {
   SDL_RenderSetClipRect(graphics->GetRenderer(), nullptr);
 }
 
+void ObserverSDL::DrawAudioControlsPanel() {
+  if (audioControlsHeight <= 0 || msgWidth <= 0) {
+    return;
+  }
+
+  int panelX = msgPosX;
+  int panelY = audioControlsY;
+  int panelWidth = msgWidth;
+  int panelHeight = audioControlsHeight;
+
+  if (audioControlsGap > 0) {
+    graphics->DrawRect(panelX, panelY - audioControlsGap, panelWidth,
+                       audioControlsGap, Color(0, 0, 0), true);
+  }
+
+  graphics->DrawRect(panelX, panelY, panelWidth, panelHeight, Color(0, 0, 0),
+                     true);
+  graphics->DrawRect(panelX, panelY, panelWidth, panelHeight,
+                     Color(70, 70, 70), false);
+
+  bool audioReady = audioInitialized &&
+                    mm4::audio::AudioSystem::Instance().IsInitialized();
+  bool musicMuted = true;
+  bool effectsMuted = true;
+  if (audioReady) {
+    auto& audioSystem = mm4::audio::AudioSystem::Instance();
+    musicMuted = audioSystem.MusicMuted();
+    effectsMuted = audioSystem.EffectsMuted();
+  }
+
+  std::string musicLabel = "[M]ute soundtrack:";
+  std::string effectsLabel = "Mute Sound [E]ffects:";
+
+  int labelW = 0, labelH = 0;
+  graphics->GetTextSize(musicLabel, labelW, labelH, true);
+  int rowHeight = std::max(labelH + 4, 18);
+  int verticalPadding = std::max(6, (panelHeight - 2 * rowHeight) / 3);
+  int row1Y = panelY + verticalPadding;
+  int row2Y = row1Y + rowHeight + verticalPadding / 2;
+
+  int iconWidth = 22;
+  int spacing = 6;
+  int horizontalPadding = 12;
+
+  int iconX = panelX + panelWidth - horizontalPadding - iconWidth;
+  Color activeColor(0, 220, 0);
+  Color inactiveColor(130, 130, 130);
+
+  Color musicColor = (!audioReady || musicMuted) ? inactiveColor : activeColor;
+  int musicLabelW = 0, musicLabelH = 0;
+  graphics->GetTextSize(musicLabel, musicLabelW, musicLabelH, true);
+  int musicLabelX = iconX - spacing - musicLabelW;
+  if (musicLabelX < panelX + horizontalPadding) {
+    musicLabelX = panelX + horizontalPadding;
+  }
+  graphics->DrawText(musicLabel, musicLabelX, row1Y, musicColor, true, true);
+  DrawSpeakerIcon(iconX, row1Y - 2, musicMuted || !audioReady, musicColor);
+
+  Color fxColor = (!audioReady || effectsMuted) ? inactiveColor : activeColor;
+  int effectsLabelW = 0, effectsLabelH = 0;
+  graphics->GetTextSize(effectsLabel, effectsLabelW, effectsLabelH, true);
+  int effectsLabelX = iconX - spacing - effectsLabelW;
+  if (effectsLabelX < panelX + horizontalPadding) {
+    effectsLabelX = panelX + horizontalPadding;
+  }
+  graphics->DrawText(effectsLabel, effectsLabelX, row2Y, fxColor, true, true);
+  DrawSpeakerIcon(iconX, row2Y - 2, effectsMuted || !audioReady, fxColor);
+}
+
+void ObserverSDL::DrawSpeakerIcon(int x, int y, bool muted,
+                                  const Color& accent) {
+  int bodyWidth = 6;
+  int bodyHeight = 10;
+  int hornWidth = 8;
+  int top = y;
+
+  graphics->DrawRect(x, top + 2, bodyWidth, bodyHeight, accent, true);
+
+  int hornX[3] = {x + bodyWidth, x + bodyWidth + hornWidth, x + bodyWidth};
+  int hornY[3] = {top, top + bodyHeight / 2 + 2, top + bodyHeight + 4};
+  graphics->DrawPolygon(hornX, hornY, 3, accent, true);
+
+  if (muted) {
+    Color muteColor(255, 80, 80);
+    graphics->DrawLine(x + bodyWidth + 1, top + 1, x + bodyWidth + hornWidth + 4,
+                       top + bodyHeight + 5, muteColor);
+    graphics->DrawLine(x + bodyWidth + hornWidth + 4, top + 1,
+                       x + bodyWidth + 1, top + bodyHeight + 5, muteColor);
+  } else {
+    Color waveColor = accent;
+    graphics->DrawLine(x + bodyWidth + 4, top + 3, x + bodyWidth + hornWidth + 2,
+                       top + 1, waveColor);
+    graphics->DrawLine(x + bodyWidth + 4, top + bodyHeight,
+                       x + bodyWidth + hornWidth + 2, top + bodyHeight + 2,
+                       waveColor);
+  }
+}
+
 void ObserverSDL::DrawTimeDisplay() {
   if (!myWorld) {
     return;
@@ -1082,8 +1278,8 @@ void ObserverSDL::DrawHelpFooter() {
   x = 10 + titleW + gapAfterTitleChars * (charW > 0 ? charW : 7);
 
   const char* controls[] = {
-      "[S] Stars",        "[N] Names",     "[V] Velocities", "[G] Graphics",
-      "[P] Pause/Resume", "[Spc] Credits", "[ESC/Q] Quit",   nullptr};
+      "[S] Stars", "[N] Names", "[V] Velocities", "[G] Graphics",
+      "[P] Pause/Resume", "[Spc] Credits", "[ESC/Q] Quit", nullptr};
 
   int gapChars = 7;  // spread commands out more
   int gapPixels = gapChars * (charW > 0 ? charW : 7);
@@ -1098,17 +1294,20 @@ void ObserverSDL::DrawHelpFooter() {
   const char* spriteStr = useSpriteMode ? "Sprites: ON" : "Sprites: OFF";
   const char* stateStr = isPaused ? "PAUSED" : "RUNNING";
 
-  int w1 = 0, h1 = 0, w2 = 0, h2 = 0;
-  graphics->GetTextSize(spriteStr, w1, h1, true);
-  graphics->GetTextSize(stateStr, w2, h2, true);
+  int wSprite = 0, hSprite = 0;
+  int wState = 0, hState = 0;
+  graphics->GetTextSize(spriteStr, wSprite, hSprite, true);
+  graphics->GetTextSize(stateStr, wState, hState, true);
 
-  int rightGroupWidth = w1 + gapPixels + w2;
+  int rightGroupWidth = wSprite + wState + gapPixels;
   int rightX = displayWidth - 10 - rightGroupWidth;
 
-  graphics->DrawText(spriteStr, rightX, textY,
+  int xCursor = rightX;
+  graphics->DrawText(spriteStr, xCursor, textY,
                      useSpriteMode ? Color(0, 255, 0) : Color(150, 150, 150),
                      true);
-  graphics->DrawText(stateStr, rightX + w1 + gapPixels, textY,
+  xCursor += wSprite + gapPixels;
+  graphics->DrawText(stateStr, xCursor, textY,
                      isPaused ? Color(255, 255, 0) : Color(0, 255, 0), true,
                      true);
 }

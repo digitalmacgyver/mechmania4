@@ -1,6 +1,72 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+== Evo Stuff ==
+
+We have been working on developing a genetic algoritm improving team
+for a coding contest.
+
+The coding contest features two opposed teams of four ships in a
+toroidal 2d world from [-512,512) in both X and Y.
+
+Ships travel through the area under newtonian physics and have:
+* An orientation (which way they are facing)
+* A position and a velocity
+
+Ships may issue orders once each game turn including:
+
+Exactly one of these three exclusive orders:
+* Thrust forwards (along their orientation) or backwards (the opposite direction) which changes their velocity by the thrust magnitude. The ship will continue to drift at the new velocity until it thrusts again or collides with something. Thrusting requires fuel which it consumes.
+* Rotate: changes the orientation of the ship by the requested amount of radians (normalized onto -pi to pi). Rotation requires fuel which it consumes.
+* Jettison either fuel (uranium) or cargo (vinyl)
+
+And also none, one, or both of these exclusive orders:
+* Increase the amound of shields a ship has. Ships lose shields from collisions with other ships, with asteroids they can't "eat" or gather, and by being struck with lasers. If a ships shields reach 0 it is destroyed. Raising shields requires fuel which it consumes.
+* Shoot lasers. Lasers are emitted along the orientation of the ship and go a beam length specified by the magnitude. Lasers strike and damage the first item they hit along their path, and their damage is proportional to their beam length minus the distance from the firing ship to the hit target. Laser damage reduces shield of ships it hits, and reduces vinyl stores (victory points) of stations it hits. Lasers require fuel which it consumes. NOTE: Lasers fire _AFTER_ any Thurst or Rotation orders from the same turn are processed - so you can turn and shoot on the same turn and your rotation will change where the laser goes.
+
+Ships travel around the game world collecting vinyl (victory points) and uranium (fuel) asteroids. There are initially 5 of each asteroid type of 40 tons each. If a ship collides with an asteroid and has enough fuel or cargo capacity to hold the asteroids mass, it adds it to the respective cargo or fuel. Otherwise it crashes into the asteroid in a perfectly elastic collision, takes some damage, and the asteroid is either broken into 3 equal size pieces, or destroyed if those pieces would be of size less than 3 tons.
+
+When ships dock at a station, friendly or enemey, any vinyl cargo they carry is immediately removed and added to the reserves of that station, where they count as victory points at game end (vinyl inside a ship is not worth any points at game end).
+
+Ships dock by colliding with a station - when this happens their velcoity is set to zero, their position is set to the stations position, all vinyl is added to the sations vinyl and removed from the ship.
+
+Ships may rotate and thrust without spending fuel from a docked state. Thrusting while docked undocks the ship.
+
+While docked ships may not collided with nor take damage from lasers.
+
+While docked ships may not jettison or shoot lasers.
+
+NOTE: Ships are not refuelled while docked. The only ways to get fuel are:
+a. When ships are initially created their fuel tanks are filled to capacity. (Teams must decide once at initialization time for each ship they have how much fuel, and how much cargo capacity the ship can have. These two values must both be >= 0 and sum to 60 tons.
+
+b. By colliding with uranium asteroids which are smaller than or equal to the ships fuel capactiy - current fuel.
+
+END SUMMARY OF GAME
+
+With that as preamble, we've been struggling to get our EvoAI.C team to operate in a good enough way that the Genetic algorithm can take off and begin actually improving things. In current testing the EvoAI team basically seems to issue random orders, rarely converges on meaningful targets or achieves any goals (harvest vinyl for victory points, gain fuel for future ship operations, damage enemy ships or stations, etc.).
+
+We're going to begin again:
+
+1. Clear out EvoAI.C of any _implementation_ of logic, but leave in place the decision skeleton, e.g. a place where goals are set, and calls are made to implement those goals, but for now just place inside those implementation comments like:
+
+//Path finding logic to generate the best navigation order this turn goes here.
+
+or
+
+//Determine if we can rotate to face and shoot this turn an enemy station with vinyl to deplete their endgame victory points, while maintaining an emergency fuel reserve for future ship operations.
+
+2. Review the contest rules in the .md file I've uploaded, and the Server logic in ServerCombined.cpp for a general overview of how ships and stations behave.
+
+3. Incorporate Team Groogroo's base NAVIGATION logic into EvoAI, including its:
+ * Depth first travesal of 1 and 2 order navigation sequences to bring our ship onto a collision course with each game world object
+ * Decision making about whether to pursue HOME VINYL or URANIUM asteroids which prioritizes gathering VINYL (victory points) and returning home, or pursue URANIUM (fuel) for future ship operations.
+ * Ignore _most_ of team Groogroo's emergency collision orders logic, but retain:
+   * It's shield maintenance procedures which keep the shields at a safe level while retaining a minimal fuel reserve
+   * It's jettison logic when approaching enemy stations so as not to accidentally award the enemy victory point granting vinyl if we should collide with an enemy station
+
+After this update team EvoAI should have a solid _navigational_ and _resource gathering_ foundation to build on. In future updates we will worry about other elements of the game, such as combat - but for now lets get navigation and resouce gathering down and in a state where the GA algorithms can improve on that baseline.
+
+
 === GrooReview ===
 
 We are ready for another round of code reviews.
@@ -488,6 +554,12 @@ game events. We will provide defaults, however the user is allowed to
 override the defaults via a configuraion file (in some good config
 language that is text based, maybe markdown, maybe JSON, you decide).
 
+To begin with, we'll start wiring up the sound system without actually
+playing anything - just getting our configuration and controls in place.
+
+So for this set of changes no actual playback or sound resources are
+reuqired.
+
 Features:
 
 1. The default configuration file will life in sound/defaults.txt
@@ -504,34 +576,34 @@ vendor/ if third party code is used).
 4. the configuration file has sound configuration for these events:
 
 team1:
-  laser:
+  laser: chmmr-laser.wav (scales), ur-quan-fusion.wav
     laser_asteroid:
-      laser_asteroid_break:
-      laser_asteroid_nobreak:
-  col_ship_asteroid:
-    col_ship_asteroid_eat:
+      laser_asteroid_break: boom45.wav (delay)
+      laser_asteroid_nobreak: boom1.wav (delay)
+  col_ship_asteroid: boom23.wav
+    col_ship_asteroid_eat: lander-pickup.wav
     col_ship_asteroid_break:
-    col_ship_asteroid_destroy:
-  col_ship_laser:
-  col_ship_ship:
-    col_ship_friendly_ship:
-  col_station_asteroid:
-  launch:
+    col_ship_asteroid_destroy: boom1.wav
+  col_ship_laser: flagship-guns.wav (delay)
+  col_ship_ship: pkunk-jerk.wav (queue), pkunk-worm.wav (queue)
+    col_ship_friendly_ship: pkunk-dodo.wav (queue), pkunk-idiot.wav (queue)
+  col_station_asteroid: pkunk-shot.wav
+  launch: orz-go.wav (queue), ur-quan-launch.wav (queue)
     launch_from_friendly:
     launch_from_enemy:
   dock:
-    dock_at_friendly:
-    dock_at_enemy:
-  deliver_vinyl:
-    deliver_vinyl_friendly:
-    deliver_vinyl_enemy:
-  raise_shields:
-  jettison:
+    dock_at_friendly: lander-return.wav
+    dock_at_enemy: orz-intruder.wav, redalert.mod
+  deliver_vinyl: chmmr-tractor.wav (scales), melnorme-charge.wav (scales)
+    deliver_vinyl_friendly: 
+    deliver_vinyl_enemy: 
+  raise_shields: ilwrath-cloak.wav, slylandro-energize.wav
+  jettison: zoqfotpik-tongue.wav
     jettison_vinyl:
     jettison_uranium: 
-  ship_destroyed:
-  ship_out_of_fuel:
-  game_won:
+  ship_destroyed: shipdies.wav
+  ship_out_of_fuel: androsynth-bubble.wav
+  game_won: druuge-ditty.wav, yehat-ditty.wav
 
 4a. This configuration structure exists of 2 teams: team1 and team2. 
 4b. All sounds are optional, if no sound file is provided no sound is played for the event in question.
@@ -555,17 +627,58 @@ col_ship_asteroid_destroy plays foo.wav since it is not present and does not ove
 
 5. There is also a game soundtrack configuration:
 
-game: list.wav, of.wav, songs.wav
+game:
+  soundtrack: arilou.mod, arispace.mod, battle.mod, comandr.mod, hyper.mod, introx.mod, outfit.mod, pkunk.mod, shipyard.mod, 
+  menua: menusd01.wav
+  menub: menusd02.wav
+  
 
 A comma separated list of songs. At the start of each match, or the end of a prior song, a new song not yet played is selected at random. Once all songs have been played once this process begins again.
 
 5a. The user may override the song with --sountrack path/to/file.wav in which case that is the only song that will be played, or --soundtrack none with the special word "none" in which case no soundtrack will be playued.
 
-6. Keyboard shortcuts
+6. Keyboard shortcuts:
+M: Mute/unmute all sounds
+U: Mute/unmute music (e.g. the soundtrack)
+E: Mute/unmute sound effects (e.g. everything else)
+These shortcuts should be listed in our footer, along with icons showing wether soundtrack and sound effects are muted.
 
 ==
 
-Let's move onto actually playing
+Let's think about our design for actually playing music, and what music formats we would suppoort.
+
+Tell me about the options for playback given these formats:
+.wav
+.ogg
+.mp3
+MOD files
+
+Do any/all of these require our software to have a player inside it,
+or can we just send some of these to the sound APIs of the OS
+directly?
+
+==
+
+In terms of handling sound playback, we want our system to enforce these rules:
+
+1. No matter how many times a given sound file is called for in a
+subtick, it plays at most once (e.g. if 3 team1 ships all undock at
+once we only hear one of their undock sounds).
+
+2. If multiple sound effects are called for on the same tick we play
+them all together.
+
+3. The soundtrack plays continuously regarless of sound effects,
+including if the game is paused (it can be disabled by muting the
+game).
+
+4. No sound effects play while we are paused / any current playing are
+stopped.
+
+==
+
+
+
 
 
 ==
