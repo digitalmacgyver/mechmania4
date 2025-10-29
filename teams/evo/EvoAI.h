@@ -15,46 +15,37 @@
 #include <map>
 #include <string>
 #include <fstream>
-#include <iostream>
-#include <iomanip>
 #include <cmath>
-#include <limits>
-#include <sstream>
 #include <vector>
 #include <algorithm>
 
 typedef std::map<std::string, double> ParamMap;
 
-// --- Groogroo Data Structures (Integrated into EvoAI) ---
+// --- Data Structures ---
 
 // FuelTraj: Represents a trajectory and the fuel used to achieve it
 class FuelTraj {
 public:
     double fuel_used;
-    CTraj traj; // The desired velocity vector
     OrderKind order_kind;
     double order_mag;
-    FuelTraj() : fuel_used(-1.0), order_kind(O_THRUST), order_mag(0.0) {} // Default to invalid
+    FuelTraj() : fuel_used(-1.0), order_kind(O_THRUST), order_mag(0.0) {}
 };
 
 // Entry: Represents a potential target in the MagicBag
 class Entry {
 public:
     CThing *thing;
-    FuelTraj fueltraj; // The immediate order to execute this turn
-    double total_fuel;
+    FuelTraj fueltraj;
     double turns_total;
-    int claimed_by_mech; // Ship index claiming this entry
-
-    Entry() : thing(NULL), total_fuel(0.0), turns_total(0.0), claimed_by_mech(-1) {}
+    Entry() : thing(NULL), turns_total(0.0) {}
 };
 
-// MagicBag: Central planning data structure (Modernized with vectors)
+// MagicBag: Central planning data structure
 class MagicBag {
 private:
     std::vector<std::vector<Entry*>> table;
     unsigned int num_drones;
-
 public:
     MagicBag(unsigned int drones);
     ~MagicBag();
@@ -63,12 +54,27 @@ public:
     void clear();
 };
 
-// --- EvoAI (CTeam Implementation) ---
+// Strategic Assessment: Global state analysis
+struct StrategicAssessment {
+    // Key strategic flags
+    bool no_hunting_targets;
+    bool no_more_points;
+    bool fuel_constrained;
+    bool endgame;
+    // Dynamically determined number of hunters needed this turn
+    int active_hunters_needed;
+    // Resource tracking
+    double uranium_left;
+    double vinyl_left;
+};
 
+// Ship Roles
 enum ShipRole {
     GATHERER,
     HUNTER
 };
+
+// --- EvoAI (CTeam Implementation) ---
 
 class EvoAI : public CTeam {
 public:
@@ -78,7 +84,7 @@ public:
     void Init();
     void Turn();
 
-    // Logging functions (Stubs provided if detailed logging is not needed)
+    // Logging stubs
     void Log(const std::string& message) {}
     void LogStructured(const std::string& tag, const std::string& data) {}
     void InitializeLogging() {}
@@ -89,22 +95,24 @@ public:
     static std::string s_paramFile;
     static std::string s_logFile;
 
-    // Groogroo specific members
+    // Core members accessible by Brains
     MagicBag* mb;
-    double uranium_left;
-    double vinyl_left;
+    StrategicAssessment strategy;
+    std::vector<ShipRole> ship_roles_; // Dynamically assigned roles
 
-    // Navigation function (Analytical Intercept)
+    // Navigation function
     FuelTraj determine_orders(CThing* thing, double time, CShip* ship);
 
 private:
     ParamMap params_;
-    std::vector<ShipRole> ship_roles_; // Track role of each ship index
+    int hunter_config_count_; // Number of ships configured with high fuel capacity in Init
     void LoadParameters();
     void PopulateMagicBag();
+    void AssessStrategy();
+    void AssignRoles();
 };
 
-// Structure to cache GA parameters (Shared base for Brains)
+// Structure to cache GA parameters
 struct CachedParams {
     // Resource thresholds
     double LOW_FUEL_THRESHOLD;
@@ -114,19 +122,28 @@ struct CachedParams {
     double EMERGENCY_FUEL_RESERVE;
     // Navigation
     double NAV_ALIGNMENT_THRESHOLD;
-    // Combat (Used by Hunter)
+    // Combat
     double COMBAT_ENGAGEMENT_RANGE;
-    double COMBAT_LASER_OVERHEAD;
     double COMBAT_MIN_FUEL_TO_HUNT;
+    double COMBAT_LASER_EFFICIENCY_RATIO;
+    double COMBAT_OVERKILL_BUFFER;
+    // Strategy
+    double STRATEGY_ENDGAME_TURN;
 };
 
-// Base Brain Class for common functionality
-class EvoBrain : public CBrain {
-protected:
+// --- UnifiedBrain (CBrain Implementation) ---
+// Handles both Gathering and Hunting logic based on the dynamic role.
+class UnifiedBrain : public CBrain {
+public:
+    UnifiedBrain(EvoAI* pTeam, ParamMap* params);
+    void Decide();
+
+private:
     EvoAI* pmyEvoTeam_;
     CachedParams cache_;
+    CThing* pTarget; // Used by Hunter logic for persistence
 
-    EvoBrain(EvoAI* pTeam, ParamMap* params);
+    // Initialization
     void CacheParameters(ParamMap* params);
 
     // Common utility functions
@@ -135,31 +152,13 @@ protected:
     void HandleDeparture();
     void ExecuteOrders(const FuelTraj& ft);
     double CalculateRemainingFuel();
-};
 
-
-// --- GathererBrain (CBrain Implementation) ---
-// Focuses on resource collection using Groogroo's logic
-class GathererBrain : public EvoBrain {
-public:
-    GathererBrain(EvoAI* pTeam, ParamMap* params);
-    void Decide();
-
-private:
-    void NavigateAndGather();
-};
-
-// --- HunterBrain (CBrain Implementation) ---
-// Focuses on combat using ChromeFunk's logic with Groogroo navigation
-class HunterBrain : public EvoBrain {
-public:
-    HunterBrain(EvoAI* pTeam, ParamMap* params);
-    void Decide();
-
-private:
-    CThing* pTarget;
+    // Gatherer Logic
+    void ExecuteGatherer();
+    
+    // Hunter Logic
+    void ExecuteHunter();
     void SelectTarget();
-    void NavigateAndEngage();
     bool AttemptToShoot(CThing* target);
 };
 
