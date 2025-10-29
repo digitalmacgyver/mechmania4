@@ -34,6 +34,11 @@ core.*
 # Dependencies
 .deps/
 teams/evo/venv/
+vendor/local/
+vendor/build-tmp/
+vendor/source-packages/
+vendor/docker-images/
+vendor/binaries/
 
 # Python cache files
 __pycache__/

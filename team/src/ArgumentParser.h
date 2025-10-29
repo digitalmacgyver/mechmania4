@@ -22,6 +22,7 @@ class ArgumentParser {
   // Basic options (backward compatible with CParser)
   std::string hostname = "localhost";
   std::string gfxreg = "graphics.reg";
+  std::string assetsRoot;
   int port = 2323;
   int numteams = 2;
   bool gfxflag = false;

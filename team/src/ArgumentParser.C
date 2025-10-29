@@ -94,6 +94,8 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         cxxopts::value<std::string>()->default_value("localhost"))(
         "g,gfxreg", "Graphics registry file",
         cxxopts::value<std::string>()->default_value("graphics.reg"))(
+        "assets-root", "Override base directory for audio assets",
+        cxxopts::value<std::string>())(
         "T,numteams", "Number of teams",
         cxxopts::value<int>()->default_value("2"))("G,graphics",
                                                    "Enable full graphics mode")(
@@ -171,6 +173,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     port = result["port"].as<int>();
     hostname = result["hostname"].as<std::string>();
     gfxreg = result["gfxreg"].as<std::string>();
+    if (result.count("assets-root")) {
+      assetsRoot = result["assets-root"].as<std::string>();
+    }
     numteams = result["numteams"].as<int>();
     gfxflag = result.count("graphics") > 0;
     reconnect = retry = result.count("reconnect") > 0;

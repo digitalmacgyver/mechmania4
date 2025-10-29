@@ -12,6 +12,7 @@ add_compile_options(-Wall -Wextra -g)
 # Option to build with graphics (now enabled by default)
 option(BUILD_WITH_GRAPHICS "Build with SDL2 graphics support" ON)
 option(USE_SDL2 "Use SDL2 for graphics instead of X11" ON)
+option(MM4_AUTO_VENDOR_DEPS "Automatically build vendored SDL dependencies if missing" ON)
 
 # Source directory
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/team/src)
@@ -59,18 +60,71 @@ set(TEAM_SOURCES
 
 # Graphics sources (only if enabled)
 if(BUILD_WITH_GRAPHICS)
+    set(VENDOR_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/local")
+    set(VENDOR_PKGCONFIG_DIR "${VENDOR_LOCAL_DIR}/lib/pkgconfig")
+
+    macro(MM4_ENABLE_VENDOR_PATHS)
+        if(EXISTS "${VENDOR_PKGCONFIG_DIR}")
+            if(DEFINED ENV{PKG_CONFIG_PATH} AND NOT "$ENV{PKG_CONFIG_PATH}" STREQUAL "")
+                set(ENV{PKG_CONFIG_PATH} "${VENDOR_PKGCONFIG_DIR}:$ENV{PKG_CONFIG_PATH}")
+            else()
+                set(ENV{PKG_CONFIG_PATH} "${VENDOR_PKGCONFIG_DIR}")
+            endif()
+        endif()
+        list(APPEND CMAKE_PREFIX_PATH "${VENDOR_LOCAL_DIR}")
+        set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+    endmacro()
+
+    MM4_ENABLE_VENDOR_PATHS()
+
     if(USE_SDL2)
         # Find SDL2 packages
         find_package(PkgConfig REQUIRED)
-        pkg_check_modules(SDL2 REQUIRED sdl2)
-        pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
-        pkg_check_modules(SDL2_TTF REQUIRED SDL2_ttf)
+        pkg_check_modules(SDL2 sdl2)
+        pkg_check_modules(SDL2_IMAGE SDL2_image)
+        pkg_check_modules(SDL2_TTF SDL2_ttf)
+        pkg_check_modules(SDL2_MIXER SDL2_mixer)
+
+        set(MM4_VENDOR_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/vendor/build-offline.sh")
+        set(MM4_VENDOR_SENTINEL "${VENDOR_LOCAL_DIR}/.mm4_vendor_complete")
+        if(MM4_AUTO_VENDOR_DEPS AND (NOT SDL2_FOUND OR NOT SDL2_IMAGE_FOUND OR NOT SDL2_TTF_FOUND OR NOT SDL2_MIXER_FOUND)
+           AND EXISTS "${MM4_VENDOR_SCRIPT}")
+            if(NOT EXISTS "${MM4_VENDOR_SENTINEL}")
+                message(STATUS "SDL2 dependencies missing; building vendored copies under vendor/local")
+                execute_process(COMMAND "${MM4_VENDOR_SCRIPT}"
+                                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vendor"
+                                RESULT_VARIABLE MM4_VENDOR_RESULT)
+                if(NOT MM4_VENDOR_RESULT EQUAL 0)
+                    message(WARNING "Vendored dependency build failed with code ${MM4_VENDOR_RESULT}. "
+                                    "Set MM4_AUTO_VENDOR_DEPS=OFF to skip auto-build.")
+                endif()
+            endif()
+            if(EXISTS "${MM4_VENDOR_SENTINEL}")
+                MM4_ENABLE_VENDOR_PATHS()
+                # Re-run pkg-config discovery now that dependencies are present.
+                pkg_check_modules(SDL2 sdl2)
+                pkg_check_modules(SDL2_IMAGE SDL2_image)
+                pkg_check_modules(SDL2_TTF SDL2_ttf)
+                pkg_check_modules(SDL2_MIXER SDL2_mixer)
+            endif()
+        endif()
+
+        if(NOT SDL2_FOUND OR NOT SDL2_IMAGE_FOUND OR NOT SDL2_TTF_FOUND)
+            message(FATAL_ERROR "SDL2 core libraries not found. "
+                                "Run vendor/build-offline.sh manually or install system packages.")
+        endif()
+
+        list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
 
         set(GRAPHICS_SOURCES
             ${SRC_DIR}/SDL2Graphics.C
             ${SRC_DIR}/ObserverSDL.C
             ${SRC_DIR}/XPMLoader.C
             ${SRC_DIR}/SpriteManager.C
+            ${SRC_DIR}/audio/AudioSystem.C
+            ${SRC_DIR}/audio/SoundLibrary.C
+            ${SRC_DIR}/audio/SoundRequestBuffer.C
+            ${SRC_DIR}/audio/AudioEventTracker.C
         )
 
         add_compile_definitions(BUILD_WITH_GRAPHICS USE_SDL2)
@@ -304,6 +358,22 @@ if(BUILD_WITH_GRAPHICS)
             ${SDL2_IMAGE_CFLAGS_OTHER}
             ${SDL2_TTF_CFLAGS_OTHER}
         )
+
+        if(SDL2_MIXER_FOUND)
+            if(DEFINED pkgcfg_lib_SDL2_MIXER_SDL2_mixer)
+                target_link_libraries(mm4obs ${pkgcfg_lib_SDL2_MIXER_SDL2_mixer})
+            else()
+                target_link_libraries(mm4obs ${SDL2_MIXER_LIBRARIES})
+            endif()
+            if(SDL2_MIXER_LDFLAGS_OTHER)
+                target_link_options(mm4obs PRIVATE ${SDL2_MIXER_LDFLAGS_OTHER})
+            endif()
+            target_include_directories(mm4obs PRIVATE ${SDL2_MIXER_INCLUDE_DIRS})
+            target_compile_options(mm4obs PRIVATE ${SDL2_MIXER_CFLAGS_OTHER})
+            target_compile_definitions(mm4obs PRIVATE MM4_USE_SDL_MIXER=1)
+        else()
+            message(WARNING "SDL2_mixer not found; building audio stubs without runtime playback.")
+        endif()
     else()
         target_link_libraries(mm4obs
             mm4_common

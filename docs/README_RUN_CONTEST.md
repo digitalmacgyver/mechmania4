@@ -7,7 +7,7 @@ For a single match with visual observation:
 ```bash
 # Terminal 1: Start the observer (with sprites)
 cd build
-./mm4obs -G -p2323 -hlocalhost
+./mm4obs -G --assets-root .. -p2323 -hlocalhost
 
 # Terminal 2: Start the server
 cd build
@@ -32,11 +32,12 @@ For running multiple consecutive matches (tournament/contest mode):
 cd build
 
 # Restart mode with full graphics
-./mm4obs -R -G -p2323 -hlocalhost
+./mm4obs -R -G --assets-root .. -p2323 -hlocalhost
 
 # Options explained:
 #   -R: Restart/reconnect mode - auto-reconnects between matches
 #   -G: Full graphics mode with sprites
+#   --assets-root .. : Resolve audio assets relative to the repository (needed when running from build/)
 #   -p: Port number (default 2323)
 #   -h: Hostname (default localhost)
 ```
@@ -46,6 +47,7 @@ cd build
 - Press **Space** to show MechMania logo between matches
 - Maintains display continuity throughout tournament
 - Never freezes - always responsive to input
+- Audio controls panel sits below the announcer log; use **M** to mute/unmute the soundtrack and **E** for effects
 
 ### 2. Run Matches
 
@@ -93,13 +95,20 @@ cd build
 ### Full Sprite Mode
 ```bash
 # Detailed sprites with animations
-./mm4obs -G -p2323 -hlocalhost
+./mm4obs -G --assets-root .. -p2323 -hlocalhost
 ```
 
 ### With Custom Graphics Registry (if not using default location)
 ```bash
 # Specify graphics registry location
-./mm4obs -G -ggraphics.reg -p2323 -hlocalhost
+./mm4obs -G --assets-root .. -ggraphics.reg -p2323 -hlocalhost
+
+### Audio Assets
+
+- `--assets-root <path>` tells the observer where to look for audio files referenced in `sound/defaults.txt`.
+- When launching from the `build/` directory, use `--assets-root ..` so relative paths like `assets/...` resolve to the repository root.
+- If you keep custom audio in another folder, point `--assets-root` to that directory instead.
+- Run with `--verbose` to see periodic audio playback logs (once per second) while debugging audio output.
 ```
 
 ## Observer Keyboard Controls

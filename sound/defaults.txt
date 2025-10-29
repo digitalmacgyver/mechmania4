@@ -2,6 +2,7 @@
 game:
   soundtrack:
     songs:
+      - assets/star_control/music/hyper.mod
       - track_one.wav
       - track_two.wav
       - track_three.wav

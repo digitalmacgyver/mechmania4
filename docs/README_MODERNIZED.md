@@ -83,6 +83,7 @@ Options:
 - `-h<hostname>` - Server hostname (default: localhost)
 - `-G` - Enable full graphics mode
 - `-R` - Auto-reconnect on disconnect
+- `--assets-root <path>` - Override base directory for audio assets
 
 ## Observer Controls
 
@@ -91,6 +92,8 @@ When running the SDL2 observer:
 - `N` - Toggle name display
 - `V` - Toggle velocity vectors
 - `SPACE` - Cycle through attractor modes
+- `M` - Toggle soundtrack mute
+- `E` - Toggle sound effects mute
 
 ## Game Overview
 

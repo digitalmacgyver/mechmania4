@@ -52,14 +52,15 @@ class ObserverSDL {
     int seconds;     // game time (whole seconds) when captured
   };
   std::vector<Message> messageBuffer;
-  int audioControlsY;
-  int audioControlsHeight;
-  int audioControlsGap;
+  int audioControlsY = 0;
+  int audioControlsHeight = 0;
+  int audioControlsGap = 0;
 
-  // Audio integration
   mm4::audio::AudioEventTracker audioEventTracker;
-  bool audioInitialized;
-  unsigned int lastAudioTurnProcessed;
+  bool audioInitialized = false;
+  unsigned int lastAudioTurnProcessed = 0;
+  std::string assetRootOverride_;
+  bool verboseAudio_ = false;
 
   // Drawing helpers
   void DrawSpace();
@@ -93,7 +94,9 @@ class ObserverSDL {
   Color GetThingColor(CThing* thing);
 
  public:
-  ObserverSDL(const char* regFileName, int gfxFlag);
+  ObserverSDL(const char* regFileName, int gfxFlag,
+              const std::string& assetsRoot = std::string(),
+              bool verboseAudio = false);
   ~ObserverSDL();
 
   // Main methods

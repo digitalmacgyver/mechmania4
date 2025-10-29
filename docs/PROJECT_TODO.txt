@@ -1,6 +1,58 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+== Evo Combat ==
+
+Great work, now we turn to putting some knobs into our system for
+combat for the genetic algorithm to work over.
+
+Consider the following baseline information:
+
+Ships have an initial configuration between fuel and cargo space that
+sums to 60 tons.
+
+The more initial fuel capacity setting a ship has the more more
+suited to combat / aggressive behaviors it is because:
+a. It starts off with more fuel (ships begin with full fuel reserves)
+b. It is more capable of holding large amounts of fuel, which are necessary for powerful laser shots.
+c. Particularly if its fuel capacity is at least 40.0, it can theoretically consume the largest fuel asteroid available in the game world.
+
+On the contrary, the more initial cargo capacity a ship has the more
+it is suited to gathering vinyl for endgame victory points because:
+a. It can fit more in its cargo hold in one round trip, reducing the
+time spent and fuel costs of moving back and forth to the station to
+ gather vinyl.
+b. Particularly if its cargo capacity is at least 40.0, it can theoretically consume the largest vinyl asteroid available in the game world.
+
+Note that in sizing these relative regions, the interesting capacities
+tend to be multiples of 40/9. This is because initial asteroids are
+mass 40, and when they are shattered they become mass 40/3, and when
+those are shattered they become mass 40/9, and when those are
+shattered they are destroyed utterly - so the smallest game object a
+ship is _likely_ to encounter is mass 40/9. (The actual smallest
+possibly object is mass 3).
+
+Consider in EvoAI among the various behavior modes a ship should be able to act out are:
+* Hunter mode - focused on destroying enemy ships, depleting vinyl reserves of enemy bases, and collecting uranium fuel to do so
+* Gatherer mode - focused on collecting vinyl, and to a lesser extend uranium
+
+And consider among the 4 ships on the team, those with higher fuel amounts, fuel capacities, and lower cargo amounts and capacities are more suited to the "Hunter" behavior, whereas the opposite are more suited to the "Gatherer" behavior.
+
+Review the attached code for ChromeFunk and extract some of the "Hunter" behavior - notably the logic in stalker and shooter. Combine this with the excellent pathfinding already present in Groogroo. When a ship enters hunter mode "stalk" towards the target, and then shoot once close enough.
+
+However:
+a. Use the existing / Groogroo based magic bag based navigation to close on targets.
+b. Apply friend or foe detection! Never shoot friendly ships or friendly bases! Never intentionally choose them as targets!
+c. Generally ignore asteroids in terms of shooting them - it tends to be a waste of fuel to shoot them (rather just collide, break them up, and then raise shields if shields have gotten too low is more fuel effieenct).
+
+At the end of this round of updates we'll have:
+
+a. An EvoAI with solid navigation and gatherer logic from Groogroo.
+b. Rudiementary / Basic hunter logic from Chromefunk.
+c. Knobs and settings for the GA algorithm to work will to improve both.
+
+
+
 == Evo Stuff ==
 
 We have been working on developing a genetic algoritm improving team

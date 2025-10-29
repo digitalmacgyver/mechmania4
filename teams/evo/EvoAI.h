@@ -10,7 +10,7 @@
 #include "Brain.h"
 #include "Coord.h"
 #include "Traj.h"
-#include "GameConstants.h" // Required for global constants
+#include "GameConstants.h"
 
 #include <map>
 #include <string>
@@ -19,11 +19,57 @@
 #include <iomanip>
 #include <cmath>
 #include <limits>
-#include <sstream> // Required for stringstream
+#include <sstream>
+#include <vector>
+#include <algorithm>
 
 typedef std::map<std::string, double> ParamMap;
 
+// --- Groogroo Data Structures (Integrated into EvoAI) ---
+
+// FuelTraj: Represents a trajectory and the fuel used to achieve it
+class FuelTraj {
+public:
+    double fuel_used;
+    CTraj traj; // The desired velocity vector
+    OrderKind order_kind;
+    double order_mag;
+    FuelTraj() : fuel_used(-1.0), order_kind(O_THRUST), order_mag(0.0) {} // Default to invalid
+};
+
+// Entry: Represents a potential target in the MagicBag
+class Entry {
+public:
+    CThing *thing;
+    FuelTraj fueltraj; // The immediate order to execute this turn
+    double total_fuel;
+    double turns_total;
+    int claimed_by_mech; // Ship index claiming this entry
+
+    Entry() : thing(NULL), total_fuel(0.0), turns_total(0.0), claimed_by_mech(-1) {}
+};
+
+// MagicBag: Central planning data structure (Modernized with vectors)
+class MagicBag {
+private:
+    std::vector<std::vector<Entry*>> table;
+    unsigned int num_drones;
+
+public:
+    MagicBag(unsigned int drones);
+    ~MagicBag();
+    Entry *getEntry(unsigned int drone, unsigned int elem);
+    void addEntry(unsigned int drone, Entry *entry);
+    void clear();
+};
+
 // --- EvoAI (CTeam Implementation) ---
+
+enum ShipRole {
+    GATHERER,
+    HUNTER
+};
+
 class EvoAI : public CTeam {
 public:
     EvoAI();
@@ -32,110 +78,89 @@ public:
     void Init();
     void Turn();
 
-    // Standard logging (redirects to LogStructured with DEBUG tag)
-    void Log(const std::string& message);
-    
-    // Structured logging function
-    // Format: TIME TAG DATA
-    void LogStructured(const std::string& tag, const std::string& data);
+    // Logging functions (Stubs provided if detailed logging is not needed)
+    void Log(const std::string& message) {}
+    void LogStructured(const std::string& tag, const std::string& data) {}
+    void InitializeLogging() {}
+    void LogWorldState() {}
 
-    // Static configuration set by mm4team.C main() or command line args
+    // Static configuration
     static bool s_loggingEnabled;
     static std::string s_paramFile;
     static std::string s_logFile;
 
+    // Groogroo specific members
+    MagicBag* mb;
+    double uranium_left;
+    double vinyl_left;
+
+    // Navigation function (Analytical Intercept)
+    FuelTraj determine_orders(CThing* thing, double time, CShip* ship);
+
 private:
     ParamMap params_;
+    std::vector<ShipRole> ship_roles_; // Track role of each ship index
     void LoadParameters();
-    void LogWorldState(); 
-    std::ofstream logFileStream_;
-    void InitializeLogging(); 
+    void PopulateMagicBag();
 };
 
-// Structure to cache GA parameters (UPDATED for MagicBag)
+// Structure to cache GA parameters (Shared base for Brains)
 struct CachedParams {
-    // Heuristics (MagicBag Weights)
-    double W_VINYL_VALUE;
-    double W_URANIUM_VALUE;
-    double W_FUEL_BOOST_FACTOR;
-    double W_TIME_PENALTY;
-    double W_FUEL_COST_PENALTY; // Penalty per unit of Delta-V
-    double W_CONFLICT_PENALTY; 
-    
-    // Thresholds
-    double THRESHOLD_RETURN_CARGO;
-    double THRESHOLD_FUEL_TARGET;
-    double THRESHOLD_MAX_SHIELD_BOOST; 
-
-    // Dynamic Fuel Management
-    double FUEL_COST_PER_DIST_ESTIMATE; // Used for safety margin calculation
-    double FUEL_SAFETY_MARGIN;
-    
-    // Navigation (Trajectory Planning and Alignment)
-    double NAV_ALIGNMENT_STRICT_ANGLE;
-    double NAV_ALIGNMENT_LOOSE_ANGLE;
-    double NAV_INTERCEPT_TIME_HORIZON;
-    double NAV_STATION_BRAKING_DIST;
-    
+    // Resource thresholds
+    double LOW_FUEL_THRESHOLD;
+    double RETURN_CARGO_THRESHOLD;
     // Safety
-    double NAV_AVOIDANCE_HORIZON;
-    double NAV_SHIELD_BOOST_TTC;
-    
-    // Tactics
-    double TACTICS_LASER_POWER;
-    double TACTICS_LASER_RANGE;
+    double MIN_SHIELD_LEVEL;
+    double EMERGENCY_FUEL_RESERVE;
+    // Navigation
+    double NAV_ALIGNMENT_THRESHOLD;
+    // Combat (Used by Hunter)
+    double COMBAT_ENGAGEMENT_RANGE;
+    double COMBAT_LASER_OVERHEAD;
+    double COMBAT_MIN_FUEL_TO_HUNT;
 };
 
-// --- HarvesterBrain (CBrain Implementation) ---
-class HarvesterBrain : public CBrain {
-public:
-    HarvesterBrain(EvoAI* pTeam, ParamMap* params);
-    void Decide();
-    CThing* GetCurrentTarget() const { return pTarget_; } // Expose target for coordination
-
-private:
-    enum BrainState {
-        DEPARTING,
-        HUNTING,
-        INTERCEPTING,
-        REFUELING,
-        BREAKING
-    };
-    
-    BrainState state_;
+// Base Brain Class for common functionality
+class EvoBrain : public CBrain {
+protected:
     EvoAI* pmyEvoTeam_;
     CachedParams cache_;
-    CThing* pTarget_;
-    std::string currentGoalDescription_; // Describes the intent/reason for the current action
-    int successiveTurns_; // Tracks consecutive O_TURN orders
-    double currentDynamicFuelLow_; // Stores the dynamically calculated fuel threshold
 
-    void UpdateState();
-    void ExecuteAction();
-    void HandleDeparting();
-    
-    // MagicBag (Target Selection)
-    void SelectTargetMagicBag();
-    double EvaluateAsteroidMagicBag(CAsteroid* asteroid, bool prioritizeFuel, bool& too_large);
-    
-    // Navigation (Trajectory Planning)
-    bool CalculateInterceptVector(CThing* target, CTraj& desiredVelocity, double& timeToIntercept);
-    bool NavigateTrajectory();
-    bool AvoidCollisions(double& imminent_ttc);
-    double CalculateDepartureAngle(); 
-    void TrackSuccessiveTurns(); // Updates the successiveTurns_ counter
-    
-    // Tactics
-    bool HandleBreaking();
-
-    void TransitionState(BrainState newState);
+    EvoBrain(EvoAI* pTeam, ParamMap* params);
     void CacheParameters(ParamMap* params);
-    const char* StateToString(BrainState state);
-    
-    // Logging helpers
-    void BrainLog(const std::string& message);
-    void LogShipDecision(); 
-    void UpdateGoalDescription(); 
+
+    // Common utility functions
+    bool HandleEmergencies();
+    void MaintainShields(double remaining_fuel_est);
+    void HandleDeparture();
+    void ExecuteOrders(const FuelTraj& ft);
+    double CalculateRemainingFuel();
+};
+
+
+// --- GathererBrain (CBrain Implementation) ---
+// Focuses on resource collection using Groogroo's logic
+class GathererBrain : public EvoBrain {
+public:
+    GathererBrain(EvoAI* pTeam, ParamMap* params);
+    void Decide();
+
+private:
+    void NavigateAndGather();
+};
+
+// --- HunterBrain (CBrain Implementation) ---
+// Focuses on combat using ChromeFunk's logic with Groogroo navigation
+class HunterBrain : public EvoBrain {
+public:
+    HunterBrain(EvoAI* pTeam, ParamMap* params);
+    void Decide();
+
+private:
+    CThing* pTarget;
+    void SelectTarget();
+    void NavigateAndEngage();
+    bool AttemptToShoot(CThing* target);
 };
 
 #endif // EVOAI_H

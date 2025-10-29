@@ -94,7 +94,7 @@ After building, you'll have the following executables:
 ./mm4team_vortex -p2323 -hlocalhost
 
 # Terminal 4: Start observer (optional)
-./mm4obs -p2323 -hlocalhost
+./mm4obs --assets-root .. -p2323 -hlocalhost
 ```
 
 ### Using Helper Scripts
@@ -125,9 +125,10 @@ mm4serv [-pport] [-hhostname] [-nnumShips] [-ccredits]
 
 #### Observer (`mm4obs`)
 ```
-mm4obs [-R] [-G] [-pport] [-hhostname]
+mm4obs [-R] [-G] [--assets-root path] [-pport] [-hhostname]
   -R: Reconnect mode (auto-reconnect after disconnect)
   -G: Full graphics mode with sprites
+  --assets-root: Override root directory for audio assets (use '..' when running from build/)
   -p: Port number (default: 2323)
   -h: Hostname (default: localhost)
 ```
@@ -149,6 +150,8 @@ When running the observer (`mm4obs`):
 | **G** | Toggle sprite mode (detailed graphics) |
 | **N** | Toggle object names |
 | **V** | Toggle velocity vectors |
+| **M** | Mute/unmute soundtrack |
+| **E** | Mute/unmute sound effects |
 | **Space** | Toggle logo display (useful between matches) |
 | **ESC/Q** | Quit observer |
 

@@ -30,6 +30,7 @@ class CParser {
   const std::string& GetTeamParamsFile() const {
     return parser.teamParamsFile;
   }
+  const std::string& GetAssetsRoot() const { return parser.assetsRoot; }
 
   // Direct access to the modern parser if needed
   ArgumentParser& GetModernParser() { return parser; }

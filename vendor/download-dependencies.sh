@@ -21,6 +21,7 @@ echo -e "\n[1/4] Downloading SDL2 libraries..."
 SDL2_VERSION="2.28.5"
 SDL2_IMAGE_VERSION="2.8.2"
 SDL2_TTF_VERSION="2.22.0"
+SDL2_MIXER_VERSION="2.6.3"
 
 if [ ! -f "source-packages/SDL2-${SDL2_VERSION}.tar.gz" ]; then
     wget -P source-packages/ "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz"
@@ -32,6 +33,10 @@ fi
 
 if [ ! -f "source-packages/SDL2_ttf-${SDL2_TTF_VERSION}.tar.gz" ]; then
     wget -P source-packages/ "https://github.com/libsdl-org/SDL_ttf/releases/download/release-${SDL2_TTF_VERSION}/SDL2_ttf-${SDL2_TTF_VERSION}.tar.gz"
+fi
+
+if [ ! -f "source-packages/SDL2_mixer-${SDL2_MIXER_VERSION}.tar.gz" ]; then
+    wget -P source-packages/ "https://github.com/libsdl-org/SDL_mixer/releases/download/release-${SDL2_MIXER_VERSION}/SDL2_mixer-${SDL2_MIXER_VERSION}.tar.gz"
 fi
 
 # CMake (for building)
@@ -70,44 +75,46 @@ cat > build-offline.sh <<'EOF'
 
 set -e
 
-VENDOR_DIR="$(dirname "$0")"
-BUILD_DIR="/tmp/mechmania-build"
+VENDOR_DIR="$(cd "$(dirname "$0")" && pwd)"
+PREFIX="${PREFIX:-$VENDOR_DIR/local}"
+BUILD_DIR="${BUILD_DIR:-$VENDOR_DIR/build-tmp}"
 
 echo "Building MechMania IV from vendored dependencies..."
 echo "No internet connection required!"
+echo "Install prefix: $PREFIX"
 
-# Extract and build SDL2
-mkdir -p $BUILD_DIR
-cd $BUILD_DIR
+mkdir -p "$BUILD_DIR"
+mkdir -p "$PREFIX"
 
-echo "Building SDL2..."
-tar -xzf $VENDOR_DIR/source-packages/SDL2-*.tar.gz
-cd SDL2-*
-./configure --prefix=/usr/local
-make -j$(nproc)
-sudo make install
-cd ..
+build_dep() {
+  local archive=$1
+  local dir_name
+  dir_name=$(tar -tzf "$archive" | head -1 | cut -f1 -d"/")
+  rm -rf "$BUILD_DIR/$dir_name"
+  tar -xzf "$archive" -C "$BUILD_DIR"
+  pushd "$BUILD_DIR/$dir_name" >/dev/null
+  ./configure --prefix="$PREFIX"
+  make -j"$(nproc)"
+  make install
+  popd >/dev/null
+}
 
-echo "Building SDL2_image..."
-tar -xzf $VENDOR_DIR/source-packages/SDL2_image-*.tar.gz
-cd SDL2_image-*
-./configure --prefix=/usr/local
-make -j$(nproc)
-sudo make install
-cd ..
+build_dep "$VENDOR_DIR/source-packages/SDL2-"*.tar.gz
+build_dep "$VENDOR_DIR/source-packages/SDL2_image-"*.tar.gz
+build_dep "$VENDOR_DIR/source-packages/SDL2_ttf-"*.tar.gz
+build_dep "$VENDOR_DIR/source-packages/SDL2_mixer-"*.tar.gz
 
-echo "Building SDL2_ttf..."
-tar -xzf $VENDOR_DIR/source-packages/SDL2_ttf-*.tar.gz
-cd SDL2_ttf-*
-./configure --prefix=/usr/local
-make -j$(nproc)
-sudo make install
-cd ..
+touch "$PREFIX/.mm4_vendor_complete"
+rm -rf "$BUILD_DIR"
+
+echo "SDL libraries installed under $PREFIX"
+echo "Add this to your environment before running cmake:"
+echo "  export PKG_CONFIG_PATH=\"$PREFIX/lib/pkgconfig:\$PKG_CONFIG_PATH\""
+echo "  export CMAKE_PREFIX_PATH=\"$PREFIX:\$CMAKE_PREFIX_PATH\""
 
 echo "Dependencies installed! Now build MechMania IV:"
 echo "  cd /path/to/mechmania4"
-echo "  mkdir build && cd build"
-echo "  cmake .."
+echo "  cmake -S . -B build"
 echo "  make -j$(nproc)"
 EOF
 
@@ -123,7 +130,7 @@ preserved for long-term availability.
 ## Contents
 
 - `source-packages/` - Source code for all dependencies
-  - SDL2, SDL2_image, SDL2_ttf libraries
+  - SDL2, SDL2_image, SDL2_ttf, SDL2_mixer libraries
   - CMake build system
 - `docker-images/` - Docker base images (if Docker was available)
 - `build-offline.sh` - Script to build from vendored sources
@@ -132,8 +139,13 @@ preserved for long-term availability.
 
 To build MechMania IV without internet access:
 
-1. Run `./build-offline.sh` to install dependencies
-2. Build MechMania IV normally with CMake
+1. Run `./build-offline.sh` (installs SDL dependencies into `vendor/local` without root)
+2. Export helper vars (or let CMake detect automatically):
+   ```bash
+   export PKG_CONFIG_PATH="$(pwd)/vendor/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+   export CMAKE_PREFIX_PATH="$(pwd)/vendor/local:$CMAKE_PREFIX_PATH"
+   ```
+3. Build MechMania IV normally with CMake (`cmake -S . -B build && cmake --build build`)
 
 ## Docker Offline Build
 

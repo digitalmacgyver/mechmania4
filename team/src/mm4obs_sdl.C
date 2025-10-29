@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
   CParser PCmdLn(argc, argv);
   g_pParser = &PCmdLn;  // Set global parser instance
   if (PCmdLn.needhelp == 1) {
-    printf("mm4obs [-R] [-G] [--verbose] [-pport] [-hhostname] [-ggfxreg]\n");
+    printf("mm4obs [-R] [-G] [--verbose] [-pport] [-hhostname] [-ggfxreg] [--assets-root path]\n");
     printf("  -R:  Attempt reconnect after server disconnect\n");
     printf("  -G:  Activate full graphics mode\n");
     printf("  --verbose: Show game time progress\n");
@@ -48,7 +48,8 @@ int main(int argc, char* argv[]) {
   printf("Initializing graphics...\n");
 
 #ifdef USE_SDL2
-  ObserverSDL myObs(PCmdLn.gfxreg, PCmdLn.gfxflag);
+  ObserverSDL myObs(PCmdLn.gfxreg, PCmdLn.gfxflag,
+                    PCmdLn.GetAssetsRoot(), PCmdLn.verbose);
   printf("SDL2 Graphics initialized\n");
 #else
   Observer myObs(PCmdLn.gfxreg, PCmdLn.gfxflag);
