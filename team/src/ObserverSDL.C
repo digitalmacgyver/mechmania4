@@ -1056,7 +1056,15 @@ void ObserverSDL::DrawAudioControlsPanel() {
   int rowHeight = std::max(labelH + 4, 18);
   int verticalPadding = std::max(6, (panelHeight - 2 * rowHeight) / 3);
   int row1Y = panelY + verticalPadding;
-  int row2Y = row1Y + rowHeight + verticalPadding / 2;
+  int shiftUp = std::min(rowHeight / 2, row1Y - panelY - 2);
+  row1Y -= shiftUp;
+  int row2Y = row1Y + rowHeight;
+  if (row2Y + labelH > panelY + panelHeight - 2) {
+    row2Y = panelY + panelHeight - labelH - 2;
+    if (row2Y <= row1Y) {
+      row2Y = row1Y + std::max(12, rowHeight / 2);
+    }
+  }
 
   const int iconReserve = 48;
   int iconWidth = 22;

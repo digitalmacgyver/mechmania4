@@ -33,6 +33,7 @@ Mix_Chunk* LoadChunk(const std::string& path) {
   Mix_Chunk* chunk = Mix_LoadWAV(path.c_str());
   if (!chunk) {
     LogMixerError("Mix_LoadWAV");
+    std::cerr << "[audio] Mix_LoadWAV failed for " << path << std::endl;
   }
   return chunk;
 }
@@ -41,6 +42,7 @@ Mix_Music* LoadMusic(const std::string& path) {
   Mix_Music* music = Mix_LoadMUS(path.c_str());
   if (!music) {
     LogMixerError("Mix_LoadMUS");
+    std::cerr << "[audio] Mix_LoadMUS failed for " << path << std::endl;
   }
   return music;
 }
@@ -282,6 +284,16 @@ void AudioSystem::FlushPending(int currentTurn) {
   }
 
   ProcessPendingEffects(currentTurn);
+
+  if (verbose_ && pending.empty()) {
+    auto now = std::chrono::steady_clock::now();
+    if (lastEffectLog_ == std::chrono::steady_clock::time_point::min() ||
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEffectLog_).count() >=
+            1000) {
+      std::cout << "[audio] no effects scheduled" << std::endl;
+      lastEffectLog_ = now;
+    }
+  }
 }
 
 #ifdef MM4_USE_SDL_MIXER
@@ -414,16 +426,16 @@ void AudioSystem::EnsureMusicPlaying() {
   if (Mix_PlayingMusic() != 0) {
     if (verbose_) {
       auto now = std::chrono::steady_clock::now();
-      if (!musicPlayingReported_ ||
-          lastMusicLog_ == std::chrono::steady_clock::time_point::min() ||
-          std::chrono::duration_cast<std::chrono::milliseconds>(now - lastMusicLog_).count() >=
-              1000) {
-        std::cout << "[audio] music playing track="
-                  << (activeMusicId_.empty() ? "<unknown>" : activeMusicId_)
-                  << std::endl;
-        lastMusicLog_ = now;
-        musicPlayingReported_ = true;
-      }
+    if (!musicPlayingReported_ ||
+        lastMusicLog_ == std::chrono::steady_clock::time_point::min() ||
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - lastMusicLog_).count() >=
+            1000) {
+      std::cout << "[audio] music playing track="
+                << (activeMusicId_.empty() ? "<unknown>" : activeMusicId_)
+                << std::endl;
+      lastMusicLog_ = now;
+      musicPlayingReported_ = true;
+    }
     }
     return;
   }

@@ -22,6 +22,7 @@ SDL2_VERSION="2.28.5"
 SDL2_IMAGE_VERSION="2.8.2"
 SDL2_TTF_VERSION="2.22.0"
 SDL2_MIXER_VERSION="2.6.3"
+LIBMODPLUG_VERSION="0.8.9.0"
 
 if [ ! -f "source-packages/SDL2-${SDL2_VERSION}.tar.gz" ]; then
     wget -P source-packages/ "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz"
@@ -37,6 +38,10 @@ fi
 
 if [ ! -f "source-packages/SDL2_mixer-${SDL2_MIXER_VERSION}.tar.gz" ]; then
     wget -P source-packages/ "https://github.com/libsdl-org/SDL_mixer/releases/download/release-${SDL2_MIXER_VERSION}/SDL2_mixer-${SDL2_MIXER_VERSION}.tar.gz"
+fi
+
+if [ ! -f "source-packages/libmodplug-${LIBMODPLUG_VERSION}.tar.gz" ]; then
+    wget -P source-packages/ "https://downloads.sourceforge.net/project/modplug-xmms/libmodplug/${LIBMODPLUG_VERSION}/libmodplug-${LIBMODPLUG_VERSION}.tar.gz"
 fi
 
 # CMake (for building)
@@ -130,7 +135,7 @@ preserved for long-term availability.
 ## Contents
 
 - `source-packages/` - Source code for all dependencies
-  - SDL2, SDL2_image, SDL2_ttf, SDL2_mixer libraries
+  - SDL2, SDL2_image, SDL2_ttf, libmodplug, SDL2_mixer libraries
   - CMake build system
 - `docker-images/` - Docker base images (if Docker was available)
 - `build-offline.sh` - Script to build from vendored sources
