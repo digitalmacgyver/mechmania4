@@ -1053,6 +1053,8 @@ void ObserverSDL::DrawAudioControlsPanel() {
 
   int labelW = 0, labelH = 0;
   graphics->GetTextSize(musicLabel, labelW, labelH, true);
+  int charW = 0, charH = 0;
+  graphics->GetTextSize("W", charW, charH, true);
   int rowHeight = std::max(labelH + 4, 18);
   int verticalPadding = std::max(6, (panelHeight - 2 * rowHeight) / 3);
   int row1Y = panelY + verticalPadding;
@@ -1091,7 +1093,7 @@ void ObserverSDL::DrawAudioControlsPanel() {
   Color fxColor = (!audioReady || effectsMuted) ? inactiveColor : activeColor;
   int effectsLabelW = 0, effectsLabelH = 0;
   graphics->GetTextSize(effectsLabel, effectsLabelW, effectsLabelH, true);
-  int effectsLabelX = iconAreaLeft - spacing - effectsLabelW;
+  int effectsLabelX = iconAreaLeft - spacing - effectsLabelW - (charW > 0 ? charW : 8);
   if (effectsLabelX < panelX + labelPadding) {
     effectsLabelX = panelX + labelPadding;
   }
@@ -1101,30 +1103,21 @@ void ObserverSDL::DrawAudioControlsPanel() {
 
 void ObserverSDL::DrawSpeakerIcon(int x, int y, bool muted,
                                   const Color& accent) {
-  int bodyWidth = 6;
-  int bodyHeight = 10;
-  int hornWidth = 8;
-  int top = y;
-
-  graphics->DrawRect(x, top + 2, bodyWidth, bodyHeight, accent, true);
-
-  int hornX[3] = {x + bodyWidth, x + bodyWidth + hornWidth, x + bodyWidth};
-  int hornY[3] = {top, top + bodyHeight / 2 + 2, top + bodyHeight + 4};
-  graphics->DrawPolygon(hornX, hornY, 3, accent, true);
+  (void)accent;
+  int boxSize = 16;
+  graphics->DrawRect(x, y, boxSize, boxSize, Color(25, 25, 25), true);
+  graphics->DrawRect(x, y, boxSize, boxSize, Color(140, 140, 140), false);
 
   if (muted) {
-    Color muteColor(255, 80, 80);
-    graphics->DrawLine(x + bodyWidth + 1, top + 1, x + bodyWidth + hornWidth + 4,
-                       top + bodyHeight + 5, muteColor);
-    graphics->DrawLine(x + bodyWidth + hornWidth + 4, top + 1,
-                       x + bodyWidth + 1, top + bodyHeight + 5, muteColor);
+    Color xColor(220, 0, 0);
+    graphics->DrawLine(x + 3, y + 3, x + boxSize - 3, y + boxSize - 3, xColor);
+    graphics->DrawLine(x + boxSize - 3, y + 3, x + 3, y + boxSize - 3, xColor);
   } else {
-    Color waveColor = accent;
-    graphics->DrawLine(x + bodyWidth + 4, top + 3, x + bodyWidth + hornWidth + 2,
-                       top + 1, waveColor);
-    graphics->DrawLine(x + bodyWidth + 4, top + bodyHeight,
-                       x + bodyWidth + hornWidth + 2, top + bodyHeight + 2,
-                       waveColor);
+    Color checkColor(0, 200, 0);
+    graphics->DrawLine(x + 3, y + boxSize - 5, x + 7, y + boxSize - 3,
+                       checkColor);
+    graphics->DrawLine(x + 7, y + boxSize - 3, x + boxSize - 3, y + 3,
+                       checkColor);
   }
 }
 

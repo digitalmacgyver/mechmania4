@@ -87,26 +87,40 @@ if(BUILD_WITH_GRAPHICS)
 
         set(MM4_VENDOR_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/vendor/build-offline.sh")
         set(MM4_VENDOR_SENTINEL "${VENDOR_LOCAL_DIR}/.mm4_vendor_complete")
-        if(MM4_AUTO_VENDOR_DEPS AND (NOT SDL2_FOUND OR NOT SDL2_IMAGE_FOUND OR NOT SDL2_TTF_FOUND OR NOT SDL2_MIXER_FOUND)
-           AND EXISTS "${MM4_VENDOR_SCRIPT}")
-            if(NOT EXISTS "${MM4_VENDOR_SENTINEL}")
-                message(STATUS "SDL2 dependencies missing; building vendored copies under vendor/local")
-                execute_process(COMMAND "${MM4_VENDOR_SCRIPT}"
-                                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vendor"
-                                RESULT_VARIABLE MM4_VENDOR_RESULT)
-                if(NOT MM4_VENDOR_RESULT EQUAL 0)
-                    message(WARNING "Vendored dependency build failed with code ${MM4_VENDOR_RESULT}. "
-                                    "Set MM4_AUTO_VENDOR_DEPS=OFF to skip auto-build.")
-                endif()
+        set(MM4_VENDOR_LIBMODPLUG_SO "${VENDOR_LOCAL_DIR}/lib/libmodplug.so")
+        set(MM4_VENDOR_LIBMODPLUG_A "${VENDOR_LOCAL_DIR}/lib/libmodplug.a")
+
+        set(MM4_VENDOR_NEEDS_BUILD FALSE)
+        if(NOT SDL2_FOUND OR NOT SDL2_IMAGE_FOUND OR NOT SDL2_TTF_FOUND OR NOT SDL2_MIXER_FOUND)
+            set(MM4_VENDOR_NEEDS_BUILD TRUE)
+        endif()
+        if(NOT EXISTS "${MM4_VENDOR_SENTINEL}")
+            set(MM4_VENDOR_NEEDS_BUILD TRUE)
+        endif()
+        if(NOT EXISTS "${MM4_VENDOR_LIBMODPLUG_SO}" AND NOT EXISTS "${MM4_VENDOR_LIBMODPLUG_A}")
+            set(MM4_VENDOR_NEEDS_BUILD TRUE)
+        endif()
+
+        if(MM4_AUTO_VENDOR_DEPS AND MM4_VENDOR_NEEDS_BUILD AND EXISTS "${MM4_VENDOR_SCRIPT}")
+            message(STATUS "Ensuring vendored SDL dependencies (including libmodplug) are available")
+            execute_process(COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/vendor/download-dependencies.sh"
+                            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vendor"
+                            RESULT_VARIABLE MM4_VENDOR_DL_RESULT)
+            if(NOT MM4_VENDOR_DL_RESULT EQUAL 0)
+                message(FATAL_ERROR "Vendored dependency download failed with code ${MM4_VENDOR_DL_RESULT}.")
             endif()
-            if(EXISTS "${MM4_VENDOR_SENTINEL}")
-                MM4_ENABLE_VENDOR_PATHS()
-                # Re-run pkg-config discovery now that dependencies are present.
-                pkg_check_modules(SDL2 sdl2)
-                pkg_check_modules(SDL2_IMAGE SDL2_image)
-                pkg_check_modules(SDL2_TTF SDL2_ttf)
-                pkg_check_modules(SDL2_MIXER SDL2_mixer)
+            execute_process(COMMAND "${MM4_VENDOR_SCRIPT}"
+                            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vendor"
+                            RESULT_VARIABLE MM4_VENDOR_RESULT)
+            if(NOT MM4_VENDOR_RESULT EQUAL 0)
+                message(FATAL_ERROR "Vendored dependency build failed with code ${MM4_VENDOR_RESULT}.")
             endif()
+            MM4_ENABLE_VENDOR_PATHS()
+            # Re-run pkg-config discovery now that dependencies are present.
+            pkg_check_modules(SDL2 sdl2)
+            pkg_check_modules(SDL2_IMAGE SDL2_image)
+            pkg_check_modules(SDL2_TTF SDL2_ttf)
+            pkg_check_modules(SDL2_MIXER SDL2_mixer)
         endif()
 
         if(NOT SDL2_FOUND OR NOT SDL2_IMAGE_FOUND OR NOT SDL2_TTF_FOUND)

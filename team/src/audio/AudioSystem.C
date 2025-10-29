@@ -34,6 +34,7 @@ Mix_Chunk* LoadChunk(const std::string& path) {
   if (!chunk) {
     LogMixerError("Mix_LoadWAV");
     std::cerr << "[audio] Mix_LoadWAV failed for " << path << std::endl;
+    std::cout << "[audio] failed to load chunk=" << path << std::endl;
   }
   return chunk;
 }
@@ -43,6 +44,7 @@ Mix_Music* LoadMusic(const std::string& path) {
   if (!music) {
     LogMixerError("Mix_LoadMUS");
     std::cerr << "[audio] Mix_LoadMUS failed for " << path << std::endl;
+    std::cout << "[audio] failed to load music=" << path << std::endl;
   }
   return music;
 }
@@ -66,6 +68,8 @@ bool AudioSystem::Initialize(const std::string& configPath,
   if ((initResult & kInitFlags) != kInitFlags) {
     std::cerr << "[audio] SDL_mixer init missing capabilities. Requested flags="
               << kInitFlags << " got=" << initResult << std::endl;
+    std::cout << "[audio] SDL_mixer capabilities missing flags=" << kInitFlags
+              << " got=" << initResult << std::endl;
     // Continue even if optional codecs missing; WAV will still function.
   }
 
@@ -73,6 +77,7 @@ bool AudioSystem::Initialize(const std::string& configPath,
                     kChunkSize) != 0) {
     LogMixerError("Mix_OpenAudio");
     Mix_Quit();
+    std::cout << "[audio] Mix_OpenAudio failed" << std::endl;
     return false;
   }
 
