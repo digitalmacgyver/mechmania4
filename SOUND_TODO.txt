@@ -27,3 +27,5 @@
   - Footer and panel honor `--mute` on the first draw, the help footer advertises current mute states, and the confirmation click is deferred until effects unmute.
 - **Testing & tooling**
   - Added `scripts/audio_headless_smoke.sh` and the `mm4_audio_probe` harness (driving `CWorld` + `AudioSystem`) to validate logs, refreshed documentation with the audio QA checklist, and linked the SOUND overview from `docs/README_MODERNIZED.md`.
+- **Sync investigation**
+  - Add a configurable “audio lead” experiment: queue per-turn effects immediately after world update, sleep a short configurable latency (e.g. 75–100 ms), then render the frame. This decouples the audio trigger from the draw call without changing game timing; evaluate impact before considering deeper display-lag approaches.

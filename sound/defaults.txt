@@ -1,7 +1,8 @@
 # Default sound configuration for MechMania IV Observer
 volume:
   soundtrack: 100
-  effects: 50
+  effects: 25
+
 game:
   soundtrack:
     songs:
@@ -21,11 +22,11 @@ teams:
       default:
         file: ../assets/star_control/effects/chmmr-laser.wav
         behavior:
-          duration_ticks: 12
+          duration_ticks: 2
           scale:
-            per_quantity: 256.0
+            per_quantity: 100.0
             min_loops: 1
-            max_loops: 8
+            max_loops: 5
       laser_asteroid:
         laser_asteroid_break:
           file: ../assets/star_control/effects/boom45.wav
@@ -77,13 +78,11 @@ teams:
         file: ../assets/star_control/effects/orz-intruder.wav
 #../assets/star_control/effects/redalert.wav
         behavior:
-          mode: queue
           delay_ticks: 1
     deliver_vinyl:
       default:
         file: ../assets/star_control/effects/chmmr-tractor.wav
         behavior:
-          mode: queue
           duration_ticks: 1
           scale:
             per_quantity: 1.6
@@ -133,12 +132,11 @@ teams:
       col_ship_friendly_ship:
         file: ../assets/star_control/effects/pkunk-idiot.wav
         behavior:
-	  delay_ticks: 6
+          delay_ticks: 6
     deliver_vinyl:
       default:
         file: ../assets/star_control/effects/melnorme-charge.wav
         behavior:
-          mode: queue
           duration_ticks: 2
           scale:
             per_quantity: 3.1
@@ -165,24 +163,16 @@ teams:
     game_won:
       default:
         file: ../assets/star_control/effects/yehat-ditty.mp3
-  manual:
-    audio:
-      ping:
-        file: ../assets/star_control/effects/boom1.wav
-    menu:
-      toggle_enabled:
-        file: ../assets/star_control/effects/menusnd01.wav
-        behavior:
-          mode: queue
-      toggle_enabled_alt:
-        file: ../assets/star_control/effects/menusnd01.wav
-        behavior:
-          mode: queue
-      toggle_disabled:
-        file: ../assets/star_control/effects/menusnd02.wav
-        behavior:
-          mode: queue
-      toggle_disabled_alt:
-        file: ../assets/star_control/effects/menusnd02.wav
-        behavior:
-          mode: queue
+manual:
+  audio:
+    ping:
+      file: ../assets/star_control/effects/boom1.wav
+  menu:
+    toggle_enabled:
+      file: ../assets/star_control/effects/menusnd01.wav
+    toggle_enabled_alt:
+      file: ../assets/star_control/effects/menusnd02.wav
+    toggle_disabled:
+      file: ../assets/star_control/effects/menusnd01.wav
+    toggle_disabled_alt:
+      file: ../assets/star_control/effects/menusnd02.wav

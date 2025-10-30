@@ -318,6 +318,74 @@ struct PendingEffect {
         pending.assetPath = resolvePath(value);
         pending.hasAsset = true;
       }
+    } else if (path.rfind("manual.", 0) == 0) {
+      std::string remainder = path.substr(std::string("manual.").size());
+
+      if (EndsWith(remainder, ".file")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".file");
+        auto& pending = pendingEffects[logicalId];
+        pending.assetPath = resolvePath(value);
+        pending.hasAsset = true;
+      } else if (EndsWith(remainder, ".inherit")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".inherit");
+        auto& pending = pendingEffects[logicalId];
+        pending.inheritId = value;
+        pending.hasInherit = true;
+      } else if (EndsWith(remainder, ".behavior.mode")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".behavior.mode");
+        auto& pending = pendingEffects[logicalId];
+        if (value == "queue") {
+          pending.behavior.mode = EffectPlaybackMode::kQueue;
+        } else if (value == "truncate" || value == "cutoff") {
+          pending.behavior.mode = EffectPlaybackMode::kTruncate;
+        } else {
+          pending.behavior.mode = EffectPlaybackMode::kSimultaneous;
+        }
+        pending.hasBehavior = true;
+      } else if (EndsWith(remainder, ".behavior.duration_ticks")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".behavior.duration_ticks");
+        auto& pending = pendingEffects[logicalId];
+        pending.behavior.durationTicks = std::max(0, ParseInt(value, 0));
+        pending.hasBehavior = true;
+      } else if (EndsWith(remainder, ".behavior.delay_ticks")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".behavior.delay_ticks");
+        auto& pending = pendingEffects[logicalId];
+        pending.behavior.delayTicks = std::max(0, ParseInt(value, 0));
+        pending.hasBehavior = true;
+      } else if (EndsWith(remainder, ".behavior.scale.per_quantity")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".behavior.scale.per_quantity");
+        auto& pending = pendingEffects[logicalId];
+        if (!pending.behavior.scale.has_value()) {
+          pending.behavior.scale = EffectScaleRule();
+        }
+        pending.behavior.scale->perQuantity = std::max(0.0, ParseDouble(value, 0.0));
+        pending.hasBehavior = true;
+      } else if (EndsWith(remainder, ".behavior.scale.min_loops")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".behavior.scale.min_loops");
+        auto& pending = pendingEffects[logicalId];
+        if (!pending.behavior.scale.has_value()) {
+          pending.behavior.scale = EffectScaleRule();
+        }
+        pending.behavior.scale->minLoops = std::max(1, ParseInt(value, 1));
+        pending.hasBehavior = true;
+      } else if (EndsWith(remainder, ".behavior.scale.max_loops")) {
+        std::string logicalId = "manual." + StripSuffix(remainder, ".behavior.scale.max_loops");
+        auto& pending = pendingEffects[logicalId];
+        if (!pending.behavior.scale.has_value()) {
+          pending.behavior.scale = EffectScaleRule();
+        }
+        int parsed = std::max(1, ParseInt(value, pending.behavior.scale->maxLoops));
+        pending.behavior.scale->maxLoops = parsed;
+        if (pending.behavior.scale->maxLoops < pending.behavior.scale->minLoops) {
+          pending.behavior.scale->maxLoops = pending.behavior.scale->minLoops;
+        }
+        pending.hasBehavior = true;
+      } else {
+        std::string logicalId = "manual." + remainder;
+        auto& pending = pendingEffects[logicalId];
+        pending.assetPath = resolvePath(value);
+        pending.hasAsset = true;
+      }
     } else if (path.rfind("game.", 0) == 0) {
       std::string musicId = path.substr(std::string("game.").size());
       musicAssets_[musicId] = resolvePath(value);

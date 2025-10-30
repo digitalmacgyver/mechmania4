@@ -146,8 +146,9 @@ bool ObserverSDL::Initialize() {
   int availableGap = displayHeight - (msgPosY + msgHeight) - footerHeight;
   if (availableGap > 10) {
     audioControlsGap = std::max(6, charH / 2);
-    int desiredHeight = std::max(2 * lineHeight + 8, 36);
-    desiredHeight = desiredHeight + desiredHeight / 2;  // Increase height by 50%
+    constexpr int kSoundRows = 3;
+    int desiredHeight = std::max(kSoundRows * lineHeight + 12, 48);
+    desiredHeight += 16;  // Extend bounding region downward
     audioControlsHeight = std::min(desiredHeight, availableGap);
     if (availableGap - audioControlsHeight < audioControlsGap) {
       audioControlsHeight = std::max(20, availableGap - audioControlsGap);
@@ -1256,7 +1257,19 @@ void ObserverSDL::DrawAudioControlsPanel() {
     effectsMuted = audioSystem.EffectsMuted();
   }
 
-  std::string trackLabel = "[X] Next song:";
+  std::string nowPlayingTrack;
+  if (audioReady) {
+    nowPlayingTrack = mm4::audio::AudioSystem::Instance().ActiveTrackId();
+    auto split = nowPlayingTrack.find_last_of("/\\");
+    if (split != std::string::npos) {
+      nowPlayingTrack = nowPlayingTrack.substr(split + 1);
+    }
+  }
+  if (nowPlayingTrack.empty()) {
+    nowPlayingTrack = "<none>";
+  }
+
+  std::string trackLabel = "Ne[X]t Song:";
   std::string trackPreviewText;
   if (audioReady) {
     auto preview = mm4::audio::AudioSystem::Instance().PlaylistSnapshot();
@@ -1268,16 +1281,8 @@ void ObserverSDL::DrawAudioControlsPanel() {
       }
       return name;
     };
-    std::vector<std::string> previewNames;
-    previewNames.reserve(std::min<size_t>(preview.size(), 3));
-    for (size_t i = 0; i < preview.size() && i < 3; ++i) {
-      previewNames.push_back(formatName(preview[i]));
-    }
-    if (!previewNames.empty()) {
-      trackPreviewText = previewNames[0];
-      for (size_t i = 1; i < previewNames.size(); ++i) {
-        trackPreviewText.append("  |  ").append(previewNames[i]);
-      }
+    if (!preview.empty()) {
+      trackPreviewText = formatName(preview.front());
     }
   }
   if (trackPreviewText.empty()) {
@@ -1295,22 +1300,29 @@ void ObserverSDL::DrawAudioControlsPanel() {
 
   int maxLabelH = std::max({trackLabelH, musicLabelH, effectsLabelH});
   int rowHeight = std::max(maxLabelH + 6, 20);
-  int totalRowsHeight = 3 * rowHeight;
-  int remaining = panelHeight - totalRowsHeight;
-  if (remaining < 0) {
-    remaining = 0;
+  const int rowCount = 3;
+  int totalRowsHeight = rowCount * rowHeight;
+  int remaining = std::max(0, panelHeight - totalRowsHeight);
+  int verticalGap = std::max(6, remaining / (rowCount + 1));
+  int rowY[rowCount];
+  rowY[0] = panelY + verticalGap;
+  for (int i = 1; i < rowCount; ++i) {
+    rowY[i] = rowY[i - 1] + rowHeight + verticalGap;
   }
-  int verticalGap = std::max(6, remaining / 4);
-  int row1Y = panelY + verticalGap;
-  int row2Y = row1Y + rowHeight + verticalGap;
-  int row3Y = row2Y + rowHeight + verticalGap;
+  rowY[1] += 16;
+  rowY[2] += 16;
+  for (int i = 1; i < rowCount; ++i) {
+    if (rowY[i] > panelY + panelHeight - rowHeight) {
+      int shift = rowY[i] - (panelY + panelHeight - rowHeight);
+      rowY[i] -= shift;
+    }
+  }
   int panelBottom = panelY + panelHeight;
-  if (row3Y + maxLabelH > panelBottom - verticalGap) {
-    row3Y = panelBottom - maxLabelH - verticalGap;
-    row2Y = row3Y - rowHeight - verticalGap;
-    row1Y = row2Y - rowHeight - verticalGap;
-    if (row1Y < panelY + verticalGap) {
-      row1Y = panelY + verticalGap;
+  int lastRowBottom = rowY[rowCount - 1] + maxLabelH;
+  if (lastRowBottom > panelBottom - verticalGap) {
+    int adjust = lastRowBottom - (panelBottom - verticalGap);
+    for (int i = 0; i < rowCount; ++i) {
+      rowY[i] -= adjust;
     }
   }
 
@@ -1328,27 +1340,25 @@ void ObserverSDL::DrawAudioControlsPanel() {
 
   Color trackColor = (!audioReady) ? inactiveColor : activeColor;
   int trackLabelX = panelX + labelPadding;
-  graphics->DrawText(trackLabel, trackLabelX, row1Y, trackColor, true, true);
-  int nameW = 0, nameH = 0;
-  graphics->GetTextSize(trackPreviewText, nameW, nameH, true);
-  graphics->DrawText(trackPreviewText, trackLabelX + trackLabelW + spacing, row1Y,
-                     Color(200, 200, 200), true, true);
+  std::string nextLine = trackLabel + " " + trackPreviewText + " | Cur: " + nowPlayingTrack;
+  graphics->DrawText(nextLine, trackLabelX, rowY[0], trackColor, true, true);
 
   Color musicColor = (!audioReady || musicMuted) ? inactiveColor : activeColor;
   int musicLabelX = iconAreaLeft - spacing - musicLabelW;
   if (musicLabelX < panelX + labelPadding) {
     musicLabelX = panelX + labelPadding;
   }
-  graphics->DrawText(musicLabel, musicLabelX, row2Y, musicColor, true, true);
-  DrawSpeakerIcon(iconX, row2Y - 2, musicMuted || !audioReady, musicColor);
+  int musicRowY = std::max(rowY[0] + verticalGap / 2, rowY[1] - rowHeight);
+  graphics->DrawText(musicLabel, musicLabelX, musicRowY, musicColor, true, true);
+  DrawSpeakerIcon(iconX, musicRowY - 2, musicMuted || !audioReady, musicColor);
 
   Color fxColor = (!audioReady || effectsMuted) ? inactiveColor : activeColor;
   int effectsLabelX = iconAreaLeft - spacing - effectsLabelW;
   if (effectsLabelX < panelX + labelPadding) {
     effectsLabelX = panelX + labelPadding;
   }
-  graphics->DrawText(effectsLabel, effectsLabelX, row3Y, fxColor, true, true);
-  DrawSpeakerIcon(iconX, row3Y - 2, effectsMuted || !audioReady, fxColor);
+  graphics->DrawText(effectsLabel, effectsLabelX, rowY[2], fxColor, true, true);
+  DrawSpeakerIcon(iconX, rowY[2] - 2, effectsMuted || !audioReady, fxColor);
 }
 
 void ObserverSDL::DrawSpeakerIcon(int x, int y, bool muted,
@@ -1561,22 +1571,8 @@ void ObserverSDL::DrawHelpFooter() {
   }
 
   // Right-side status (align to right using measured widths)
-  bool audioReady = audioInitialized &&
-                    mm4::audio::AudioSystem::Instance().IsInitialized();
-  bool musicMuted = startAudioMuted_;
-  bool effectsMuted = startAudioMuted_;
-  if (audioReady) {
-    auto& audioSystem = mm4::audio::AudioSystem::Instance();
-    musicMuted = audioSystem.MusicMuted();
-    effectsMuted = audioSystem.EffectsMuted();
-  }
-
   std::string spriteStr = useSpriteMode ? "Sprites: ON" : "Sprites: OFF";
   std::string stateStr = isPaused ? "PAUSED" : "RUNNING";
-  std::string musicStr =
-      std::string("Soundtrack: ") + (musicMuted ? "MUTED (M)" : "ON (M)");
-  std::string effectsStr =
-      std::string("Effects: ") + (effectsMuted ? "MUTED (E)" : "ON (E)");
 
   struct StatusLabel {
     std::string text;
@@ -1584,8 +1580,6 @@ void ObserverSDL::DrawHelpFooter() {
   };
 
   std::vector<StatusLabel> labels = {
-      {musicStr, musicMuted ? Color(255, 80, 80) : Color(0, 220, 0)},
-      {effectsStr, effectsMuted ? Color(255, 80, 80) : Color(0, 220, 0)},
       {spriteStr,
        useSpriteMode ? Color(0, 255, 0) : Color(150, 150, 150)},
       {stateStr, isPaused ? Color(255, 255, 0) : Color(0, 255, 0)}};
