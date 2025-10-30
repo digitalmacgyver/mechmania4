@@ -20,6 +20,7 @@
 #include <map>
 #include <random>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -29,6 +30,7 @@
 #include "Sendable.h"
 #include "Thing.h"
 #include "stdafx.h"
+#include "audio/AudioTypes.h"
 
 #define MAX_THINGS 512
 
@@ -53,6 +55,19 @@ class CWorld : public CSendable {
   double GetGameTime() const;     // Tells elapsed game time
   unsigned int GetCurrentTurn() const;    // Returns current turn number
   void IncrementTurn();                   // Increment turn counter
+  const std::vector<mm4::audio::EffectRequest>& GetAudioEvents() const {
+    return audioEvents_;
+  }
+  void ClearAudioEvents();
+  void LogAudioEvent(const mm4::audio::EffectRequest& request);
+  void LogAudioEvent(const std::string& logicalEvent,
+                     int teamWorldIndex,
+                     double quantity = 0.0,
+                     int count = 1,
+                     const std::string& metadata = std::string(),
+                     int delayTicks = 0,
+                     int requestedLoops = 1,
+                     bool preserveDuplicates = false);
 
   // Announcer system
   void AddAnnouncerMessage(const char* message);  // Legacy interface (wraps AppendAnnouncerMessage)
@@ -144,6 +159,7 @@ class CWorld : public CSendable {
   unsigned int currentTurn;  // Track current turn number for logging
   std::mt19937 collision_rng_;
   std::uniform_real_distribution<double> ship_collision_angle_dist_;
+  std::vector<mm4::audio::EffectRequest> audioEvents_;
 };
 
 #endif  // ! _WORLD_H_DSDFJSFLJKSEGFKLESF

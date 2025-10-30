@@ -87,6 +87,7 @@ class CShip : public CThing {
   bool bDockFlag;
   bool bWasDocked;  // Previous turn's docking state (for collision logging)
   bool bLaunchedThisTurn;  // True if ship undocked this turn (makes thrust free for entire turn)
+  int dockedStationTeamIndex_;
   double dDockDist, dLaserDist;
   CBrain* pBrain;
 
@@ -107,6 +108,7 @@ class CShip : public CThing {
   // Collision physics implementations
   void HandleElasticShipCollision(CThing* pOtherShip);  // Proper elastic collision
   double CalculateCollisionMomentumChange(const CThing* pOtherThing) const;  // Calculate |Δp| for collision
+  void LogShipDestroyed();
 
   // Collision processing implementations
   void HandleCollisionOld(CThing* pOthThing, CWorld* pWorld);  // Legacy

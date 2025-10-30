@@ -400,6 +400,15 @@ std::string SoundLibrary::DefaultSoundtrackId() const {
   return {};
 }
 
+std::vector<std::string> SoundLibrary::AllSoundtrackIds() const {
+  std::vector<std::string> ids;
+  ids.reserve(musicAssets_.size());
+  for (const auto& entry : musicAssets_) {
+    ids.push_back(entry.first);
+  }
+  return ids;
+}
+
 void SoundLibrary::SetAssetRootOverride(const std::string& assetRoot) {
   if (assetRoot.empty()) {
     assetRootOverride_.clear();

@@ -30,6 +30,7 @@ CParser::CParser(int argc, char** argv) {
   reconnect = parser.reconnect ? 1 : 0;
   verbose = parser.verbose ? 1 : 0;
   enableAudioTestPing = parser.enableAudioTestPing ? 1 : 0;
+  startAudioMuted = parser.startAudioMuted ? 1 : 0;
 
   // Initialize global game constants from the parsed values
   InitializeGameConstants(&parser);
@@ -51,4 +52,5 @@ void CParser::SetDefaults() {
   reconnect = 0;
   verbose = 0;
   enableAudioTestPing = 0;
+  startAudioMuted = 0;
 }

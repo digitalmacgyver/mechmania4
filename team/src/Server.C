@@ -196,6 +196,21 @@ void CServer::BroadcastWorld() {
   }
 }
 
+void CServer::SendWorldToObserver() {
+  if (ObsConn == (unsigned int)-1) {
+    return;
+  }
+  if (abOpen[ObsConn - 1] != true) {
+    return;
+  }
+  if (pmyNet->IsOpen(ObsConn) == 0) {
+    abOpen[ObsConn - 1] = false;
+    printf("Observer disconnected\n");
+    return;
+  }
+  SendWorld(ObsConn);
+}
+
 void CServer::ResumeSync() {
   // Reset team timing
   double now = pmyWorld->GetTimeStamp();
@@ -462,6 +477,7 @@ double CServer::Simulation() {
     }
     // Clear announcer messages after each frame
     pmyWorld->AnnouncerText[0] = 0;
+    pmyWorld->ClearAudioEvents();
   }
 
   // Increment turn counter after physics completes

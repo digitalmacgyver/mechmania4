@@ -68,6 +68,8 @@ class ObserverSDL {
   bool enableAudioDiagnostics_ = false;
   double diagnosticsPingIntervalSeconds_ = 5.0;
   double nextDiagnosticsPingTime_ = -1.0;
+  bool startAudioMuted_ = false;
+  bool nextMenuToggleUsesAlt_ = false;
 
   // Drawing helpers
   void DrawSpace();
@@ -91,6 +93,7 @@ class ObserverSDL {
   void DrawVelocityVector(CThing* thing);
   void MaybeEmitDiagnosticsPing(mm4::audio::AudioSystem& audioSystem,
                                 double gameTimeSeconds);
+  void PlayMenuToggleSound();
 
   // Coordinate transformation
   int WorldToScreenX(double wx);
@@ -106,7 +109,8 @@ class ObserverSDL {
   ObserverSDL(const char* regFileName, int gfxFlag,
               const std::string& assetsRoot = std::string(),
               bool verboseAudio = false,
-              bool enableAudioDiagnostics = false);
+              bool enableAudioDiagnostics = false,
+              bool startAudioMuted = false);
   ~ObserverSDL();
 
   // Main methods

@@ -1,6 +1,10 @@
 #include <sys/types.h>
 
+#include <cmath>
 #include <ctime>
+#include <limits>
+#include <string>
+#include <vector>
 
 #include "ParserModern.h"
 #include "Server.h"
@@ -51,6 +55,59 @@ int main(int argc, char* argv[]) {
 
     myServ.BroadcastWorld();
     myServ.ReceiveTeamOrders();
+  }
+
+  if (pWorld) {
+    const unsigned int numTeams = pWorld->GetNumTeams();
+    std::vector<double> teamScores(numTeams, 0.0);
+    double bestScore = std::numeric_limits<double>::lowest();
+
+    for (unsigned int i = 0; i < numTeams; ++i) {
+      CTeam* team = pWorld->GetTeam(i);
+      double score = 0.0;
+      if (team && team->GetStation()) {
+        score = team->GetStation()->GetVinylStore();
+      }
+      teamScores[i] = score;
+      if (score > bestScore) {
+        bestScore = score;
+      }
+    }
+
+    if (numTeams > 0 && std::isfinite(bestScore)) {
+      auto makeEventId = [](const CTeam* team, const std::string& suffix) {
+        if (!team) {
+          return suffix;
+        }
+        int worldIndex = static_cast<int>(team->GetWorldIndex());
+        return "team" + std::to_string(worldIndex + 1) + "." + suffix;
+      };
+
+      const double kScoreEpsilon = 1e-3;
+      pWorld->bGameOver = true;
+
+      for (unsigned int i = 0; i < numTeams; ++i) {
+        CTeam* team = pWorld->GetTeam(i);
+        bool isWinner =
+            std::fabs(teamScores[i] - bestScore) <= kScoreEpsilon;
+        std::string suffix =
+            isWinner ? "game_won.default" : "game_lost.default";
+        std::string metadata;
+        if (team && team->GetName()) {
+          metadata = team->GetName();
+        }
+        int teamIndex =
+            team ? static_cast<int>(team->GetWorldIndex()) : -1;
+        pWorld->LogAudioEvent(makeEventId(team, suffix),
+                              teamIndex, teamScores[i], 1, metadata);
+      }
+
+      // Push final snapshot so observer hears game result cues.
+      myServ.BroadcastWorld();
+      myServ.WaitForObserver();
+      myServ.SendWorldToObserver();
+      pWorld->ClearAudioEvents();
+    }
   }
 
   // Log final scores

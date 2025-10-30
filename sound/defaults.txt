@@ -3,9 +3,14 @@ game:
   soundtrack:
     songs:
       - assets/star_control/music/hyper.mod
-      - track_one.wav
-      - track_two.wav
-      - track_three.wav
+      - assets/star_control/music/arilou.mod
+      - assets/star_control/music/arispace.mod
+      - assets/star_control/music/battle.mod
+      - assets/star_control/music/comandr.mod
+      - assets/star_control/music/introx.mod
+      - assets/star_control/music/outfit.mod
+      - assets/star_control/music/pkunk.mod
+      - assets/star_control/music/shipyard.mod
 
 teams:
   team:
@@ -14,22 +19,26 @@ teams:
         file: ../assets/star_control/effects/chmmr-laser.wav
         behavior:
           duration_ticks: 12
+          scale:
+            per_quantity: 256.0
+            min_loops: 1
+            max_loops: 8
       laser_asteroid:
         laser_asteroid_break:
-          file: ../assets/star_control/effects/boom-large.wav
+          file: ../assets/star_control/effects/boom45.wav
           behavior:
             delay_ticks: 1
         laser_asteroid_nobreak:
-          file: ../assets/star_control/effects/boom-small.wav
+          file: ../assets/star_control/effects/boom1.wav
           behavior:
             delay_ticks: 1
     col_ship_asteroid:
       default:
-        file: ../assets/star_control/effects/boom-medium.wav
+        file: ../assets/star_control/effects/boom23.wav
       col_ship_asteroid_eat:
         file: ../assets/star_control/effects/lander-pickup.wav
       col_ship_asteroid_destroy:
-        file: ../assets/star_control/effects/boom-small.wav
+        file: ../assets/star_control/effects/boom1.wav
     col_ship_laser:
       default:
         file: ../assets/star_control/effects/flagship-guns.wav
@@ -53,20 +62,37 @@ teams:
         behavior:
           mode: queue
       launch_from_friendly:
+        inherit: team.launch.default
       launch_from_enemy:
+        inherit: team.launch.default
     dock:
+      default:
+        file: ../assets/star_control/effects/lander-return.wav
       dock_at_friendly:
         file: ../assets/star_control/effects/lander-return.wav
       dock_at_enemy:
         file: ../assets/star_control/effects/orz-intruder.wav
+        behavior:
+          mode: queue
+      dock_at_enemy_alert:
+        file: ../assets/star_control/effects/redalert.wav
+        behavior:
+          mode: queue
+          delay_ticks: 1
     deliver_vinyl:
       default:
         file: ../assets/star_control/effects/chmmr-tractor.wav
         behavior:
           mode: queue
           duration_ticks: 16
+          scale:
+            per_quantity: 8.0
+            min_loops: 1
+            max_loops: 8
       deliver_vinyl_friendly:
+        inherit: team.deliver_vinyl.default
       deliver_vinyl_enemy:
+        inherit: team.deliver_vinyl.default
     raise_shields:
       default:
         file: ../assets/star_control/effects/ilwrath-cloak.wav
@@ -74,7 +100,9 @@ teams:
       default:
         file: ../assets/star_control/effects/zoqfotpik-tongue.wav
       jettison_vinyl:
+        inherit: team.jettison.default
       jettison_uranium:
+        inherit: team.jettison.default
     ship_destroyed:
       default:
         file: ../assets/star_control/effects/boom-shipdie.wav
@@ -84,17 +112,28 @@ teams:
     game_won:
       default:
         file: ../assets/star_control/effects/druuge-ditty.mp3
+    game_lost:
+      default:
+        file: ../assets/star_control/effects/pkunk-loser.wav
   team2:
     laser:
       default:
         file: ../assets/star_control/effects/ur-quan-fusion.wav
         behavior:
           duration_ticks: 12
+          scale:
+            per_quantity: 256.0
+            min_loops: 1
+            max_loops: 8
     launch:
       default:
         file: ../assets/star_control/effects/ur-quan-launch.wav
         behavior:
           mode: queue
+      launch_from_friendly:
+        inherit: team2.launch.default
+      launch_from_enemy:
+        inherit: team2.launch.default
     col_ship_ship:
       default:
         file: ../assets/star_control/effects/pkunk-worm.wav
@@ -110,13 +149,47 @@ teams:
         behavior:
           mode: queue
           duration_ticks: 16
+          scale:
+            per_quantity: 8.0
+            min_loops: 1
+            max_loops: 8
+      deliver_vinyl_friendly:
+        inherit: team2.deliver_vinyl.default
+      deliver_vinyl_enemy:
+        inherit: team2.deliver_vinyl.default
     raise_shields:
       default:
         file: ../assets/star_control/effects/slylandro-energize.wav
+    ship_destroyed:
+      default:
+        file: ../assets/star_control/effects/boom-shipdie.wav
+    ship_out_of_fuel:
+      default:
+        file: ../assets/star_control/effects/androsynth-bubble.wav
     game_won:
       default:
         file: ../assets/star_control/effects/yehat-ditty.mp3
+    game_lost:
+      default:
+        file: ../assets/star_control/effects/pkunk-worm.wav
   manual:
     audio:
       ping:
         file: ../assets/star_control/effects/orz-go.wav
+    menu:
+      toggle_enabled:
+        file: ../assets/star_control/effects/menusnd01.wav
+        behavior:
+          mode: queue
+      toggle_enabled_alt:
+        file: ../assets/star_control/effects/menusnd02.wav
+        behavior:
+          mode: queue
+      toggle_disabled:
+        file: ../assets/star_control/effects/menusnd03.wav
+        behavior:
+          mode: queue
+      toggle_disabled_alt:
+        file: ../assets/star_control/effects/menusnd04.wav
+        behavior:
+          mode: queue

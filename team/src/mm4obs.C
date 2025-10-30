@@ -16,9 +16,10 @@ int main(int argc, char *argv[]) {
   CParser PCmdLn(argc, argv);
   g_pParser = &PCmdLn;  // Set global parser instance
   if (PCmdLn.needhelp == 1) {
-    printf("mm4obs [-R] [-G] [-pport] [-hhostname] [-ggfxreg]\n");
+    printf("mm4obs [-R] [-G] [--mute] [-pport] [-hhostname] [-ggfxreg]\n");
     printf("  -R:  Attempt reconnect after server disconnect\n");
     printf("  -G:  Activate full graphics mode\n");
+    printf("  --mute: Start observer with soundtrack and effects muted\n");
     printf("  port defaults to 2323\n  hostname defaults to localhost\n");
     printf("  gfxreg defaults to graphics.reg\n");
     printf("MechMania IV: The Vinyl Frontier   10/2/98\n");

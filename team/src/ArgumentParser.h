@@ -39,6 +39,7 @@ class ArgumentParser {
   // Observer options
   bool verbose = false;          // Verbose output for observer
   bool enableAudioTestPing = false;  // Enable manual audio diagnostics ping
+  bool startAudioMuted = false;      // Start observer with audio muted
 
   // Config file
   std::string configFile;

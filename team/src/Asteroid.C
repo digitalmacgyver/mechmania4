@@ -10,10 +10,23 @@
 #include "GameConstants.h"
 #include "PhysicsUtils.h"
 #include "Ship.h"
+#include "Station.h"
+#include "Team.h"
 #include "World.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
+#include <string>
 
 extern ArgumentParser* g_pParser;
+
+namespace {
+std::string MakeTeamEventSuffix(const CTeam* team, const std::string& suffix) {
+  if (!team) {
+    return suffix;
+  }
+  int index = static_cast<int>(team->GetWorldIndex());
+  return "team" + std::to_string(index + 1) + "." + suffix;
+}
+}
 
 /////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -449,6 +462,18 @@ void CAsteroid::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
     // impact point
     pOthThing->bIsColliding = angbo;  // How convenient
 
+    if (pWorld) {
+      CStation* station = static_cast<CStation*>(pOthThing);
+      CTeam* stationTeam =
+          station ? station->GetTeam() : nullptr;
+      int teamIndex =
+          stationTeam ? static_cast<int>(stationTeam->GetWorldIndex()) : -1;
+      pWorld->LogAudioEvent(
+          MakeTeamEventSuffix(stationTeam, "col_station_asteroid.default"),
+          teamIndex, GetMass(), 1,
+          station ? station->GetName() : "");
+    }
+
     return;
   }
 
@@ -544,6 +569,18 @@ void CAsteroid::HandleCollisionNew(CThing* pOthThing, CWorld* pWorld) {
     // impact point
     pOthThing->bIsColliding = angbo;  // How convenient
 
+    if (pWorld) {
+      CStation* station = static_cast<CStation*>(pOthThing);
+      CTeam* stationTeam =
+          station ? station->GetTeam() : nullptr;
+      int teamIndex =
+          stationTeam ? static_cast<int>(stationTeam->GetWorldIndex()) : -1;
+      pWorld->LogAudioEvent(
+          MakeTeamEventSuffix(stationTeam, "col_station_asteroid.default"),
+          teamIndex, GetMass(), 1,
+          station ? station->GetName() : "");
+    }
+
     return;
   }
 
@@ -609,6 +646,16 @@ void CAsteroid::CreateFragmentsOld(CThing* pOthThing, CWorld* pWorld,
     VCh.rho = g_game_max_speed;
   }
   CAsteroid* pChildAst;
+
+  if (OthKind == SHIP && pWorld) {
+    CShip* ship = static_cast<CShip*>(pOthThing);
+    CTeam* team = ship ? ship->GetTeam() : nullptr;
+    int teamIndex = team ? static_cast<int>(team->GetWorldIndex()) : -1;
+    pWorld->LogAudioEvent(
+        MakeTeamEventSuffix(team, "col_ship_asteroid.col_ship_asteroid_destroy"),
+        teamIndex, GetMass(), 1,
+        ship ? ship->GetName() : "");
+  }
 
   for (i = 0; i < numNew; ++i) {
     pChildAst = MakeChildAsteroid(nMass);
@@ -714,6 +761,16 @@ void CAsteroid::CreateFragmentsNew(CThing* pOthThing, CWorld* pWorld,
 
   // Create fragments with center-of-mass motion + 120° spread pattern
   CAsteroid* pChildAst;
+  if (OthKind == SHIP && pWorld) {
+    CShip* ship = static_cast<CShip*>(pOthThing);
+    CTeam* team = ship ? ship->GetTeam() : nullptr;
+    int teamIndex = team ? static_cast<int>(team->GetWorldIndex()) : -1;
+    pWorld->LogAudioEvent(
+        MakeTeamEventSuffix(team, "col_ship_asteroid.col_ship_asteroid_destroy"),
+        teamIndex, GetMass(), 1,
+        ship ? ship->GetName() : "");
+  }
+
   for (i = 0; i < numNew; ++i) {
     pChildAst = MakeChildAsteroid(nMass);
 

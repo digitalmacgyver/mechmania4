@@ -25,10 +25,11 @@ int main(int argc, char* argv[]) {
   CParser PCmdLn(argc, argv);
   g_pParser = &PCmdLn;  // Set global parser instance
   if (PCmdLn.needhelp == 1) {
-    printf("mm4obs [-R] [-G] [--verbose] [-pport] [-hhostname] [-ggfxreg] [--assets-root path]\n");
+    printf("mm4obs [-R] [-G] [--verbose] [--mute] [-pport] [-hhostname] [-ggfxreg] [--assets-root path]\n");
     printf("  -R:  Attempt reconnect after server disconnect\n");
     printf("  -G:  Activate full graphics mode\n");
     printf("  --verbose: Show game time progress\n");
+    printf("  --mute: Start observer with soundtrack and effects muted\n");
     printf("  port defaults to 2323\n  hostname defaults to localhost\n");
     printf("  gfxreg defaults to graphics.reg\n");
     printf("MechMania IV: The Vinyl Frontier - SDL2 Edition\n");
@@ -50,7 +51,8 @@ int main(int argc, char* argv[]) {
 #ifdef USE_SDL2
   ObserverSDL myObs(PCmdLn.gfxreg, PCmdLn.gfxflag,
                     PCmdLn.GetAssetsRoot(), PCmdLn.verbose,
-                    PCmdLn.enableAudioTestPing);
+                    PCmdLn.enableAudioTestPing,
+                    PCmdLn.startAudioMuted != 0);
   printf("SDL2 Graphics initialized\n");
 #else
   Observer myObs(PCmdLn.gfxreg, PCmdLn.gfxflag);

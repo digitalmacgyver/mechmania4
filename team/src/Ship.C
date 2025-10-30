@@ -17,8 +17,19 @@
 #include <algorithm>         // For std::swap
 #include <cmath>
 #include <functional>        // For std::function (recursive lambda)
+#include <string>
 
 extern CParser* g_pParser;
+
+namespace {
+std::string MakeTeamEventSuffix(const CTeam* team, const std::string& suffix) {
+  if (!team) {
+    return suffix;
+  }
+  int index = static_cast<int>(team->GetWorldIndex());
+  return "team" + std::to_string(index + 1) + "." + suffix;
+}
+}
 
 ///////////////////////////////////////////
 // Helper functions (must be defined before use in member functions)
@@ -174,6 +185,10 @@ void CShip::AnnounceOutOfFuel() const {
   char msg[256];
   snprintf(msg, sizeof(msg), "%s ran out of fuel", GetName());
   world->AddAnnouncerMessage(msg);
+  int teamIndex = static_cast<int>(team->GetWorldIndex());
+  world->LogAudioEvent(
+      MakeTeamEventSuffix(team, "ship_out_of_fuel.default"),
+      teamIndex, 0.0, 1, GetName());
 }
 
 void CShip::ProcessShieldOrder(double shieldamt) {
@@ -196,6 +211,13 @@ void CShip::ProcessShieldOrder(double shieldamt) {
   SetAmount(S_FUEL, newFuel);
   SetAmount(S_SHIELD, GetAmount(S_SHIELD) + shieldBoost);
   SetOrder(O_SHIELD, 0.0);
+
+  if (pmyTeam && pmyTeam->GetWorld()) {
+    int teamIndex = static_cast<int>(pmyTeam->GetWorldIndex());
+    pmyTeam->GetWorld()->LogAudioEvent(
+        MakeTeamEventSuffix(pmyTeam, "raise_shields.default"),
+        teamIndex, shieldBoost, 1, GetName());
+  }
 
   if (oldFuel > 0.01 && newFuel <= 0.01) {
     printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", GetName(),
@@ -337,6 +359,8 @@ CShip::CShip(CCoord StPos, CTeam *pteam, unsigned int ShNum)
   bDockFlag = true;
   bWasDocked = true;  // Start docked
   bLaunchedThisTurn = false;
+  dockedStationTeamIndex_ =
+      pteam ? static_cast<int>(pteam->GetWorldIndex()) : -1;
   dDockDist = g_ship_default_docking_distance;
   dLaserDist = 0.0;
   omega = 0.0;
@@ -428,6 +452,7 @@ void CShip::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const Coll
     case CollisionCommandType::kAdjustShield: {
       // Adjust shield by delta (can be negative for damage)
       double current = adStatCur[(unsigned int)S_SHIELD];
+      bool wasAlive = current > 0.0;
       double new_amount = current + cmd.scalar;
 
       // Clamp to valid range [0, max_capacity]
@@ -442,8 +467,8 @@ void CShip::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const Coll
       adStatCur[(unsigned int)S_SHIELD] = new_amount;
 
       // If shield drops to zero, ship is destroyed
-      if (adStatCur[(unsigned int)S_SHIELD] <= 0.0) {
-        DeadFlag = true;
+      if (new_amount <= 0.0 && wasAlive) {
+        LogShipDestroyed();
       }
       break;
     }
@@ -487,6 +512,11 @@ void CShip::ApplyCollisionCommandDerived(const CollisionCommand& cmd, const Coll
     case CollisionCommandType::kSetDocked: {
       // Set docking state
       bDockFlag = cmd.bool_flag;
+      if (cmd.bool_flag) {
+        dockedStationTeamIndex_ = static_cast<int>(cmd.scalar);
+      } else {
+        dockedStationTeamIndex_ = -1;
+      }
       break;
     }
 
@@ -545,7 +575,34 @@ CollisionOutcome CShip::HandleStationCollision(const CollisionContext& ctx,
 
   outcome.AddCommand(CollisionCommand::SetPosition(self_state->thing, other_state->position));
   outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, CTraj(0.0, 0.0)));
-  outcome.AddCommand(CollisionCommand::SetDocked(self_state->thing, true));
+  int stationTeamIndex =
+      other_state->team ? static_cast<int>(other_state->team->GetWorldIndex())
+                        : -1;
+  CollisionCommand dockCmd =
+      CollisionCommand::SetDocked(self_state->thing, true);
+  dockCmd.scalar = static_cast<double>(stationTeamIndex);
+  outcome.AddCommand(dockCmd);
+
+  bool friendlyStation = (self_state->team == other_state->team);
+  if (ctx.world) {
+    int teamIndex = self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1;
+    ctx.world->LogAudioEvent(
+        MakeTeamEventSuffix(self_state->team, "dock.default"),
+        teamIndex, 0.0, 1,
+        self_state->thing ? self_state->thing->GetName() : "");
+    std::string dockSuffix =
+        friendlyStation ? "dock.dock_at_friendly" : "dock.dock_at_enemy";
+    ctx.world->LogAudioEvent(
+        MakeTeamEventSuffix(self_state->team, dockSuffix),
+        teamIndex, 0.0, 1,
+        self_state->thing ? self_state->thing->GetName() : "");
+    if (!friendlyStation) {
+      ctx.world->LogAudioEvent(
+          MakeTeamEventSuffix(self_state->team, "dock.dock_at_enemy_alert"),
+          teamIndex, 0.0, 1,
+          self_state->thing ? self_state->thing->GetName() : "");
+    }
+  }
 
   if (self_state->ship_cargo > 0.01) {
     if (self_state->team == other_state->team) {
@@ -557,6 +614,16 @@ CollisionOutcome CShip::HandleStationCollision(const CollisionContext& ctx,
         snprintf(msg, sizeof(msg), "%s delivered %.1f vinyl to %s",
                  self_state->thing->GetName(), self_state->ship_cargo, other_state->thing->GetName());
         outcome.AddCommand(CollisionCommand::Announce(msg));
+        ctx.world->LogAudioEvent(
+            MakeTeamEventSuffix(self_state->team, "deliver_vinyl.default"),
+            self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1,
+            self_state->ship_cargo, 1,
+            self_state->thing ? self_state->thing->GetName() : "");
+        ctx.world->LogAudioEvent(
+            MakeTeamEventSuffix(self_state->team, "deliver_vinyl.deliver_vinyl_friendly"),
+            self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1,
+            self_state->ship_cargo, 1,
+            self_state->thing ? self_state->thing->GetName() : "");
       }
     } else {
       outcome.AddCommand(CollisionCommand::AdjustCargo(other_state->thing, self_state->ship_cargo));
@@ -567,6 +634,16 @@ CollisionOutcome CShip::HandleStationCollision(const CollisionContext& ctx,
         snprintf(msg, sizeof(msg), "[ENEMY DELIVERY] %s delivered %.1f vinyl to enemy %s",
                  self_state->thing->GetName(), self_state->ship_cargo, other_state->thing->GetName());
         outcome.AddCommand(CollisionCommand::Announce(msg));
+        ctx.world->LogAudioEvent(
+            MakeTeamEventSuffix(self_state->team, "deliver_vinyl.default"),
+            self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1,
+            self_state->ship_cargo, 1,
+            self_state->thing ? self_state->thing->GetName() : "");
+        ctx.world->LogAudioEvent(
+            MakeTeamEventSuffix(self_state->team, "deliver_vinyl.deliver_vinyl_enemy"),
+            self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1,
+            self_state->ship_cargo, 1,
+            self_state->thing ? self_state->thing->GetName() : "");
       }
     }
   }
@@ -581,6 +658,14 @@ CollisionOutcome CShip::HandleLaserCollision(const CollisionContext& ctx,
 
   double laser_mass = other_state->mass;
   double damage = laser_mass / g_laser_damage_mass_divisor;
+
+  if (ctx.world) {
+    int teamIndex = self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1;
+    ctx.world->LogAudioEvent(
+        MakeTeamEventSuffix(self_state->team, "col_ship_laser.default"),
+        teamIndex, laser_mass, 1,
+        self_state->thing ? self_state->thing->GetName() : "");
+  }
 
   outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
 
@@ -619,6 +704,20 @@ CollisionOutcome CShip::HandleAsteroidCollision(const CollisionContext& ctx,
   CollisionOutcome outcome;
 
   bool asteroidFits = AsteroidFitsSnapshot(self_state, other_state);
+
+  if (ctx.world) {
+    int teamIndex = self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1;
+    ctx.world->LogAudioEvent(
+        MakeTeamEventSuffix(self_state->team, "col_ship_asteroid.default"),
+        teamIndex, other_state->mass, 1,
+        self_state->thing ? self_state->thing->GetName() : "");
+    if (asteroidFits) {
+      ctx.world->LogAudioEvent(
+          MakeTeamEventSuffix(self_state->team, "col_ship_asteroid.col_ship_asteroid_eat"),
+          teamIndex, other_state->mass, 1,
+          self_state->thing ? self_state->thing->GetName() : "");
+    }
+  }
 
   if (asteroidFits) {
     if (!ctx.disable_eat_damage) {
@@ -710,6 +809,21 @@ CollisionOutcome CShip::HandleShipCollision(const CollisionContext& ctx,
   }
 
   outcome.AddCommand(CollisionCommand::AdjustShield(self_state->thing, -damage));
+
+  if (ctx.world) {
+    int teamIndex = self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1;
+    ctx.world->LogAudioEvent(
+        MakeTeamEventSuffix(self_state->team, "col_ship_ship.default"),
+        teamIndex, damage, 1,
+        self_state->thing ? self_state->thing->GetName() : "");
+    bool friendly = (self_state->team == other_state->team);
+    if (friendly) {
+      ctx.world->LogAudioEvent(
+          MakeTeamEventSuffix(self_state->team, "col_ship_ship.col_ship_friendly_ship"),
+          teamIndex, damage, 1,
+          self_state->thing ? self_state->thing->GetName() : "");
+    }
+  }
 
   if ((self_state->ship_shield - damage) <= 0.0 && ctx.world) {
     char msg[256];
@@ -1434,7 +1548,7 @@ void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
         snprintf(msg, sizeof(msg), "%s destroyed by laser", GetName());
         pWorld->AddAnnouncerMessage(msg);
       }
-      KillThing();
+      LogShipDestroyed();
     }
 
     // Apply momentum transfer from laser (new physics mode)
@@ -1535,7 +1649,7 @@ void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
         snprintf(msg, sizeof(msg), "%s destroyed by %s", GetName(), shortCause);
         pWorld->AddAnnouncerMessage(msg);
       }
-      KillThing();
+      LogShipDestroyed();
     }
   }
 
@@ -1705,7 +1819,7 @@ void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
         snprintf(msg, sizeof(msg), "%s destroyed by laser", GetName());
         pWorld->AddAnnouncerMessage(msg);
       }
-      KillThing();
+      LogShipDestroyed();
     }
 
     // Apply momentum transfer from laser (new physics mode)
@@ -1818,7 +1932,7 @@ void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
         snprintf(msg, sizeof(msg), "%s destroyed by %s", GetName(), shortCause);
         pWorld->AddAnnouncerMessage(msg);
       }
-      KillThing();
+      LogShipDestroyed();
     }
   }
 
@@ -1983,6 +2097,23 @@ void CShip::HandleJettison() {
   double matamt = GetAmount(AstToStat(AsMat));
   matamt -= dMass;
   SetAmount(AstToStat(AsMat), matamt);
+
+  if (pWld) {
+    int teamIndex = GetTeam() ? static_cast<int>(GetTeam()->GetWorldIndex()) : -1;
+    pWld->LogAudioEvent(
+        MakeTeamEventSuffix(GetTeam(), "jettison.default"),
+        teamIndex, dMass, 1, GetName());
+    std::string jettisonSuffix;
+    if (AsMat == VINYL) {
+      jettisonSuffix = "jettison.jettison_vinyl";
+    } else if (AsMat == URANIUM) {
+      jettisonSuffix = "jettison.jettison_uranium";
+    } else {
+      jettisonSuffix = "jettison.default";
+    }
+    pWld->LogAudioEvent(MakeTeamEventSuffix(GetTeam(), jettisonSuffix),
+                        teamIndex, dMass, 1, GetName());
+  }
 }
 
 ///////////////////////////////////////////////////
@@ -2164,6 +2295,7 @@ unsigned CShip::GetSerialSize() const {
   totsize += BufWrite(NULL, bDockFlag);
   totsize += BufWrite(NULL, dDockDist);
   totsize += BufWrite(NULL, dLaserDist);
+  totsize += BufWrite(NULL, static_cast<unsigned int>(dockedStationTeamIndex_ + 1));
 
   unsigned int i;
   for (i = 0; i < (unsigned int)O_ALL_ORDERS; ++i) {
@@ -2189,6 +2321,8 @@ unsigned CShip::SerialPack(char *buf, unsigned buflen) const {
   vpb += BufWrite(vpb, bDockFlag);
   vpb += BufWrite(vpb, dDockDist);
   vpb += BufWrite(vpb, dLaserDist);
+  unsigned int encodedDock = static_cast<unsigned int>(dockedStationTeamIndex_ + 1);
+  vpb += BufWrite(vpb, encodedDock);
 
   unsigned int i;
   for (i = 0; i < (unsigned int)O_ALL_ORDERS; ++i) {
@@ -2214,6 +2348,9 @@ unsigned CShip::SerialUnpack(char *buf, unsigned buflen) {
   vpb += BufRead(vpb, bDockFlag);
   vpb += BufRead(vpb, dDockDist);
   vpb += BufRead(vpb, dLaserDist);
+  unsigned int encodedDock = 0;
+  vpb += BufRead(vpb, encodedDock);
+  dockedStationTeamIndex_ = static_cast<int>(encodedDock) - 1;
 
   unsigned int i;
   for (i = 0; i < (unsigned int)O_ALL_ORDERS; ++i) {
@@ -2396,6 +2533,19 @@ void CShip::ProcessThrustDriftNew(double thrustamt, double dt) {
 
     bDockFlag = false;
     bLaunchedThisTurn = true;  // Mark that we launched this turn (makes thrust free)
+    if (pmyTeam && pmyTeam->GetWorld()) {
+      int teamIndex = static_cast<int>(pmyTeam->GetWorldIndex());
+      bool friendlyLaunch = (dockedStationTeamIndex_ == teamIndex);
+      pmyTeam->GetWorld()->LogAudioEvent(
+          MakeTeamEventSuffix(pmyTeam, "launch.default"),
+          teamIndex, std::max(0.0, thrustamt), 1, GetName());
+      std::string launchSuffix =
+          friendlyLaunch ? "launch.launch_from_friendly"
+                          : "launch.launch_from_enemy";
+      pmyTeam->GetWorld()->LogAudioEvent(
+          MakeTeamEventSuffix(pmyTeam, launchSuffix),
+          teamIndex, std::max(0.0, thrustamt), 1, GetName());
+    }
   }
 
   if (thrustamt < 0.0) {
@@ -2459,6 +2609,19 @@ void CShip::ProcessThrustDriftOld(double thrustamt, double dt) {
     }
     Vel = Accel;  // Leave station at full speed
     bDockFlag = false;
+    if (pmyTeam && pmyTeam->GetWorld()) {
+      int teamIndex = static_cast<int>(pmyTeam->GetWorldIndex());
+      bool friendlyLaunch = (dockedStationTeamIndex_ == teamIndex);
+      pmyTeam->GetWorld()->LogAudioEvent(
+          MakeTeamEventSuffix(pmyTeam, "launch.default"),
+          teamIndex, std::max(0.0, thrustamt), 1, GetName());
+      std::string launchSuffix =
+          friendlyLaunch ? "launch.launch_from_friendly"
+                          : "launch.launch_from_enemy";
+      pmyTeam->GetWorld()->LogAudioEvent(
+          MakeTeamEventSuffix(pmyTeam, launchSuffix),
+          teamIndex, std::max(0.0, thrustamt), 1, GetName());
+    }
   }
 
   if (thrustamt < 0.0) {
@@ -2669,6 +2832,16 @@ void CShip::HandleElasticShipCollision(CThing* pOtherShip) {
            old_pos.fX, old_pos.fY, Pos.fX, Pos.fY,
            separation_distance, separation_angle * 180.0 / PI);
   }
+}
+
+void CShip::LogShipDestroyed() {
+  if (pmyTeam && pmyTeam->GetWorld()) {
+    int teamIndex = static_cast<int>(pmyTeam->GetWorldIndex());
+    pmyTeam->GetWorld()->LogAudioEvent(
+        MakeTeamEventSuffix(pmyTeam, "ship_destroyed.default"),
+        teamIndex, 0.0, 1, GetName());
+  }
+  CThing::KillThing();
 }
 
 double CShip::CalculateCollisionMomentumChange(const CThing* pOtherThing) const {

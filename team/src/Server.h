@@ -27,6 +27,7 @@ class CServer {
   void IntroduceWorld(int conn);
   unsigned int SendWorld(int conn);
   void BroadcastWorld();  // Sends world to all open connections
+  void SendWorldToObserver();  // Sends latest world snapshot to observer
   void MeetTeams();       // Gets teams from clients and sends to observer
 
   void ReceiveTeamOrders();  // Gives orders to local teams' ships

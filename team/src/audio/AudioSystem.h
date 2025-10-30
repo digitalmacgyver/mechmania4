@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <mutex>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -47,6 +48,11 @@ class AudioSystem {
   bool MusicMuted() const { return musicMuted_; }
   bool EffectsMuted() const { return effectsMuted_; }
   bool Verbose() const { return verbose_; }
+  void NextTrack(bool fromManual = false);
+  std::string ActiveTrackId() const { return activeMusicId_; }
+  std::vector<std::string> PlaylistSnapshot() const;
+  void RefreshPlaylist();
+  void OnTrackFinished();
 
  private:
   AudioSystem() = default;
@@ -94,11 +100,19 @@ class AudioSystem {
   void ProcessPendingEffects(int currentTurn);
   void DispatchEffect(const ScheduledEffect& pending);
   void EnsureMusicPlaying();
+  bool StartTrack(const std::string& trackId, bool manualSource);
+  void AdvancePlaylist(bool manualSource);
+  void ReshufflePlaylist();
 
   std::unordered_map<std::string, Mix_Chunk*> chunkCache_;
   std::vector<ChannelState> channels_;
   Mix_Music* activeMusic_ = nullptr;
   std::string activeMusicId_;
+  std::vector<std::string> playlistOrder_;
+  size_t playlistIndex_ = 0;
+  std::mt19937 playlistRng_{0x4D4D534F};  // Stable seed "MM5O"
+  std::vector<std::string> basePlaylist_;
+  bool nextMenuToggleUsesAlt_ = false;
 #else
   void ProcessPendingEffects(int currentTurn);
 #endif

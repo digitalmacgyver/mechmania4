@@ -1,94 +1,38 @@
-Sound System Roadmap (SDL_mixer Integration)
-===========================================
+# Sound System Status
 
-Overall Goal
-------------
-Migrate the MechMania observer to an SDL_mixer-based audio stack that can:
-- decode WAV/MP3/MOD (optionally Ogg) via a single cross-platform API,
-- respect advanced playback behaviors (queue, delay, scale) configured in sound/defaults.txt,
-- keep music running continuously while enforcing per-tick rules for sound effects.
+## Project Goals
+- Deliver a reliable SDL_mixer based audio stack that can run headless or with full observer UI.
+- Keep soundtrack and effects flexible via `sound/defaults.txt`, supporting per-team overrides and behaviour hints (queue, delay, scale).
+- Ensure the observer UI exposes intuitive audio controls (mute toggles, diagnostics, future playlist control) while respecting command-line flags.
 
-Current Status
---------------
-- ✅ Build now tolerates missing system SDL_mixer by stubbing playback and warning at configure time.
-- ✅ Vendoring script updated to capture SDL2_mixer alongside other SDL deps for offline installs.
-- ✅ AudioSystem scaffolding present (initialization, request buffering, logging).
-- ✅ SoundLibrary parses defaults.txt using a custom indentation parser; it captures file paths, queue/delay/scale metadata, and supports per-event fallback lookups.
-- ✅ AudioEventTracker emits effect requests with quantities and team-local logical IDs (e.g. team1.launch.default).
-- ✅ defaults.txt demonstrates new schema (file + behavior with queue/delay/scale) and inherit semantics.
-- ✅ Default soundtrack now seeds assets/star_control/music/hyper.mod to exercise SDL_mixer playback.
-- ✅ EffectRequest delay/loop hints now come from SoundLibrary descriptors when enqueuing playback requests, and queue-mode flags reach the buffer.
-- ✅ Observer footer exposes audio mute (M) and effects (E) toggles with real-time status indicators.
-- ✅ AudioSystem scheduler enforces delay/queue semantics with Mix channel dispatch and logs scheduling when SDL_mixer is unavailable.
+## In Progress
+- **World-driven effect emission**
+  - Ensure remaining gameplay events emit `CWorld::LogAudioEvent()` calls (e.g., game-end summaries still pending richer metadata).
+  - Confirm new game outcome IDs (`team#.game_lost.default`) follow a consistent naming scheme across replays and remote observers.
+- **Default configuration refinements**
+  - Document manual namespace keys (e.g., `manual.menu.toggle_enabled_alt`) for UI code to reference.
+- **Observer audio UX**
+  - Track context is now displayed; add tooltip/legend updates so help footer also references the `[X]` shortcut.
+  - Collect feedback on the alternating menu clicks to confirm they feel responsive when spammed while muted.
 
-To-Do / Next Steps
-------------------
-1. **Menu interaction sounds**
-   - Introduce logical events (`menu.toggle.enabled`, `menu.toggle.disabled`, etc.) and map them to `menusnd01-04.wav` with alternating playback.
-   - Ensure the first toggle uses “A” (menusnd01) and the second uses “B” (menusnd02); continue alternating if the control keeps flipping.
-   - When effects are muted, play a single confirmation click then suppress further menu audio until effects are re-enabled.
-   - Update `sound/defaults.txt` and AudioSystem helpers so menu sounds respect the mute state rule.
-
-2. **Finalize Star Control effect coverage**
-   - Fill the remaining schema items from the pseudo-config (e.g., `launch_from_enemy`, `jettison_vinyl/uranium`, `dock_at_enemy` including `redalert.wav`).
-   - Encode loop/delay/queue semantics: laser loop duration tied to order magnitude, deliver_vinyl loop scaled by payload, queue mode for sequential collisions/docks.
-   - Verify both teams inherit sane defaults while honoring overrides (Team 1 vs Team 2 variation).
-   - Implementation guide (assets live under `assets/star_control/effects/` unless noted):
-     * `laser` – team1 default `chmmr-laser.wav`, team2 default `ur-quan-fusion.wav`; loop for `order_magnitude / 256.0` seconds (minimum one full playback).
-     * `laser_asteroid.laser_asteroid_break` → `boom45.wav` with 1-tick delay; `laser_asteroid_nobreak` → `boom1.wav` with 1-tick delay.
-     * `col_ship_asteroid` default `boom23.wav`; `.eat` overrides `lander-pickup.wav`; `.destroy` overrides `boom1.wav`; keep default for `.break` until asset decided.
-     * `col_ship_laser` → `flagship-guns.wav` with 1-tick delay.
-     * `col_ship_ship` queue mode using team1 `pkunk-jerk.wav`, team2 `pkunk-worm.wav`; friendly-fire override uses team1 `pkunk-dodo.wav`, team2 `pkunk-idiot.wav` (queue).
-     * `col_station_asteroid` → `pkunk-shot.wav`.
-     * `launch` queue mode: team1 `orz-go.wav`, team2 `ur-quan-launch.wav`; special cases `launch_from_friendly/enemy` inherit unless new assets assigned.
-     * `dock.dock_at_friendly` → `lander-return.wav`; `.dock_at_enemy` plays `orz-intruder.wav` immediately followed by `redalert.wav` (converted WAV lives in effects directory).
-     * `deliver_vinyl` queue + loop: team1 `chmmr-tractor.wav`, team2 `melnorme-charge.wav`; loop duration = `total_vinyl / 8.0` seconds with minimum one pass.
-     * `raise_shields` – team1 `ilwrath-cloak.wav`, team2 `slylandro-energize.wav`.
-     * `jettison` default `zoqfotpik-tongue.wav`; create overrides for `.jettison_vinyl` and `.jettison_uranium` as desired (currently inherit default).
-     * `ship_destroyed` → `boom-shipdie.wav` (preferred over missing `shipdies.wav`).
-     * `ship_out_of_fuel` → `androsynth-bubble.wav`.
-     * `game_won` – team1 `druuge-ditty.mp3`, team2 `yehat-ditty.mp3`; verify MP3 playback path or convert to WAV if necessary.
-
-3. **Observer startup muting (`--mute`)**
-   - Add CLI flag that starts the observer with both music/effects muted but still allows the UI to unmute.
-   - Update help text, argument plumbing, panel state, and footer indicators.
-   - Ensure menu sounds and soundtrack respect the startup mute state.
-
-4. **Random soundtrack cycling + “[N]ext song” control**
-   - Shuffle through `arilou.mod`, `arispace.mod`, `battle.mod`, `comandr.mod`, `hyper.mod`, `introx.mod`, `outfit.mod`, `pkunk.mod`, `shipyard.mod`.
-   - When a track finishes (or “[N]ext song” is pressed), choose an unplayed track until all have been heard, then reshuffle.
-   - Insert a “[N]ext song” control above the mute row, expanding the panel layout as needed.
-   - Emit verbose logs for track transitions so tests can assert behaviour.
-
-5. **Testing & validation**
-   - Extend `test7.sh` once menu/playlist logging is in place (potentially send automated key events).
-   - Document manual QA: toggling menu items, verifying ping behaviour with new flag, checking soundtrack rotation.
-
-Open Questions
---------------
-- Decide whether YAML parsing should move to a third-party library (yaml-cpp) or keep the current indent-based parser long-term.
-- Determine default duration_ticks when unspecified (current behavior treats 0 as "play to completion").
-- Clarify how inheritance should behave when behavior attributes are omitted in the child.
-
-Immediate Diagnostics
----------------------
-- Validate menu sound logic once implemented (confirm alternating playback and mute suppression).
-- Verify soundtrack shuffling logs track IDs for `[N]ext song` and natural transitions.
-- Ensure new logical events appear in verbose logs so integration tests can latch onto them.
-
-Automation & Tooling Updates
-----------------------------
-- `scripts/test_collision_modes.py`: already accepts observer flags; extend scripted scenarios if we need to fire the “[N]ext song” control automatically.
-- Consider adding a lightweight menu-audio regression script that toggles mute/effects via simulated inputs (optional future work).
-
-Validation Workflow
--------------------
-1. `cmake -S . -B build` (no extra flags once vendoring auto-runs) then `cmake --build build`.
-2. `teams/testteam/tests/test7.sh --observer-enable-audio-test-ping` – confirm launch audio, ping diagnostics, and (eventually) menu/soundtrack logging.
-3. Manual QA: exercise mute toggles, `[N]ext song`, and verify menu sounds respect the mute state; optionally run `./build/mm4_modtest -s ...` for codec smoke tests.
-
-Upcoming Debugging Tasks
-------------------------
-- Define menu event IDs and fire them from the observer UI handlers.
-- Revisit `AudioEventTracker` for outstanding pseudo-config events (e.g., friendly/enemy launches, jettison variations) to ensure they emit the correct logical IDs.
-- Add soundtrack playlist management (shuffle queue) and wire `[N]ext song` keyboard shortcut + UI label.
+## Remaining TODOs
+- **Menu interaction sounds**
+  - Add stateful toggling in `ObserverSDL`: track last effect used per control (music/effects toggles), alternate between `menusnd01`/`menusnd02` (enabled) and `menusnd03`/`menusnd04` (disabled). Store booleans in class state; reset when mute global toggled.
+  - Hook into UI events:
+    - Keyboard shortcuts (`SDLK_m`, `SDLK_e`) once mute state toggles.
+    - Future UI buttons (if any) should call common helper `PlayMenuToggle(bool enabled, bool effectsMuted)`.
+  - Implement “first click after enabling effects should play even if effects were muted” rule: detect rising edge of effects mute; play a single confirmation using `manual.menu.toggle_enabled` then suppress until unmuted again.
+  - Queue manual events via `AudioSystem::QueueEffect()` using `manual.menu.*` logical IDs (no team index).
+- **Soundtrack management**
+  - Persist playlist seed/ordering to the server log so replay desyncs are debuggable; expose CLI knob for deterministic seed overrides.
+  - Add observer-side command palette (or HUD overlay) to display the next few tracks in queue using `PlaylistSnapshot()`.
+  - Gate track advancement when music is muted so that unmuting resumes at the newly selected track without flashing audio.
+  - Exercise `NextTrack(true)` and auto-advance paths in an automated harness (headless observer run) to confirm hooks still fire after pause/resume and server reconnects.
+- **Observer startup polish**
+  - When `--mute` used, ensure footer indicators render muted state immediately (update `DrawAudioControlsPanel` to read `startAudioMuted_` on first draw).
+  - Defer first menu sound until effects unmuted by caching a `menuMutedAck_` flag; synthesise a single `manual.menu.toggle_enabled` click when user unmutes.
+  - Expose current music/effects mute status in the on-screen help (e.g., “Soundtrack: MUTED (M)”).
+- **Testing & tooling**
+  - Extend `build/quick_test.sh` or new script to run observer in headless mode with `--verbose --mute` and assert presence of audio logs (`[audio] music next track`, `schedule event=team1.launch...` etc.).
+  - Add unit-ish coverage: craft a small integration harness that instantiates `CWorld`, triggers events (launch, dock, deliver), and verifies `GetAudioEvents()` contents.
+  - Update docs (`README_MODERNIZED.md`) with new CLI flag and QA checklist: menu toggles, cycle soundtrack, mute/unmute flows.

@@ -22,7 +22,7 @@
 
 ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
                          const std::string& assetsRoot, bool verboseAudio,
-                         bool enableAudioDiagnostics)
+                         bool enableAudioDiagnostics, bool startAudioMuted)
     : graphics(nullptr),
       spriteManager(nullptr),
       myWorld(nullptr),
@@ -33,7 +33,8 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
       lastAudioTurnProcessed(std::numeric_limits<unsigned int>::max()),
       assetRootOverride_(assetsRoot),
       verboseAudio_(verboseAudio),
-      enableAudioDiagnostics_(enableAudioDiagnostics) {  // Enable sprite mode when -G is used
+      enableAudioDiagnostics_(enableAudioDiagnostics),
+      startAudioMuted_(startAudioMuted) {  // Enable sprite mode when -G is used
   (void)regFileName;
 
   drawnames = 1;
@@ -180,6 +181,10 @@ bool ObserverSDL::Initialize() {
     audioEventTracker.Reset();
     lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
     nextDiagnosticsPingTime_ = -1.0;
+    if (startAudioMuted_) {
+      auto& audioSystem = mm4::audio::AudioSystem::Instance();
+      audioSystem.SetMuted(true);
+    }
     if (enableAudioDiagnostics_) {
       if (verboseAudio_) {
         std::cout << "[audio] diagnostics heartbeat enabled (interval="
@@ -204,6 +209,11 @@ void ObserverSDL::Update() {
       auto& audioSystem = mm4::audio::AudioSystem::Instance();
       audioSystem.BeginSubtick();
       MaybeEmitDiagnosticsPing(audioSystem, myWorld->GetGameTime());
+      const auto& worldEvents = myWorld->GetAudioEvents();
+      for (const auto& event : worldEvents) {
+        audioSystem.QueueEffect(event);
+      }
+      myWorld->ClearAudioEvents();
       unsigned int currentTurn = myWorld->GetCurrentTurn();
       if (currentTurn != lastAudioTurnProcessed) {
         auto events = audioEventTracker.GatherEvents(*myWorld);
@@ -265,6 +275,24 @@ void ObserverSDL::MaybeEmitDiagnosticsPing(
   if (gameTimeSeconds + kEpsilon >= nextDiagnosticsPingTime_) {
     nextDiagnosticsPingTime_ = gameTimeSeconds + diagnosticsPingIntervalSeconds_;
   }
+}
+
+void ObserverSDL::PlayMenuToggleSound() {
+  if (!audioInitialized) {
+    return;
+  }
+  auto& audioSystem = mm4::audio::AudioSystem::Instance();
+  if (!audioSystem.IsInitialized()) {
+    return;
+  }
+  mm4::audio::EffectRequest req;
+  if (nextMenuToggleUsesAlt_) {
+    req.logicalEvent = "manual.menu.toggle_enabled_alt";
+  } else {
+    req.logicalEvent = "manual.menu.toggle_enabled";
+  }
+  audioSystem.QueueEffect(req);
+  nextMenuToggleUsesAlt_ = !nextMenuToggleUsesAlt_;
 }
 
 void ObserverSDL::Draw() {
@@ -366,11 +394,13 @@ bool ObserverSDL::HandleEvents() {
             // Cycle drawnames: 0 = off, 1 = human names, 2 = numeric/status
             // labels
             drawnames = (drawnames + 1) % 3;
+            PlayMenuToggleSound();
             break;
           case SDLK_s:
             showStarfield = !showStarfield;
             std::cout << "Starfield: " << (showStarfield ? "ON" : "OFF")
                       << std::endl;
+            PlayMenuToggleSound();
             break;
           case SDLK_m: {
             if (audioInitialized &&
@@ -382,6 +412,7 @@ bool ObserverSDL::HandleEvents() {
                         << std::endl;
               AddMessage(mute ? "Soundtrack muted" : "Soundtrack unmuted",
                          -1);
+              PlayMenuToggleSound();
             }
             break;
           }
@@ -396,21 +427,45 @@ bool ObserverSDL::HandleEvents() {
               AddMessage(mute ? "Sound effects muted"
                               : "Sound effects unmuted",
                          -1);
+              PlayMenuToggleSound();
             }
             break;
           }
           case SDLK_v:
             ToggleVelVectors();
+            PlayMenuToggleSound();
             break;
           case SDLK_g:
             ToggleSpriteMode();
             std::cout << "Sprite mode: " << (useSpriteMode ? "ON" : "OFF")
                       << std::endl;
+            PlayMenuToggleSound();
             break;
+          case SDLK_x: {
+            if (audioInitialized &&
+                mm4::audio::AudioSystem::Instance().IsInitialized()) {
+              auto& audioSystem = mm4::audio::AudioSystem::Instance();
+              audioSystem.NextTrack(true);
+              std::string trackId = audioSystem.ActiveTrackId();
+              std::string displayName = trackId;
+              auto pos = displayName.find_last_of("/\\");
+              if (pos != std::string::npos) {
+                displayName = displayName.substr(pos + 1);
+              }
+              if (displayName.empty()) {
+                AddMessage("Soundtrack advanced to next track", -1);
+              } else {
+                AddMessage("Soundtrack: " + displayName, -1);
+              }
+            }
+            PlayMenuToggleSound();
+            break;
+          }
           case SDLK_SPACE:
             attractor = (attractor + 1) % 3;
             std::cout << "Logo mode: " << (attractor ? "ON" : "OFF")
                       << " (level " << attractor << ")" << std::endl;
+            PlayMenuToggleSound();
             break;
           case SDLK_p:
             // Toggle pause
@@ -421,6 +476,7 @@ bool ObserverSDL::HandleEvents() {
             } else {
               AddMessage("Game RESUMED", -1);
             }
+            PlayMenuToggleSound();
             break;
         }
         break;
@@ -1165,6 +1221,32 @@ void ObserverSDL::DrawAudioControlsPanel() {
   }
   graphics->DrawText(effectsLabel, effectsLabelX, row2Y, fxColor, true, true);
   DrawSpeakerIcon(iconX, row2Y - 2, effectsMuted || !audioReady, fxColor);
+
+  int row3Y = row2Y + rowHeight;
+  if (row3Y + labelH > panelY + panelHeight - 2) {
+    row3Y = panelY + panelHeight - labelH - 2;
+  }
+  std::string trackLabel = "[X] Next song:";
+  std::string trackName;
+  if (audioReady) {
+    trackName = mm4::audio::AudioSystem::Instance().ActiveTrackId();
+    auto split = trackName.find_last_of("/\\");
+    if (split != std::string::npos) {
+      trackName = trackName.substr(split + 1);
+    }
+  }
+  if (trackName.empty()) {
+    trackName = "<none>";
+  }
+  int trackLabelW = 0, trackLabelH = 0;
+  graphics->GetTextSize(trackLabel, trackLabelW, trackLabelH, true);
+  int trackLabelX = panelX + labelPadding;
+  Color trackColor = (!audioReady) ? inactiveColor : activeColor;
+  graphics->DrawText(trackLabel, trackLabelX, row3Y, trackColor, true, true);
+  int nameW = 0, nameH = 0;
+  graphics->GetTextSize(trackName, nameW, nameH, true);
+  graphics->DrawText(trackName, trackLabelX + trackLabelW + spacing,
+                     row3Y, Color(200, 200, 200), true, true);
 }
 
 void ObserverSDL::DrawSpeakerIcon(int x, int y, bool muted,

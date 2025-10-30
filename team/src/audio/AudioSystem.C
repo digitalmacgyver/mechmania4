@@ -13,6 +13,7 @@
 #include <cmath>
 #include <limits>
 #include <iostream>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -49,6 +50,10 @@ Mix_Music* LoadMusic(const std::string& path) {
   }
   return music;
 }
+
+void HandleMusicFinished() {
+  AudioSystem::Instance().OnTrackFinished();
+}
 #endif
 }  // namespace
 
@@ -83,6 +88,7 @@ bool AudioSystem::Initialize(const std::string& configPath,
   }
 
   Mix_ChannelFinished(nullptr);  // placeholder; will attach handler later
+  Mix_HookMusicFinished(HandleMusicFinished);
 
   verbose_ = verbose;
   library_.SetAssetRootOverride(assetsRoot);
@@ -90,6 +96,17 @@ bool AudioSystem::Initialize(const std::string& configPath,
     std::cerr << "[audio] Warning: sound library failed to load defaults."
               << std::endl;
   }
+  basePlaylist_ = library_.AllSoundtrackIds();
+  playlistOrder_ = basePlaylist_;
+  playlistIndex_ = 0;
+  if (playlistOrder_.empty()) {
+    std::string fallback = library_.DefaultSoundtrackId();
+    if (!fallback.empty()) {
+      playlistOrder_.push_back(fallback);
+    }
+  }
+  ReshufflePlaylist();
+  playlistIndex_ = 0;
 
   requestBuffer_.ClearAll();
   pendingEffects_.clear();
@@ -151,6 +168,7 @@ void AudioSystem::Shutdown() {
   ReleaseAllMusic();
   channels_.clear();
   chunkCache_.clear();
+  Mix_HookMusicFinished(nullptr);
   Mix_CloseAudio();
   Mix_Quit();
 #endif
@@ -162,6 +180,9 @@ void AudioSystem::Shutdown() {
   effectsMuted_ = false;
   verbose_ = false;
   musicPlayingReported_ = false;
+  playlistOrder_.clear();
+  basePlaylist_.clear();
+  playlistIndex_ = 0;
   std::cout << "[audio] SDL_mixer shutdown complete." << std::endl;
 }
 
@@ -211,6 +232,11 @@ void AudioSystem::QueueEffect(const EffectRequest& request) {
   if (isDiagnosticsPing) {
     std::cout << "[audio] diagnostics request event=" << request.logicalEvent
               << std::endl;
+  }
+
+  if (request.logicalEvent == "manual.menu.toggle_enabled" ||
+      request.logicalEvent == "manual.menu.toggle_enabled_alt") {
+    nextMenuToggleUsesAlt_ = request.logicalEvent == "manual.menu.toggle_enabled";
   }
 
   if (!initialized_ || effectsPaused_) {
@@ -482,45 +508,7 @@ void AudioSystem::EnsureMusicPlaying() {
     }
     return;
   }
-
-  std::string defaultId = library_.DefaultSoundtrackId();
-  if (defaultId.empty()) {
-    return;
-  }
-
-  if (!activeMusic_ || activeMusicId_ != defaultId) {
-    ReleaseAllMusic();
-    std::string asset = library_.ResolveMusicAsset(defaultId);
-    if (asset.empty()) {
-      std::cerr << "[audio] Missing music asset for track " << defaultId
-                << std::endl;
-      return;
-    }
-    activeMusic_ = LoadMusic(asset);
-    if (!activeMusic_) {
-      return;
-    }
-    activeMusicId_ = defaultId;
-    if (verbose_) {
-      std::cout << "[audio] music loaded track=" << asset << std::endl;
-    }
-  }
-
-  if (activeMusic_) {
-    if (Mix_PlayMusic(activeMusic_, -1) != 0) {
-      LogMixerError("Mix_PlayMusic");
-      ReleaseAllMusic();
-      musicPlayingReported_ = false;
-      return;
-    }
-    if (verbose_) {
-      std::cout << "[audio] music start track="
-                << (activeMusicId_.empty() ? "<unknown>" : activeMusicId_)
-                << std::endl;
-    }
-    lastMusicLog_ = std::chrono::steady_clock::now();
-    musicPlayingReported_ = true;
-  }
+  AdvancePlaylist(false);
 #endif
 }
 
@@ -552,6 +540,128 @@ void AudioSystem::PauseEffects() {
 #ifdef MM4_USE_SDL_MIXER
   Mix_HaltChannel(-1);
   channels_.clear();
+#endif
+}
+
+void AudioSystem::RefreshPlaylist() {
+#ifdef MM4_USE_SDL_MIXER
+  basePlaylist_ = library_.AllSoundtrackIds();
+  playlistOrder_ = basePlaylist_;
+  if (playlistOrder_.empty()) {
+    std::string fallback = library_.DefaultSoundtrackId();
+    if (!fallback.empty()) {
+      playlistOrder_.push_back(fallback);
+    }
+  }
+  playlistIndex_ = 0;
+  ReshufflePlaylist();
+#endif
+}
+
+void AudioSystem::ReshufflePlaylist() {
+#ifdef MM4_USE_SDL_MIXER
+  if (playlistOrder_.empty()) {
+    playlistIndex_ = 0;
+    return;
+  }
+  std::shuffle(playlistOrder_.begin(), playlistOrder_.end(), playlistRng_);
+  playlistIndex_ = playlistIndex_ % playlistOrder_.size();
+#endif
+}
+
+void AudioSystem::AdvancePlaylist(bool manualSource) {
+#ifdef MM4_USE_SDL_MIXER
+  if (playlistOrder_.empty()) {
+    std::string fallback = library_.DefaultSoundtrackId();
+    if (!fallback.empty()) {
+      playlistOrder_.push_back(fallback);
+    } else {
+      return;
+    }
+  }
+  size_t attempts = playlistOrder_.size();
+  for (size_t i = 0; i < attempts; ++i) {
+    if (playlistIndex_ >= playlistOrder_.size()) {
+      playlistIndex_ = 0;
+      ReshufflePlaylist();
+    }
+    const std::string& trackId = playlistOrder_[playlistIndex_];
+    playlistIndex_ = (playlistIndex_ + 1) % playlistOrder_.size();
+    if (!StartTrack(trackId, manualSource)) {
+      continue;
+    }
+    return;
+  }
+#endif
+}
+
+void AudioSystem::NextTrack(bool fromManual) {
+#ifdef MM4_USE_SDL_MIXER
+  AdvancePlaylist(fromManual);
+#else
+  (void)fromManual;
+#endif
+}
+
+std::vector<std::string> AudioSystem::PlaylistSnapshot() const {
+#ifdef MM4_USE_SDL_MIXER
+  return playlistOrder_;
+#else
+  return {};
+#endif
+}
+
+bool AudioSystem::StartTrack(const std::string& trackId, bool manualSource) {
+#ifdef MM4_USE_SDL_MIXER
+  std::string asset = library_.ResolveMusicAsset(trackId);
+  if (asset.empty()) {
+    std::cerr << "[audio] Missing music asset for track " << trackId << std::endl;
+    return false;
+  }
+
+  Mix_Music* music = LoadMusic(asset);
+  if (!music) {
+    return false;
+  }
+
+  ReleaseAllMusic();
+  activeMusic_ = music;
+  activeMusicId_ = trackId;
+  std::cout << "[audio] music next track=" << trackId
+            << " source=" << (manualSource ? "manual" : "auto") << std::endl;
+
+  if (musicMuted_) {
+    musicPlayingReported_ = false;
+    lastMusicLog_ = std::chrono::steady_clock::time_point::min();
+    return true;
+  }
+
+  int loop = 0;
+  if (Mix_PlayMusic(activeMusic_, loop) != 0) {
+    LogMixerError("Mix_PlayMusic");
+    ReleaseAllMusic();
+    return false;
+  }
+
+  lastMusicLog_ = std::chrono::steady_clock::now();
+  musicPlayingReported_ = true;
+  if (verbose_) {
+    std::cout << "[audio] music start track=" << trackId
+              << " source=" << (manualSource ? "manual" : "auto") << std::endl;
+  }
+  return true;
+#else
+  (void)trackId;
+  (void)manualSource;
+  return false;
+#endif
+}
+
+void AudioSystem::OnTrackFinished() {
+#ifdef MM4_USE_SDL_MIXER
+  if (!musicMuted_) {
+    AdvancePlaylist(false);
+  }
 #endif
 }
 

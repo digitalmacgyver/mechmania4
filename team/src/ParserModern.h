@@ -20,6 +20,7 @@ class CParser {
   int port, numteams, gfxflag, needhelp, retry, reconnect;
   int verbose;  // Added for verbose output
   int enableAudioTestPing;  // Non-zero when --enable-audio-test-ping supplied
+  int startAudioMuted;      // Non-zero when --mute supplied
 
   // New functionality - access to modern features
   bool UseNewFeature(const std::string& feature) const {
@@ -32,6 +33,7 @@ class CParser {
     return parser.teamParamsFile;
   }
   const std::string& GetAssetsRoot() const { return parser.assetsRoot; }
+  bool StartAudioMuted() const { return parser.startAudioMuted; }
 
   // Direct access to the modern parser if needed
   ArgumentParser& GetModernParser() { return parser; }

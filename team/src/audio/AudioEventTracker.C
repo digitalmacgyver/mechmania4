@@ -55,13 +55,9 @@ std::vector<EffectRequest> AudioEventTracker::GatherEvents(const CWorld& world) 
       }
 
       double delivered = vinyl - prevVinyl;
-      if (delivered > 0.01) {
-        EffectRequest req;
-        req.logicalEvent = teamTag + ".deliver_vinyl.default";
-        req.teamWorldIndex = teamWorldIndex;
-        req.quantity = delivered;
-        req.metadata = team->GetName();
-        events.push_back(req);
+      if (delivered > 0.01 && verbose_) {
+        std::cout << "[audio] tracker detected vinyl delivery team="
+                  << teamTag << " amount=" << delivered << std::endl;
       }
 
       stationState_[teamWorldIndex] = StationSnapshot{vinyl};
@@ -95,34 +91,19 @@ std::vector<EffectRequest> AudioEventTracker::GatherEvents(const CWorld& world) 
           events.push_back(req);
         }
 
-        if (prevIt->second.alive && !snapshot.alive) {
-          EffectRequest req;
-          req.logicalEvent = teamTag + ".ship_destroyed";
-          req.teamWorldIndex = teamWorldIndex;
-          req.metadata = ship->GetName();
-          events.push_back(req);
-        }
+        // Ship destruction handled directly by game logic for richer context.
 
         if (!prevIt->second.docked && snapshot.docked) {
-          EffectRequest req;
-          req.logicalEvent = teamTag + ".dock.default";
-          req.teamWorldIndex = teamWorldIndex;
-          req.metadata = ship->GetName();
-          events.push_back(req);
           if (verbose_) {
-            std::cout << "[audio] dock transition ship=" << req.metadata
+            std::cout << "[audio] dock transition ship=" << ship->GetName()
                       << " team=" << teamTag << " turn=" << currentTurn
                       << std::endl;
           }
         } else if (prevIt->second.docked && !snapshot.docked) {
-          EffectRequest req;
-          req.logicalEvent = teamTag + ".launch.default";
-          req.teamWorldIndex = teamWorldIndex;
-          req.metadata = ship->GetName();
-          events.push_back(req);
-          lastLaunchTransitions_.push_back(teamTag + ":" + req.metadata);
+          std::string shipName = ship->GetName();
+          lastLaunchTransitions_.push_back(teamTag + ":" + shipName);
           if (verbose_) {
-            std::cout << "[audio] launch event emitted ship=" << req.metadata
+            std::cout << "[audio] launch event emitted ship=" << shipName
                       << " team=" << teamTag << " turn=" << currentTurn
                       << std::endl;
           }

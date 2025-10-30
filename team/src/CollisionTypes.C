@@ -109,6 +109,7 @@ CollisionCommand CollisionCommand::SetDocked(CThing* target, bool docked) {
   cmd.type = CollisionCommandType::kSetDocked;
   cmd.target = target;
   cmd.bool_flag = docked;
+  cmd.scalar = -1.0;
   return cmd;
 }
 

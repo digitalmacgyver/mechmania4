@@ -10,9 +10,11 @@
 #include <algorithm>
 #include <cmath>
 #include <ctime>
+#include <cstdio>
 #include <map>
 #include <random>
 #include <set>
+#include <string>
 #include <vector>
 
 #include "ArgumentParser.h"
@@ -26,6 +28,34 @@
 #include "World.h"
 
 extern CParser* g_pParser;
+
+namespace {
+std::string TeamEventSuffix(const CTeam* team, const std::string& suffix) {
+  if (!team) {
+    return suffix;
+  }
+  int index = static_cast<int>(team->GetWorldIndex());
+  return "team" + std::to_string(index + 1) + "." + suffix;
+}
+
+void LogShipOutOfFuelEvent(CWorld& world, CShip* ship) {
+  if (!ship) {
+    return;
+  }
+  CTeam* team = ship->GetTeam();
+  if (!team) {
+    return;
+  }
+  char msg[256];
+  const char* shipName = ship->GetName();
+  snprintf(msg, sizeof(msg), "%s ran out of fuel",
+           shipName ? shipName : "Unknown ship");
+  world.AddAnnouncerMessage(msg);
+  int teamIndex = static_cast<int>(team->GetWorldIndex());
+  world.LogAudioEvent(TeamEventSuffix(team, "ship_out_of_fuel.default"),
+                      teamIndex, 0.0, 1, shipName ? shipName : "");
+}
+}
 
 //////////////////////////////////////////////////
 // Construction/Destruction
@@ -104,6 +134,32 @@ CWorld* CWorld::CreateCopy() {
   pWld->SerialUnpack(buf, acsz);
   delete[] buf;
   return pWld;
+}
+
+void CWorld::ClearAudioEvents() { audioEvents_.clear(); }
+
+void CWorld::LogAudioEvent(const mm4::audio::EffectRequest& request) {
+  audioEvents_.push_back(request);
+}
+
+void CWorld::LogAudioEvent(const std::string& logicalEvent,
+                           int teamWorldIndex,
+                           double quantity,
+                           int count,
+                           const std::string& metadata,
+                           int delayTicks,
+                           int requestedLoops,
+                           bool preserveDuplicates) {
+  mm4::audio::EffectRequest req;
+  req.logicalEvent = logicalEvent;
+  req.quantity = quantity;
+  req.count = count;
+  req.teamWorldIndex = teamWorldIndex;
+  req.metadata = metadata;
+  req.requestedDelayTicks = delayTicks;
+  req.requestedLoops = requestedLoops;
+  req.preserveDuplicates = preserveDuplicates;
+  LogAudioEvent(req);
 }
 
 //////////////////////////////////////////////////
@@ -359,8 +415,14 @@ void CWorld::LaserModelOld() {
         if (oldFuel > 0.01 && (oldFuel - fuel_cost) <= 0.01) {
           printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
                  pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+          LogShipOutOfFuelEvent(*this, pShip);
         }
       }
+
+      int shooterTeamIndex =
+          pTeam ? static_cast<int>(pTeam->GetWorldIndex()) : -1;
+      LogAudioEvent(TeamEventSuffix(pTeam, "laser.default"),
+                    shooterTeamIndex, dLasPwr, 1, pShip->GetName());
 
       // Compute the nominal end-of-beam position from shooter
       LasPos = pShip->GetPos();
@@ -428,6 +490,17 @@ void CWorld::LaserModelOld() {
         LasThing.SetMass(g_laser_mass_scale_per_remaining_unit *
                          (dLasPwr - dLasRng));
 
+        if (pTarget->GetKind() == ASTEROID) {
+          bool shatter =
+              LasThing.GetMass() >= g_asteroid_laser_shatter_threshold;
+          std::string suffix =
+              shatter ? "laser.laser_asteroid.laser_asteroid_break"
+                      : "laser.laser_asteroid.laser_asteroid_nobreak";
+          LogAudioEvent(TeamEventSuffix(pTeam, suffix),
+                        shooterTeamIndex, LasThing.GetMass(), 1,
+                        pTarget->GetName() ? pTarget->GetName() : "");
+        }
+
         // Set laser velocity based on physics mode
         if (g_pParser && g_pParser->UseNewFeature("physics")) {
           // NEW PHYSICS: Photon momentum model
@@ -489,6 +562,7 @@ void CWorld::LaserModelOld() {
         if (oldFuel > 0.01 && dfuel <= 0.01) {
           printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
                  pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+          LogShipOutOfFuelEvent(*this, pShip);
         }
       }
       // NEW MODE: Fuel already deducted before firing (lines 228-247)
@@ -557,7 +631,13 @@ void CWorld::LaserModelNew() {
       if (oldFuel > 0.01 && (oldFuel - fuel_cost) <= 0.01) {
         printf("[OUT OF FUEL] Ship %s (%s) ran out of fuel\n", pShip->GetName(),
                pShip->GetTeam() ? pShip->GetTeam()->GetName() : "Unknown");
+        LogShipOutOfFuelEvent(*this, pShip);
       }
+
+      int shooterTeamIndex =
+          pTeam ? static_cast<int>(pTeam->GetWorldIndex()) : -1;
+      LogAudioEvent(TeamEventSuffix(pTeam, "laser.default"),
+                    shooterTeamIndex, dLasPwr, 1, pShip->GetName());
 
       // Compute the nominal end-of-beam position from shooter
       LasPos = pShip->GetPos();
@@ -586,6 +666,17 @@ void CWorld::LaserModelNew() {
         // Remaining beam power at impact
         dLasRng = TmpPos.DistTo(pShip->GetPos());
         LasThing.SetMass(g_laser_mass_scale_per_remaining_unit * (dLasPwr - dLasRng));
+
+        if (pTarget->GetKind() == ASTEROID) {
+          bool shatter =
+              LasThing.GetMass() >= g_asteroid_laser_shatter_threshold;
+          std::string suffix = shatter
+                                   ? "laser.laser_asteroid.laser_asteroid_break"
+                                   : "laser.laser_asteroid.laser_asteroid_nobreak";
+          LogAudioEvent(TeamEventSuffix(pTeam, suffix),
+                        shooterTeamIndex, LasThing.GetMass(), 1,
+                        pTarget->GetName() ? pTarget->GetName() : "");
+        }
 
         // Set laser velocity (photon momentum model in new physics)
         double beam_direction = pShip->GetOrient();
@@ -1527,6 +1618,28 @@ unsigned CWorld::GetSerialSize() const {
     totsize += pTh->GetSerialSize();
   }
 
+  totsize += BufWrite(NULL, static_cast<unsigned int>(audioEvents_.size()));
+  for (const auto& event : audioEvents_) {
+    unsigned int logicalLen =
+        static_cast<unsigned int>(event.logicalEvent.size() + 1);
+    totsize += BufWrite(NULL, logicalLen);
+    totsize += BufWrite(NULL, event.logicalEvent.c_str(), logicalLen);
+    totsize += BufWrite(NULL, event.quantity);
+    totsize += BufWrite(NULL, static_cast<unsigned int>(event.count));
+    unsigned int encodedTeam =
+        static_cast<unsigned int>(event.teamWorldIndex + 1);
+    totsize += BufWrite(NULL, encodedTeam);
+    unsigned int metadataLen =
+        static_cast<unsigned int>(event.metadata.size() + 1);
+    totsize += BufWrite(NULL, metadataLen);
+    totsize += BufWrite(NULL, event.metadata.c_str(), metadataLen);
+    totsize += BufWrite(NULL,
+                        static_cast<unsigned int>(event.requestedDelayTicks));
+    totsize += BufWrite(NULL,
+                        static_cast<unsigned int>(event.requestedLoops));
+    totsize += BufWrite(NULL, event.preserveDuplicates);
+  }
+
   return totsize;
 }
 
@@ -1580,6 +1693,29 @@ unsigned CWorld::SerialPack(char* buf, unsigned buflen) const {
     vpb += BufWrite(vpb, iTm);
 
     vpb += pTh->SerialPack((char*)vpb, sz);
+  }
+
+  unsigned int eventCount = static_cast<unsigned int>(audioEvents_.size());
+  vpb += BufWrite(vpb, eventCount);
+  for (const auto& event : audioEvents_) {
+    unsigned int logicalLen =
+        static_cast<unsigned int>(event.logicalEvent.size() + 1);
+    vpb += BufWrite(vpb, logicalLen);
+    vpb += BufWrite(vpb, event.logicalEvent.c_str(), logicalLen);
+    vpb += BufWrite(vpb, event.quantity);
+    vpb += BufWrite(vpb, static_cast<unsigned int>(event.count));
+    unsigned int encodedTeam =
+        static_cast<unsigned int>(event.teamWorldIndex + 1);
+    vpb += BufWrite(vpb, encodedTeam);
+    unsigned int metadataLen =
+        static_cast<unsigned int>(event.metadata.size() + 1);
+    vpb += BufWrite(vpb, metadataLen);
+    vpb += BufWrite(vpb, event.metadata.c_str(), metadataLen);
+    vpb += BufWrite(vpb,
+                    static_cast<unsigned int>(event.requestedDelayTicks));
+    vpb += BufWrite(vpb,
+                    static_cast<unsigned int>(event.requestedLoops));
+    vpb += BufWrite(vpb, event.preserveDuplicates);
   }
 
   return (vpb - buf);
@@ -1660,6 +1796,66 @@ unsigned CWorld::SerialUnpack(char* buf, unsigned buflen) {
         pTh->KillThing();
       }
     }
+  }
+
+  unsigned int eventCount = 0;
+  vpb += BufRead(vpb, eventCount);
+  audioEvents_.clear();
+  audioEvents_.reserve(eventCount);
+  for (unsigned int idx = 0; idx < eventCount; ++idx) {
+    unsigned int logicalLen = 0;
+    vpb += BufRead(vpb, logicalLen);
+    std::string logicalEvent;
+    if (logicalLen > 0) {
+      std::vector<char> buffer(logicalLen);
+      vpb += BufRead(vpb, buffer.data(), logicalLen);
+      logicalEvent.assign(buffer.data(),
+                          buffer.data() + (logicalLen ? logicalLen - 1 : 0));
+    } else {
+      logicalEvent.clear();
+    }
+
+    double quantity = 0.0;
+    vpb += BufRead(vpb, quantity);
+
+    unsigned int count = 0;
+    vpb += BufRead(vpb, count);
+
+    unsigned int encodedTeam = 0;
+    vpb += BufRead(vpb, encodedTeam);
+    int teamWorldIndex = static_cast<int>(encodedTeam) - 1;
+
+    unsigned int metadataLen = 0;
+    vpb += BufRead(vpb, metadataLen);
+    std::string metadata;
+    if (metadataLen > 0) {
+      std::vector<char> buffer(metadataLen);
+      vpb += BufRead(vpb, buffer.data(), metadataLen);
+      metadata.assign(buffer.data(),
+                      buffer.data() + (metadataLen ? metadataLen - 1 : 0));
+    } else {
+      metadata.clear();
+    }
+
+    unsigned int delayTicks = 0;
+    vpb += BufRead(vpb, delayTicks);
+
+    unsigned int requestedLoops = 0;
+    vpb += BufRead(vpb, requestedLoops);
+
+    bool preserveDuplicates = false;
+    vpb += BufRead(vpb, preserveDuplicates);
+
+    mm4::audio::EffectRequest req;
+    req.logicalEvent = std::move(logicalEvent);
+    req.quantity = quantity;
+    req.count = static_cast<int>(count);
+    req.teamWorldIndex = teamWorldIndex;
+    req.metadata = std::move(metadata);
+    req.requestedDelayTicks = static_cast<int>(delayTicks);
+    req.requestedLoops = static_cast<int>(requestedLoops);
+    req.preserveDuplicates = preserveDuplicates;
+    audioEvents_.push_back(std::move(req));
   }
 
   KillDeadThings();

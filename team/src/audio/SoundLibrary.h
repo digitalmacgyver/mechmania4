@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace mm4::audio {
 
@@ -43,6 +44,7 @@ class SoundLibrary {
   std::optional<SoundEffectDescriptor> ResolveEffect(const std::string& logicalEvent) const;
   std::string ResolveMusicAsset(const std::string& trackId) const;
   std::string DefaultSoundtrackId() const;
+  std::vector<std::string> AllSoundtrackIds() const;
   void SetAssetRootOverride(const std::string& assetRoot);
   void Clear();
 
