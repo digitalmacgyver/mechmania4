@@ -1,6 +1,26 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+
+Produce a README.md for how to use this overall system, how to invoke
+GA optimizer, with wha command line parameters, and whether it's
+recommended to initially train against:
+
+A very bad enemy team
+A mediocre enemy team
+A good enemy team
+
+And whether once this intial training is done, whether it's good to do
+successive trainings against evo generations against themselves, or
+whether it's best to train successive generations vs. known enemy
+teams. (Assume the goal is to make EvoAI good enough to regularly beat
+the good enemy team).
+
+Also include instructions on how to run analyze_ga_log.py and how to
+interpret the results to know if the GA algorithm is progressing and
+working well, or if it's just randomly driting and not generating
+improvements / converging.
+
 == EVO Combat ==
 
 For our next improvements:
@@ -24,6 +44,12 @@ fuel cost to reduce 1 unit of shields from an enemy ship or 1 ton of
 vinyl from an enemy station is highly dependent on our distance D from
 the target.
 
+Laser Efficiency considerations should be balanced against other
+relavant data such as: the hunter's current fuel reserves, the targets
+ships shields or staions vinyl reserves, whether there is any free
+uranium left in the world, and whether the game is nearly over (the
+game is ~300 game seconds long at which point it ends).
+
 2. Add logic to avoid "overkill" with lasers. A ship with X shields is
 destroyed when its shields reach 0 - so there is no point in deling
 much, much more than X damage to it (it is OK to deal a little bit
@@ -43,6 +69,9 @@ c. (no living enemy ships with current fuel && ! enemy station has vinyl ) ; we 
 d. (no vinyl free in the world && ! friendly ships have vinyl cargo ) ; we might call this condition "probably no more points" (in theory an emeny ship could have vinyl and jettison it back into the world, but this is unlikely).
 e. (no uranium free in the world) ; we might call this condition "fuel constrained" - at this point ships will never get more fuel - so logic around fuel reserves might need to be changed so we don't end the game with unused fuel we refused to touch.
 f. (no uraniam free in the world && no vinul free in the world ) ; For friendly ships that don't have vinyl cargo - the only useful thing to do is most likely to attack enemy ships or ensure vinyl in friendly ships makes it back to the station
+g. game clock is approaching 300. The game ends when the internal game clock reaches its 300th turn. Since it takes ~30 turns to nagivate to any point on the map and do something, final strategic and tactical manouvers should begin around turn 270 if not indicated by prior world states. There is no benefit to having exceess fuel at the end of the game.
+
+The key insight is that all ships which can contribute to gathering activites should probably do so when there are no hunting targets, and all ships that can contribute to hunting activities should probablyu do so when there is no more points to be gathered.
 
 
 == Evo Combat ==
@@ -671,8 +700,16 @@ vendor/ if third party code is used).
 
 4. the configuration file has sound configuration for these events:
 
-team1:
-  laser: chmmr-laser.wav (scales), ur-quan-fusion.wav
+Format:
+When  multiple files are listed, the first file is the default for team1, and the second is the default for team2.
+When only one file is listed, both teams have the same default.
+Files are found under assets/star_control - search the relevant directories for exact paths
+A file followed by (loop) means the file is to be looped until the final play time exceeds some value established my magnitude. For laser loops the playtime is laser order_magnitude / 256.0 seconds (Always play at least one full sound effect, start additional ones if less than the loop time has elapsed).
+For the deliver_vinyl (loop) the loop is to be set by the total vinyl added to the station for a duration of total_vinyl / 8.0 seconds
+Items with the (delay) modifier are to be played after a 1 tick delay.
+Items with a (queue) modifier are to be queued up and played sequentially if multiples arrive in the same tick.
+For each of (loop), (delay), and (queue) behaviors above feel free to modify the behavior in ways standard of sound effects in games to simpify implementation while retaining the core idea, even if not an exect functional match.
+  laser: chmmr-laser.wav (loop), ur-quan-fusion.wav
     laser_asteroid:
       laser_asteroid_break: boom45.wav (delay)
       laser_asteroid_nobreak: boom1.wav (delay)
@@ -690,7 +727,7 @@ team1:
   dock:
     dock_at_friendly: lander-return.wav
     dock_at_enemy: orz-intruder.wav, redalert.mod
-  deliver_vinyl: chmmr-tractor.wav (scales), melnorme-charge.wav (scales)
+  deliver_vinyl: chmmr-tractor.wav (loop) (queue), melnorme-charge.wav (loop) (queue)
     deliver_vinyl_friendly: 
     deliver_vinyl_enemy: 
   raise_shields: ilwrath-cloak.wav, slylandro-energize.wav
@@ -701,7 +738,6 @@ team1:
   ship_out_of_fuel: androsynth-bubble.wav
   game_won: druuge-ditty.wav, yehat-ditty.wav
 
-4a. This configuration structure exists of 2 teams: team1 and team2. 
 4b. All sounds are optional, if no sound file is provided no sound is played for the event in question.
 4c. Parent items with indented children provide the default sound for all unconfigured children.
 4d. Indented items override the sound for their parents, when present.

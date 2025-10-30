@@ -15,14 +15,19 @@ echo "Install prefix: $PREFIX"
 mkdir -p "$BUILD_DIR"
 mkdir -p "$PREFIX"
 
+export PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+
 build_dep() {
   local archive=$1
+  shift
+  local configure_args=("$@")
   local dir_name
   dir_name=$(tar -tzf "$archive" | head -1 | cut -f1 -d"/")
   rm -rf "$BUILD_DIR/$dir_name"
   tar -xzf "$archive" -C "$BUILD_DIR"
   pushd "$BUILD_DIR/$dir_name" >/dev/null
-  ./configure --prefix="$PREFIX"
+  ./configure --prefix="$PREFIX" "${configure_args[@]}"
   make -j"$(nproc)"
   make install
   popd >/dev/null
@@ -31,7 +36,8 @@ build_dep() {
 build_dep "$VENDOR_DIR/source-packages/SDL2-"*.tar.gz
 build_dep "$VENDOR_DIR/source-packages/SDL2_image-"*.tar.gz
 build_dep "$VENDOR_DIR/source-packages/SDL2_ttf-"*.tar.gz
-build_dep "$VENDOR_DIR/source-packages/SDL2_mixer-"*.tar.gz
+build_dep "$VENDOR_DIR/source-packages/libmodplug-"*.tar.gz --disable-dependency-tracking
+build_dep "$VENDOR_DIR/source-packages/SDL2_mixer-"*.tar.gz --disable-music-mod-mikmod --enable-music-mod-modplug
 
 touch "$PREFIX/.mm4_vendor_complete"
 rm -rf "$BUILD_DIR"

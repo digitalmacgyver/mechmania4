@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <iostream>
 #include <utility>
 #include <vector>
@@ -206,18 +207,31 @@ int ComputeDurationTicks(const EffectRequest& request,
 }  // namespace
 
 void AudioSystem::QueueEffect(const EffectRequest& request) {
+  const bool isDiagnosticsPing = (request.logicalEvent == "manual.audio.ping");
+  if (isDiagnosticsPing) {
+    std::cout << "[audio] diagnostics request event=" << request.logicalEvent
+              << std::endl;
+  }
+
   if (!initialized_ || effectsPaused_) {
     return;
   }
 
   auto descriptorOpt = library_.ResolveEffect(request.logicalEvent);
   if (!descriptorOpt.has_value()) {
+    if (isDiagnosticsPing) {
+      std::cout << "[audio] diagnostics missing descriptor event="
+                << request.logicalEvent << std::endl;
+    }
     std::cerr << "[audio] Missing asset for logical event "
               << request.logicalEvent << std::endl;
     return;
   }
 
   const auto& descriptor = descriptorOpt.value();
+  if (isDiagnosticsPing && verbose_) {
+    std::cout << "[audio] diagnostics asset=" << descriptor.assetPath << std::endl;
+  }
 
   EffectRequest enriched = request;
   if (enriched.requestedDelayTicks <= 0) {
@@ -228,6 +242,16 @@ void AudioSystem::QueueEffect(const EffectRequest& request) {
       descriptor.behavior.mode == EffectPlaybackMode::kQueue;
 
   requestBuffer_.QueueEffect(enriched);
+  if (verbose_) {
+    if (enriched.logicalEvent.find(".launch.") != std::string::npos) {
+      std::cout << "[audio] launch event queued event="
+                << enriched.logicalEvent << " count=" << enriched.count;
+      if (!enriched.metadata.empty()) {
+        std::cout << " ship=" << enriched.metadata;
+      }
+      std::cout << std::endl;
+    }
+  }
 }
 
 void AudioSystem::EndSubtick() {
@@ -318,6 +342,9 @@ Mix_Chunk* AudioSystem::LoadEffectChunk(
   }
 
   chunkCache_[descriptor.assetPath] = chunk;
+  if (verbose_) {
+    std::cout << "[audio] chunk cached asset=" << descriptor.assetPath << std::endl;
+  }
   return chunk;
 }
 
@@ -348,10 +375,15 @@ void AudioSystem::ServiceActiveChannels(int currentTurn) {
 
   auto it = channels_.begin();
   while (it != channels_.end()) {
-    it->durationTicks -= delta;
+    if (it->enforceDuration) {
+      it->durationTicks -= delta;
+    }
     bool playing = it->channel >= 0 && Mix_Playing(it->channel) != 0;
-    if (it->durationTicks <= 0 || !playing) {
-      if (playing && it->channel >= 0) {
+    bool expired = it->enforceDuration && it->durationTicks <= 0;
+    if (expired || !playing) {
+      if (!expired && playing) {
+        // Channel finished naturally; leave it halted by SDL_mixer.
+      } else if (expired && playing && it->channel >= 0) {
         Mix_HaltChannel(it->channel);
       }
       it = channels_.erase(it);
@@ -400,7 +432,10 @@ void AudioSystem::DispatchEffect(const ScheduledEffect& pending) {
   ChannelState state;
   state.logicalId = pending.descriptor.logicalId;
   state.loopsRemaining = loops;
-  state.durationTicks = ComputeDurationTicks(pending.request, pending.descriptor);
+  state.enforceDuration = pending.descriptor.behavior.durationTicks > 0;
+  state.durationTicks = state.enforceDuration
+                            ? ComputeDurationTicks(pending.request, pending.descriptor)
+                            : std::numeric_limits<int>::max();
   state.channel = channel;
   channels_.push_back(state);
 

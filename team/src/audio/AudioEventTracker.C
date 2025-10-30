@@ -5,6 +5,7 @@
 #include "audio/AudioEventTracker.h"
 
 #include <algorithm>
+#include <iostream>
 #include <sstream>
 
 #include "Ship.h"
@@ -19,12 +20,16 @@ void AudioEventTracker::Reset() {
   stationState_.clear();
   hasLastTurn_ = false;
   lastProcessedTurn_ = 0;
+  lastLaunchTransitions_.clear();
+  lastTransitionTurn_ = 0;
 }
 
 std::vector<EffectRequest> AudioEventTracker::GatherEvents(const CWorld& world) {
   std::vector<EffectRequest> events;
 
   unsigned int currentTurn = world.GetCurrentTurn();
+  lastLaunchTransitions_.clear();
+  lastTransitionTurn_ = currentTurn;
   if (hasLastTurn_ && currentTurn == lastProcessedTurn_) {
     return events;
   }
@@ -104,14 +109,23 @@ std::vector<EffectRequest> AudioEventTracker::GatherEvents(const CWorld& world) 
           req.teamWorldIndex = teamWorldIndex;
           req.metadata = ship->GetName();
           events.push_back(req);
+          if (verbose_) {
+            std::cout << "[audio] dock transition ship=" << req.metadata
+                      << " team=" << teamTag << " turn=" << currentTurn
+                      << std::endl;
+          }
         } else if (prevIt->second.docked && !snapshot.docked) {
           EffectRequest req;
           req.logicalEvent = teamTag + ".launch.default";
           req.teamWorldIndex = teamWorldIndex;
           req.metadata = ship->GetName();
           events.push_back(req);
-          std::cout << "[audio] launch event emitted for " << req.metadata
-                    << " team=" << teamTag << std::endl;
+          lastLaunchTransitions_.push_back(teamTag + ":" + req.metadata);
+          if (verbose_) {
+            std::cout << "[audio] launch event emitted ship=" << req.metadata
+                      << " team=" << teamTag << " turn=" << currentTurn
+                      << std::endl;
+          }
         }
       }
 

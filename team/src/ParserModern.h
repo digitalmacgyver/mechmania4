@@ -19,6 +19,7 @@ class CParser {
   char hostname[128], gfxreg[128];
   int port, numteams, gfxflag, needhelp, retry, reconnect;
   int verbose;  // Added for verbose output
+  int enableAudioTestPing;  // Non-zero when --enable-audio-test-ping supplied
 
   // New functionality - access to modern features
   bool UseNewFeature(const std::string& feature) const {

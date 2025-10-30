@@ -109,6 +109,8 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "test-file", "Path to test moves file (for testteam), use '-' for stdin",
          cxxopts::value<std::string>())(
         "verbose", "Enable verbose output")(
+        "enable-audio-test-ping",
+         "Enable manual audio diagnostics ping (requires verbose for logs)")(
         "help", "Show help");
 
     // Feature flags
@@ -195,6 +197,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     }
 
     verbose = result.count("verbose") > 0;
+    enableAudioTestPing = result.count("enable-audio-test-ping") > 0;
 
     // Parse timing options
     if (result.count("game-turn-duration")) {

@@ -385,6 +385,13 @@ if(BUILD_WITH_GRAPHICS)
             target_include_directories(mm4obs PRIVATE ${SDL2_MIXER_INCLUDE_DIRS})
             target_compile_options(mm4obs PRIVATE ${SDL2_MIXER_CFLAGS_OTHER})
             target_compile_definitions(mm4obs PRIVATE MM4_USE_SDL_MIXER=1)
+
+            pkg_check_modules(LIBMODPLUG IMPORTED_TARGET libmodplug)
+            if(LIBMODPLUG_FOUND)
+                target_link_libraries(mm4obs PkgConfig::LIBMODPLUG)
+            else()
+                message(WARNING "libmodplug not found; MOD playback may be unavailable.")
+            endif()
         else()
             message(WARNING "SDL2_mixer not found; building audio stubs without runtime playback.")
         endif()
@@ -396,6 +403,41 @@ if(BUILD_WITH_GRAPHICS)
             ${X11_Xpm_LIB}
         )
         target_include_directories(mm4obs PRIVATE ${X11_INCLUDE_DIR})
+    endif()
+endif()
+
+# Standalone MOD playback diagnostic tool
+if(USE_SDL2 AND SDL2_MIXER_FOUND)
+    add_executable(mm4_modtest
+        sound/test/ModPlayer.C
+    )
+    target_link_libraries(mm4_modtest
+        ${SDL2_LIBRARIES}
+    )
+    target_include_directories(mm4_modtest PRIVATE
+        ${SDL2_INCLUDE_DIRS}
+    )
+    target_compile_options(mm4_modtest PRIVATE
+        ${SDL2_CFLAGS_OTHER}
+    )
+
+    if(DEFINED pkgcfg_lib_SDL2_MIXER_SDL2_mixer)
+        target_link_libraries(mm4_modtest ${pkgcfg_lib_SDL2_MIXER_SDL2_mixer})
+    else()
+        target_link_libraries(mm4_modtest ${SDL2_MIXER_LIBRARIES})
+    endif()
+    if(SDL2_MIXER_LDFLAGS_OTHER)
+        target_link_options(mm4_modtest PRIVATE ${SDL2_MIXER_LDFLAGS_OTHER})
+    endif()
+    target_include_directories(mm4_modtest PRIVATE ${SDL2_MIXER_INCLUDE_DIRS})
+    target_compile_options(mm4_modtest PRIVATE ${SDL2_MIXER_CFLAGS_OTHER})
+    target_compile_definitions(mm4_modtest PRIVATE MM4_USE_SDL_MIXER=1)
+
+    pkg_check_modules(MODTEST_LIBMODPLUG IMPORTED_TARGET libmodplug)
+    if(MODTEST_LIBMODPLUG_FOUND)
+        target_link_libraries(mm4_modtest PkgConfig::MODTEST_LIBMODPLUG)
+    else()
+        message(WARNING "libmodplug not found; mm4_modtest may be unable to play MOD files.")
     endif()
 endif()
 

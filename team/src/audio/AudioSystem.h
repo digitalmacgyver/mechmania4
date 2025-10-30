@@ -84,6 +84,7 @@ class AudioSystem {
     int loopsRemaining = 0;
     int durationTicks = 0;
     int channel = -1;
+    bool enforceDuration = false;
   };
 
   Mix_Chunk* LoadEffectChunk(const SoundEffectDescriptor& descriptor);

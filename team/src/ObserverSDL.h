@@ -18,6 +18,10 @@
 #include "Thing.h"
 #include "World.h"
 
+namespace mm4::audio {
+class AudioSystem;
+}
+
 class ObserverSDL {
  private:
   SDL2Graphics* graphics;
@@ -61,6 +65,9 @@ class ObserverSDL {
   unsigned int lastAudioTurnProcessed = 0;
   std::string assetRootOverride_;
   bool verboseAudio_ = false;
+  bool enableAudioDiagnostics_ = false;
+  double diagnosticsPingIntervalSeconds_ = 5.0;
+  double nextDiagnosticsPingTime_ = -1.0;
 
   // Drawing helpers
   void DrawSpace();
@@ -82,6 +89,8 @@ class ObserverSDL {
   void DrawHelpFooter();
   void DrawLogo();
   void DrawVelocityVector(CThing* thing);
+  void MaybeEmitDiagnosticsPing(mm4::audio::AudioSystem& audioSystem,
+                                double gameTimeSeconds);
 
   // Coordinate transformation
   int WorldToScreenX(double wx);
@@ -96,7 +105,8 @@ class ObserverSDL {
  public:
   ObserverSDL(const char* regFileName, int gfxFlag,
               const std::string& assetsRoot = std::string(),
-              bool verboseAudio = false);
+              bool verboseAudio = false,
+              bool enableAudioDiagnostics = false);
   ~ObserverSDL();
 
   // Main methods
@@ -111,6 +121,7 @@ class ObserverSDL {
       myWorld = world;
       audioEventTracker.Reset();
       lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
+      nextDiagnosticsPingTime_ = -1.0;
     }
   }
   CWorld* GetWorld() { return myWorld; }

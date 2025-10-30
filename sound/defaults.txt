@@ -9,80 +9,114 @@ game:
 
 teams:
   team:
-    launch:
-      default:
-        file: ../assets/star_control/effects/ur-quan-launch.wav
-  team1:
     laser:
       default:
+        file: ../assets/star_control/effects/chmmr-laser.wav
+        behavior:
+          duration_ticks: 12
       laser_asteroid:
-        default:
         laser_asteroid_break:
+          file: ../assets/star_control/effects/boom-large.wav
+          behavior:
+            delay_ticks: 1
         laser_asteroid_nobreak:
+          file: ../assets/star_control/effects/boom-small.wav
+          behavior:
+            delay_ticks: 1
     col_ship_asteroid:
       default:
+        file: ../assets/star_control/effects/boom-medium.wav
       col_ship_asteroid_eat:
-      col_ship_asteroid_break:
+        file: ../assets/star_control/effects/lander-pickup.wav
       col_ship_asteroid_destroy:
+        file: ../assets/star_control/effects/boom-small.wav
     col_ship_laser:
+      default:
+        file: ../assets/star_control/effects/flagship-guns.wav
+        behavior:
+          delay_ticks: 1
     col_ship_ship:
       default:
+        file: ../assets/star_control/effects/pkunk-jerk.wav
+        behavior:
+          mode: queue
       col_ship_friendly_ship:
+        file: ../assets/star_control/effects/pkunk-dodo.wav
+        behavior:
+          mode: queue
     col_station_asteroid:
+      default:
+        file: ../assets/star_control/effects/pkunk-shot.wav
     launch:
       default:
+        file: ../assets/star_control/effects/orz-go.wav
+        behavior:
+          mode: queue
       launch_from_friendly:
       launch_from_enemy:
     dock:
-      default:
       dock_at_friendly:
+        file: ../assets/star_control/effects/lander-return.wav
       dock_at_enemy:
+        file: ../assets/star_control/effects/orz-intruder.wav
     deliver_vinyl:
       default:
+        file: ../assets/star_control/effects/chmmr-tractor.wav
+        behavior:
+          mode: queue
+          duration_ticks: 16
       deliver_vinyl_friendly:
       deliver_vinyl_enemy:
     raise_shields:
+      default:
+        file: ../assets/star_control/effects/ilwrath-cloak.wav
     jettison:
       default:
+        file: ../assets/star_control/effects/zoqfotpik-tongue.wav
       jettison_vinyl:
       jettison_uranium:
     ship_destroyed:
+      default:
+        file: ../assets/star_control/effects/boom-shipdie.wav
     ship_out_of_fuel:
+      default:
+        file: ../assets/star_control/effects/androsynth-bubble.wav
     game_won:
+      default:
+        file: ../assets/star_control/effects/druuge-ditty.mp3
   team2:
     laser:
       default:
-      laser_asteroid:
-        default:
-        laser_asteroid_break:
-        laser_asteroid_nobreak:
-    col_ship_asteroid:
-      default:
-      col_ship_asteroid_eat:
-      col_ship_asteroid_break:
-      col_ship_asteroid_destroy:
-    col_ship_laser:
-    col_ship_ship:
-      default:
-      col_ship_friendly_ship:
-    col_station_asteroid:
+        file: ../assets/star_control/effects/ur-quan-fusion.wav
+        behavior:
+          duration_ticks: 12
     launch:
       default:
-      launch_from_friendly:
-      launch_from_enemy:
-    dock:
+        file: ../assets/star_control/effects/ur-quan-launch.wav
+        behavior:
+          mode: queue
+    col_ship_ship:
       default:
-      dock_at_friendly:
-      dock_at_enemy:
+        file: ../assets/star_control/effects/pkunk-worm.wav
+        behavior:
+          mode: queue
+      col_ship_friendly_ship:
+        file: ../assets/star_control/effects/pkunk-idiot.wav
+        behavior:
+          mode: queue
     deliver_vinyl:
       default:
-      deliver_vinyl_friendly:
-      deliver_vinyl_enemy:
+        file: ../assets/star_control/effects/melnorme-charge.wav
+        behavior:
+          mode: queue
+          duration_ticks: 16
     raise_shields:
-    jettison:
       default:
-      jettison_vinyl:
-      jettison_uranium:
-    ship_destroyed:
-    ship_out_of_fuel:
+        file: ../assets/star_control/effects/slylandro-energize.wav
     game_won:
+      default:
+        file: ../assets/star_control/effects/yehat-ditty.mp3
+  manual:
+    audio:
+      ping:
+        file: ../assets/star_control/effects/orz-go.wav

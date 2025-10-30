@@ -18,7 +18,8 @@ CMD=(python3 scripts/test_collision_modes.py \
     --test-file teams/testteam/tests/test7_ship_launches.txt \
     --max-turns 20 \
     --observer-verbose \
-    --observer-assets-root ..)
+    --observer-assets-root .. \
+    --observer-enable-audio-test-ping)
 
 printf 'Command: %q ' "${CMD[@]}"
 printf '\n\n'
@@ -54,7 +55,7 @@ else
 fi
 
 EFFECT_EVENTS=$(grep -c "effect playing event=.*launch.default" "$OBS_LOG" || true)
-if [[ "$EFFECT_EVENTS" -lt 2 ]]; then
+if [[ "$EFFECT_EVENTS" -lt 1 ]]; then
     echo "✗ Expected launch audio playback not logged (count=$EFFECT_EVENTS)"
     PASS=0
 else

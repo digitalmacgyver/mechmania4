@@ -21,7 +21,8 @@
 #include "audio/AudioSystem.h"
 
 ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
-                         const std::string& assetsRoot, bool verboseAudio)
+                         const std::string& assetsRoot, bool verboseAudio,
+                         bool enableAudioDiagnostics)
     : graphics(nullptr),
       spriteManager(nullptr),
       myWorld(nullptr),
@@ -31,7 +32,8 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
       audioInitialized(false),
       lastAudioTurnProcessed(std::numeric_limits<unsigned int>::max()),
       assetRootOverride_(assetsRoot),
-      verboseAudio_(verboseAudio) {  // Enable sprite mode when -G is used
+      verboseAudio_(verboseAudio),
+      enableAudioDiagnostics_(enableAudioDiagnostics) {  // Enable sprite mode when -G is used
   (void)regFileName;
 
   drawnames = 1;
@@ -50,6 +52,7 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
     useVelVectors = true;  // Tactical display
   }
 
+  audioEventTracker.SetVerbose(verboseAudio_);
   audioEventTracker.Reset();
   graphics = new SDL2Graphics();
 }
@@ -176,6 +179,19 @@ bool ObserverSDL::Initialize() {
   } else {
     audioEventTracker.Reset();
     lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
+    nextDiagnosticsPingTime_ = -1.0;
+    if (enableAudioDiagnostics_) {
+      if (verboseAudio_) {
+        std::cout << "[audio] diagnostics heartbeat enabled (interval="
+                  << diagnosticsPingIntervalSeconds_ << "s)" << std::endl;
+      } else {
+        std::cout << "[audio] diagnostics heartbeat armed but verbose logging is off"
+                  << std::endl;
+      }
+    } else if (verboseAudio_) {
+      std::cout << "[audio] diagnostics heartbeat disabled (enable with --enable-audio-test-ping)"
+                << std::endl;
+    }
   }
 
   return true;
@@ -185,19 +201,69 @@ void ObserverSDL::Update() {
   // Only update world state if not paused
   if (!isPaused && myWorld) {
     if (audioInitialized) {
+      auto& audioSystem = mm4::audio::AudioSystem::Instance();
+      audioSystem.BeginSubtick();
+      MaybeEmitDiagnosticsPing(audioSystem, myWorld->GetGameTime());
       unsigned int currentTurn = myWorld->GetCurrentTurn();
       if (currentTurn != lastAudioTurnProcessed) {
-        auto& audioSystem = mm4::audio::AudioSystem::Instance();
-        audioSystem.BeginSubtick();
         auto events = audioEventTracker.GatherEvents(*myWorld);
+        if (verboseAudio_) {
+          std::cout << "[audio] gathered events turn=" << currentTurn
+                    << " count=" << events.size() << std::endl;
+          if (events.empty()) {
+            const auto& transitions =
+                audioEventTracker.LastLaunchTransitions();
+            if (!transitions.empty()) {
+              std::cout << "[audio] launch transitions without effects:";
+              for (const auto& transition : transitions) {
+                std::cout << " " << transition;
+              }
+              std::cout << std::endl;
+            }
+          }
+        }
         for (const auto& event : events) {
           audioSystem.QueueEffect(event);
         }
-        audioSystem.EndSubtick();
-        audioSystem.FlushPending(static_cast<int>(currentTurn));
         lastAudioTurnProcessed = currentTurn;
       }
+      audioSystem.EndSubtick();
+      audioSystem.FlushPending(static_cast<int>(currentTurn));
     }
+  }
+}
+
+void ObserverSDL::MaybeEmitDiagnosticsPing(
+    mm4::audio::AudioSystem& audioSystem, double gameTimeSeconds) {
+  if (!enableAudioDiagnostics_) {
+    return;
+  }
+
+  if (!verboseAudio_) {
+    return;
+  }
+
+  if (!std::isfinite(gameTimeSeconds) || gameTimeSeconds < 0.0) {
+    return;
+  }
+
+  if (nextDiagnosticsPingTime_ < 0.0) {
+    nextDiagnosticsPingTime_ = gameTimeSeconds;
+  }
+
+  constexpr double kEpsilon = 1e-6;
+  if (gameTimeSeconds + kEpsilon < nextDiagnosticsPingTime_) {
+    return;
+  }
+
+  mm4::audio::EffectRequest request;
+  request.logicalEvent = "manual.audio.ping";
+  request.metadata = "diagnostics";
+  audioSystem.QueueEffect(request);
+  nextDiagnosticsPingTime_ =
+      nextDiagnosticsPingTime_ + diagnosticsPingIntervalSeconds_;
+  if (gameTimeSeconds + kEpsilon >= nextDiagnosticsPingTime_) {
+    nextDiagnosticsPingTime_ = gameTimeSeconds + diagnosticsPingIntervalSeconds_;
   }
 }
 

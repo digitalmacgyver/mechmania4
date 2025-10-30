@@ -17,10 +17,17 @@ class CStation;
 
 namespace mm4::audio {
 
-class AudioEventTracker {
+ class AudioEventTracker {
  public:
   void Reset();
   std::vector<EffectRequest> GatherEvents(const CWorld& world);
+  void SetVerbose(bool verbose) { verbose_ = verbose; }
+  const std::vector<std::string>& LastLaunchTransitions() const {
+    return lastLaunchTransitions_;
+  }
+  unsigned int LastLaunchTransitionTurn() const {
+    return lastTransitionTurn_;
+  }
 
  private:
   struct ShipSnapshot {
@@ -38,6 +45,10 @@ class AudioEventTracker {
   unsigned int lastProcessedTurn_ = 0;
   bool hasLastTurn_ = false;
 
+  bool verbose_ = false;
+  std::vector<std::string> lastLaunchTransitions_;
+  unsigned int lastTransitionTurn_ = 0;
+
   std::unordered_map<std::string, ShipSnapshot> shipState_;
   std::unordered_map<int, StationSnapshot> stationState_;
 };
@@ -45,4 +56,3 @@ class AudioEventTracker {
 }  // namespace mm4::audio
 
 #endif  // MM4_AUDIO_AUDIO_EVENT_TRACKER_H_
-

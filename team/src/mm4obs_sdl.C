@@ -49,7 +49,8 @@ int main(int argc, char* argv[]) {
 
 #ifdef USE_SDL2
   ObserverSDL myObs(PCmdLn.gfxreg, PCmdLn.gfxflag,
-                    PCmdLn.GetAssetsRoot(), PCmdLn.verbose);
+                    PCmdLn.GetAssetsRoot(), PCmdLn.verbose,
+                    PCmdLn.enableAudioTestPing);
   printf("SDL2 Graphics initialized\n");
 #else
   Observer myObs(PCmdLn.gfxreg, PCmdLn.gfxflag);
@@ -180,8 +181,8 @@ int main(int argc, char* argv[]) {
       // Handle events (keyboard, mouse, etc.)
       running = myObs.HandleEvents();
     } else {
-      // Headless mode: skip drawing entirely for maximum performance
-      // Don't need Update() either since we're just acknowledging frames
+      // Headless mode: still run update so audio diagnostics can fire.
+      myObs.Update();
       // Keep running unless we lose connection
       running = connected || PCmdLn.reconnect;
     }

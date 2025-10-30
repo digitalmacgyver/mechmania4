@@ -1499,6 +1499,7 @@ unsigned CWorld::GetSerialSize() const {
   totsize += BufWrite(NULL, UFirstIndex);
   totsize += BufWrite(NULL, ULastIndex);
   totsize += BufWrite(NULL, gametime);
+  totsize += BufWrite(NULL, currentTurn);
   totsize += BufWrite(NULL, AnnouncerText, maxAnnouncerTextLen);
 
   unsigned int i, inext, sz, iTm, crc = 666, uTK = 0;
@@ -1539,6 +1540,7 @@ unsigned CWorld::SerialPack(char* buf, unsigned buflen) const {
   vpb += BufWrite(vpb, UFirstIndex);
   vpb += BufWrite(vpb, ULastIndex);
   vpb += BufWrite(vpb, gametime);
+  vpb += BufWrite(vpb, currentTurn);
   vpb += BufWrite(vpb, AnnouncerText, maxAnnouncerTextLen);
 
   unsigned int i, inext, sz, iTm, crc = 666, uTK;
@@ -1596,6 +1598,7 @@ unsigned CWorld::SerialUnpack(char* buf, unsigned buflen) {
   vpb += BufRead(vpb, inext);
   vpb += BufRead(vpb, ilast);
   vpb += BufRead(vpb, gametime);
+  vpb += BufRead(vpb, currentTurn);
   vpb += BufRead(vpb, AnnouncerText, maxAnnouncerTextLen);
 
   // CRITICAL FIX: Ensure announcer text is null-terminated after deserialization

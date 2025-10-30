@@ -58,7 +58,8 @@ def check_executables(team_names):
 
 def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', test_file=None,
                   show_team_output=False, use_stdin=False, max_turns=None,
-                  observer_verbose=False, observer_assets_root=None):
+                  observer_verbose=False, observer_assets_root=None,
+                  observer_enable_audio_test_ping=False):
     """
     Run a single test game with specified server flags.
 
@@ -239,6 +240,8 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         ]
         if observer_verbose:
             observer_cmd.append("--verbose")
+        if observer_enable_audio_test_ping:
+            observer_cmd.append("--enable-audio-test-ping")
         if observer_assets_root:
             observer_cmd.extend(["--assets-root", observer_assets_root])
         print(f"Observer log: {observer_log_path}")
@@ -390,6 +393,8 @@ def main():
                         help='Run observer with --verbose for audio diagnostics')
     parser.add_argument('--observer-assets-root', type=str,
                         help='Override assets root passed to observer (--assets-root)')
+    parser.add_argument('--observer-enable-audio-test-ping', action='store_true',
+                        help='Enable observer manual audio diagnostics ping')
     args = parser.parse_args()
 
     print("MechMania IV - Collision Handling Test Harness")
@@ -429,7 +434,8 @@ def main():
             use_stdin=args.use_stdin,
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
-            observer_assets_root=args.observer_assets_root
+            observer_assets_root=args.observer_assets_root,
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -445,7 +451,8 @@ def main():
             use_stdin=args.use_stdin,
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
-            observer_assets_root=args.observer_assets_root
+            observer_assets_root=args.observer_assets_root,
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
         )
     # If --legacy-mode is specified, only run one test with full legacy mode
     elif args.legacy_mode:
@@ -460,7 +467,8 @@ def main():
             use_stdin=args.use_stdin,
             max_turns=args.max_turns,
             observer_verbose=args.observer_verbose,
-            observer_assets_root=args.observer_assets_root
+            observer_assets_root=args.observer_assets_root,
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
         )
     else:
         # For groogroo vs groogroo test, use shorter game (100 turns) unless specified
@@ -479,7 +487,8 @@ def main():
             use_stdin=args.use_stdin,
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
-            observer_assets_root=args.observer_assets_root
+            observer_assets_root=args.observer_assets_root,
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -495,7 +504,8 @@ def main():
             use_stdin=args.use_stdin,
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
-            observer_assets_root=args.observer_assets_root
+            observer_assets_root=args.observer_assets_root,
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
         )
 
     # Summary
