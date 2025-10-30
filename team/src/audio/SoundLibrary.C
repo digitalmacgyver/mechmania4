@@ -183,6 +183,13 @@ bool SoundLibrary::LoadDefaults(const std::string& configPath) {
     return true;
   }
 
+  if (auto it = parsed.scalars.find("volume.soundtrack"); it != parsed.scalars.end()) {
+    soundtrackVolumePercent_ = std::clamp(ParseInt(it->second, 100), 0, 100);
+  }
+  if (auto it = parsed.scalars.find("volume.effects"); it != parsed.scalars.end()) {
+    effectsVolumePercent_ = std::clamp(ParseInt(it->second, 100), 0, 100);
+  }
+
   auto resolvePath = [&](const std::string& relative) {
     std::filesystem::path rel(relative);
     if (rel.is_absolute()) {
@@ -259,8 +266,13 @@ struct PendingEffect {
       } else if (EndsWith(remainder, ".behavior.mode")) {
         std::string logicalId = StripSuffix(remainder, ".behavior.mode");
         auto& pending = pendingEffects[logicalId];
-        pending.behavior.mode = (value == "queue") ? EffectPlaybackMode::kQueue
-                                                   : EffectPlaybackMode::kSimultaneous;
+        if (value == "queue") {
+          pending.behavior.mode = EffectPlaybackMode::kQueue;
+        } else if (value == "truncate" || value == "cutoff") {
+          pending.behavior.mode = EffectPlaybackMode::kTruncate;
+        } else {
+          pending.behavior.mode = EffectPlaybackMode::kSimultaneous;
+        }
         pending.hasBehavior = true;
       } else if (EndsWith(remainder, ".behavior.duration_ticks")) {
         std::string logicalId = StripSuffix(remainder, ".behavior.duration_ticks");
@@ -427,6 +439,8 @@ void SoundLibrary::Clear() {
   defaultSoundtrackId_.clear();
   baseDirectory_.clear();
   assetRootOverride_.clear();
+  soundtrackVolumePercent_ = 100;
+  effectsVolumePercent_ = 100;
 }
 
 void SoundLibrary::RegisterDefaultFallbacks() {

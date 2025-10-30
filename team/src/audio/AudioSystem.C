@@ -13,7 +13,9 @@
 #include <cmath>
 #include <limits>
 #include <iostream>
+#include <iomanip>
 #include <random>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -53,6 +55,13 @@ Mix_Music* LoadMusic(const std::string& path) {
 
 void HandleMusicFinished() {
   AudioSystem::Instance().OnTrackFinished();
+}
+#endif
+
+#ifdef MM4_USE_SDL_MIXER
+int PercentToMixerVolume(int percent) {
+  percent = std::clamp(percent, 0, 100);
+  return (percent * MIX_MAX_VOLUME) / 100;
 }
 #endif
 }  // namespace
@@ -96,17 +105,16 @@ bool AudioSystem::Initialize(const std::string& configPath,
     std::cerr << "[audio] Warning: sound library failed to load defaults."
               << std::endl;
   }
-  basePlaylist_ = library_.AllSoundtrackIds();
-  playlistOrder_ = basePlaylist_;
-  playlistIndex_ = 0;
-  if (playlistOrder_.empty()) {
-    std::string fallback = library_.DefaultSoundtrackId();
-    if (!fallback.empty()) {
-      playlistOrder_.push_back(fallback);
-    }
-  }
+  RebuildPlaylistOrder();
+#ifdef MM4_USE_SDL_MIXER
   ReshufflePlaylist();
-  playlistIndex_ = 0;
+#endif
+  LogPlaylistState("initialize");
+
+#ifdef MM4_USE_SDL_MIXER
+  musicConfiguredVolume_ = PercentToMixerVolume(library_.SoundtrackVolumePercent());
+  effectsConfiguredVolume_ = PercentToMixerVolume(library_.EffectsVolumePercent());
+#endif
 
   requestBuffer_.ClearAll();
   pendingEffects_.clear();
@@ -123,6 +131,16 @@ bool AudioSystem::Initialize(const std::string& configPath,
   lastMusicLog_ = std::chrono::steady_clock::time_point::min();
   lastEffectLog_ = std::chrono::steady_clock::time_point::min();
   musicPlayingReported_ = false;
+#ifdef MM4_USE_SDL_MIXER
+  musicDuckingCount_ = 0;
+  musicPrevVolume_ = musicConfiguredVolume_;
+  if (!musicMuted_) {
+    Mix_VolumeMusic(musicConfiguredVolume_);
+  }
+  if (!effectsMuted_) {
+    Mix_Volume(-1, effectsConfiguredVolume_);
+  }
+#endif
   std::cout << "[audio] SDL_mixer initialized (rate=" << kSampleRate
             << "Hz, channels=" << kAudioChannels << ")" << std::endl;
   EnsureMusicPlaying();
@@ -134,6 +152,8 @@ bool AudioSystem::Initialize(const std::string& configPath,
     std::cerr << "[audio] Warning: sound library failed to load defaults."
               << std::endl;
   }
+  RebuildPlaylistOrder();
+  LogPlaylistState("initialize");
 
   requestBuffer_.ClearAll();
   pendingEffects_.clear();
@@ -147,6 +167,12 @@ bool AudioSystem::Initialize(const std::string& configPath,
   lastMusicLog_ = std::chrono::steady_clock::time_point::min();
   lastEffectLog_ = std::chrono::steady_clock::time_point::min();
   musicPlayingReported_ = false;
+#ifdef MM4_USE_SDL_MIXER
+  musicDuckingCount_ = 0;
+  musicPrevVolume_ = 128;
+  musicConfiguredVolume_ = 128;
+  effectsConfiguredVolume_ = 128;
+#endif
   std::cerr << "[audio] SDL_mixer not available; audio playback disabled."
             << std::endl;
   return true;
@@ -183,6 +209,10 @@ void AudioSystem::Shutdown() {
   playlistOrder_.clear();
   basePlaylist_.clear();
   playlistIndex_ = 0;
+#ifdef MM4_USE_SDL_MIXER
+  musicDuckingCount_ = 0;
+  musicPrevVolume_ = MIX_MAX_VOLUME;
+#endif
   std::cout << "[audio] SDL_mixer shutdown complete." << std::endl;
 }
 
@@ -313,6 +343,16 @@ void AudioSystem::FlushPending(int currentTurn) {
     scheduled.descriptor = descriptorOpt.value();
 
     int startTick = currentTurn + effect.requestedDelayTicks;
+    if (scheduled.descriptor.behavior.mode == EffectPlaybackMode::kTruncate) {
+      auto eraseIt = pendingEffects_.begin();
+      while (eraseIt != pendingEffects_.end()) {
+        if (eraseIt->descriptor.logicalId == scheduled.descriptor.logicalId) {
+          eraseIt = pendingEffects_.erase(eraseIt);
+        } else {
+          ++eraseIt;
+        }
+      }
+    }
     if (scheduled.descriptor.behavior.mode == EffectPlaybackMode::kQueue) {
       int tail = 0;
       if (auto it = queueTailTicks_.find(scheduled.descriptor.logicalId);
@@ -393,6 +433,23 @@ void AudioSystem::ReleaseAllMusic() {
   musicPlayingReported_ = false;
 }
 
+void AudioSystem::StopChannelsForLogicalId(const std::string& logicalId) {
+  auto it = channels_.begin();
+  while (it != channels_.end()) {
+    if (it->logicalId == logicalId) {
+      if (IsGameWonEffect(it->logicalId)) {
+        EndMusicDuck();
+      }
+      if (it->channel >= 0) {
+        Mix_HaltChannel(it->channel);
+      }
+      it = channels_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
 void AudioSystem::ServiceActiveChannels(int currentTurn) {
   int delta = currentTurn - lastServiceTurn_;
   if (delta <= 0) {
@@ -407,6 +464,11 @@ void AudioSystem::ServiceActiveChannels(int currentTurn) {
     bool playing = it->channel >= 0 && Mix_Playing(it->channel) != 0;
     bool expired = it->enforceDuration && it->durationTicks <= 0;
     if (expired || !playing) {
+#ifdef MM4_USE_SDL_MIXER
+      if (IsGameWonEffect(it->logicalId)) {
+        EndMusicDuck();
+      }
+#endif
       if (!expired && playing) {
         // Channel finished naturally; leave it halted by SDL_mixer.
       } else if (expired && playing && it->channel >= 0) {
@@ -448,6 +510,12 @@ void AudioSystem::DispatchEffect(const ScheduledEffect& pending) {
     return;
   }
 
+#ifdef MM4_USE_SDL_MIXER
+  if (pending.descriptor.behavior.mode == EffectPlaybackMode::kTruncate) {
+    StopChannelsForLogicalId(pending.descriptor.logicalId);
+  }
+#endif
+
   int loops = std::max(1, pending.request.requestedLoops);
   int channel = Mix_PlayChannel(-1, chunk, loops - 1);
   if (channel == -1) {
@@ -464,6 +532,12 @@ void AudioSystem::DispatchEffect(const ScheduledEffect& pending) {
                             : std::numeric_limits<int>::max();
   state.channel = channel;
   channels_.push_back(state);
+
+#ifdef MM4_USE_SDL_MIXER
+  if (IsGameWonEffect(pending.descriptor.logicalId)) {
+    BeginMusicDuck();
+  }
+#endif
 
   std::cout << "[audio] effect playing event=" << pending.request.logicalEvent
             << " channel=" << channel << std::endl;
@@ -508,6 +582,23 @@ void AudioSystem::EnsureMusicPlaying() {
     }
     return;
   }
+  if (activeMusic_) {
+    int loop = 0;
+    if (Mix_PlayMusic(activeMusic_, loop) != 0) {
+      LogMixerError("Mix_PlayMusic");
+      ReleaseAllMusic();
+      AdvancePlaylist(false);
+      return;
+    }
+    lastMusicLog_ = std::chrono::steady_clock::now();
+    musicPlayingReported_ = true;
+    if (verbose_) {
+      std::cout << "[audio] music start track="
+                << (activeMusicId_.empty() ? "<unknown>" : activeMusicId_)
+                << " source=resume" << std::endl;
+    }
+    return;
+  }
   AdvancePlaylist(false);
 #endif
 }
@@ -544,7 +635,14 @@ void AudioSystem::PauseEffects() {
 }
 
 void AudioSystem::RefreshPlaylist() {
+  RebuildPlaylistOrder();
 #ifdef MM4_USE_SDL_MIXER
+  ReshufflePlaylist();
+#endif
+  LogPlaylistState("refresh");
+}
+
+void AudioSystem::RebuildPlaylistOrder() {
   basePlaylist_ = library_.AllSoundtrackIds();
   playlistOrder_ = basePlaylist_;
   if (playlistOrder_.empty()) {
@@ -554,8 +652,7 @@ void AudioSystem::RefreshPlaylist() {
     }
   }
   playlistIndex_ = 0;
-  ReshufflePlaylist();
-#endif
+  playlistRng_.seed(playlistSeed_);
 }
 
 void AudioSystem::ReshufflePlaylist() {
@@ -565,7 +662,86 @@ void AudioSystem::ReshufflePlaylist() {
     return;
   }
   std::shuffle(playlistOrder_.begin(), playlistOrder_.end(), playlistRng_);
-  playlistIndex_ = playlistIndex_ % playlistOrder_.size();
+  playlistIndex_ = 0;
+#endif
+}
+
+void AudioSystem::LogPlaylistState(const char* context) const {
+  std::ostringstream header;
+  header << "[audio] playlist context=" << (context ? context : "unknown")
+         << " seed=0x" << std::hex << std::uppercase << playlistSeed_
+         << " tracks=" << std::dec << playlistOrder_.size();
+  std::cout << header.str() << std::endl;
+
+  if (!playlistOrder_.empty()) {
+    std::ostringstream order;
+    order << "[audio] playlist order=";
+    for (size_t i = 0; i < playlistOrder_.size(); ++i) {
+      if (i > 0) {
+        order << ",";
+      }
+      order << playlistOrder_[i];
+    }
+    std::cout << order.str() << std::endl;
+  }
+}
+
+#ifdef MM4_USE_SDL_MIXER
+bool AudioSystem::IsGameWonEffect(const std::string& logicalId) const {
+  static const std::string kSuffix = ".game_won.default";
+  if (logicalId.size() < kSuffix.size()) {
+    return false;
+  }
+  return logicalId.compare(logicalId.size() - kSuffix.size(), kSuffix.size(), kSuffix) == 0;
+}
+
+void AudioSystem::BeginMusicDuck() {
+  if (musicMuted_) {
+    return;
+  }
+  if (musicDuckingCount_ == 0) {
+    musicPrevVolume_ = Mix_VolumeMusic(-1);
+    Mix_VolumeMusic(0);
+    if (verbose_) {
+      std::cout << "[audio] music duck start" << std::endl;
+    }
+  }
+  ++musicDuckingCount_;
+}
+
+void AudioSystem::EndMusicDuck() {
+  if (musicDuckingCount_ == 0) {
+    return;
+  }
+  --musicDuckingCount_;
+  if (musicDuckingCount_ == 0 && !musicMuted_) {
+    Mix_VolumeMusic(musicPrevVolume_);
+    if (verbose_) {
+      std::cout << "[audio] music duck end" << std::endl;
+    }
+  }
+}
+#endif  // MM4_USE_SDL_MIXER
+
+void AudioSystem::SetPlaylistSeed(uint32_t seed) {
+  playlistSeed_ = seed;
+  playlistSeedOverridden_ = true;
+  playlistRng_.seed(playlistSeed_);
+  if (!initialized_) {
+    return;
+  }
+
+  RebuildPlaylistOrder();
+#ifdef MM4_USE_SDL_MIXER
+  ReshufflePlaylist();
+#endif
+  LogPlaylistState("seed_override");
+
+#ifdef MM4_USE_SDL_MIXER
+  ReleaseAllMusic();
+  if (!playlistOrder_.empty()) {
+    AdvancePlaylist(false);
+  }
 #endif
 }
 
@@ -584,6 +760,7 @@ void AudioSystem::AdvancePlaylist(bool manualSource) {
     if (playlistIndex_ >= playlistOrder_.size()) {
       playlistIndex_ = 0;
       ReshufflePlaylist();
+      LogPlaylistState("reshuffle");
     }
     const std::string& trackId = playlistOrder_[playlistIndex_];
     playlistIndex_ = (playlistIndex_ + 1) % playlistOrder_.size();
@@ -604,11 +781,18 @@ void AudioSystem::NextTrack(bool fromManual) {
 }
 
 std::vector<std::string> AudioSystem::PlaylistSnapshot() const {
-#ifdef MM4_USE_SDL_MIXER
-  return playlistOrder_;
-#else
-  return {};
-#endif
+  std::vector<std::string> snapshot;
+  if (playlistOrder_.empty()) {
+    return snapshot;
+  }
+  snapshot.reserve(playlistOrder_.size());
+  size_t count = playlistOrder_.size();
+  size_t index = playlistIndex_;
+  for (size_t i = 0; i < count; ++i) {
+    size_t pos = (index + i) % playlistOrder_.size();
+    snapshot.push_back(playlistOrder_[pos]);
+  }
+  return snapshot;
 }
 
 bool AudioSystem::StartTrack(const std::string& trackId, bool manualSource) {
@@ -678,12 +862,14 @@ void AudioSystem::SetMuted(bool muted) {
 void AudioSystem::SetMusicMuted(bool muted) {
   musicMuted_ = muted;
 #ifdef MM4_USE_SDL_MIXER
+  musicDuckingCount_ = 0;
+  musicPrevVolume_ = musicConfiguredVolume_;
   if (musicMuted_) {
     Mix_VolumeMusic(0);
     Mix_HaltMusic();
     musicPlayingReported_ = false;
   } else {
-    Mix_VolumeMusic(MIX_MAX_VOLUME);
+    Mix_VolumeMusic(musicConfiguredVolume_);
     EnsureMusicPlaying();
   }
 #else
@@ -695,11 +881,15 @@ void AudioSystem::SetMusicMuted(bool muted) {
 void AudioSystem::SetEffectsMuted(bool muted) {
   effectsMuted_ = muted;
 #ifdef MM4_USE_SDL_MIXER
-  int volume = effectsMuted_ ? 0 : MIX_MAX_VOLUME;
+  int volume = effectsMuted_ ? 0 : effectsConfiguredVolume_;
   Mix_Volume(-1, volume);
   if (effectsMuted_) {
     Mix_HaltChannel(-1);
     channels_.clear();
+    if (!musicMuted_) {
+      Mix_VolumeMusic(musicConfiguredVolume_);
+    }
+    musicDuckingCount_ = 0;
   }
 #else
   (void)muted;

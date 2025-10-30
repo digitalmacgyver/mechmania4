@@ -6,6 +6,7 @@
 #define MM4_AUDIO_AUDIO_SYSTEM_H_
 
 #include <chrono>
+#include <cstdint>
 #include <mutex>
 #include <random>
 #include <string>
@@ -51,6 +52,8 @@ class AudioSystem {
   void NextTrack(bool fromManual = false);
   std::string ActiveTrackId() const { return activeMusicId_; }
   std::vector<std::string> PlaylistSnapshot() const;
+  void SetPlaylistSeed(uint32_t seed);
+  uint32_t PlaylistSeed() const { return playlistSeed_; }
   void RefreshPlaylist();
   void OnTrackFinished();
 
@@ -103,19 +106,33 @@ class AudioSystem {
   bool StartTrack(const std::string& trackId, bool manualSource);
   void AdvancePlaylist(bool manualSource);
   void ReshufflePlaylist();
+  void StopChannelsForLogicalId(const std::string& logicalId);
+  void BeginMusicDuck();
+  void EndMusicDuck();
+  bool IsGameWonEffect(const std::string& logicalId) const;
 
   std::unordered_map<std::string, Mix_Chunk*> chunkCache_;
   std::vector<ChannelState> channels_;
   Mix_Music* activeMusic_ = nullptr;
-  std::string activeMusicId_;
-  std::vector<std::string> playlistOrder_;
-  size_t playlistIndex_ = 0;
-  std::mt19937 playlistRng_{0x4D4D534F};  // Stable seed "MM5O"
-  std::vector<std::string> basePlaylist_;
   bool nextMenuToggleUsesAlt_ = false;
 #else
   void ProcessPendingEffects(int currentTurn);
 #endif
+  std::vector<std::string> playlistOrder_;
+  size_t playlistIndex_ = 0;
+  std::mt19937 playlistRng_{0x4D4D534F};  // Stable seed "MM5O"
+  std::vector<std::string> basePlaylist_;
+  std::string activeMusicId_;
+  uint32_t playlistSeed_ = 0x4D4D534F;
+  bool playlistSeedOverridden_ = false;
+#ifdef MM4_USE_SDL_MIXER
+  int musicDuckingCount_ = 0;
+  int musicPrevVolume_ = 128;
+  int musicConfiguredVolume_ = 128;
+  int effectsConfiguredVolume_ = 128;
+#endif
+  void RebuildPlaylistOrder();
+  void LogPlaylistState(const char* context) const;
 };
 
 }  // namespace mm4::audio

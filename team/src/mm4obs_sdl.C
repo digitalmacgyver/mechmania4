@@ -52,7 +52,8 @@ int main(int argc, char* argv[]) {
   ObserverSDL myObs(PCmdLn.gfxreg, PCmdLn.gfxflag,
                     PCmdLn.GetAssetsRoot(), PCmdLn.verbose,
                     PCmdLn.enableAudioTestPing,
-                    PCmdLn.startAudioMuted != 0);
+                    PCmdLn.startAudioMuted != 0,
+                    PCmdLn.GetPlaylistSeed());
   printf("SDL2 Graphics initialized\n");
 #else
   Observer myObs(PCmdLn.gfxreg, PCmdLn.gfxflag);

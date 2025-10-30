@@ -1,4 +1,7 @@
 # Default sound configuration for MechMania IV Observer
+volume:
+  soundtrack: 100
+  effects: 50
 game:
   soundtrack:
     songs:
@@ -33,8 +36,8 @@ teams:
           behavior:
             delay_ticks: 1
     col_ship_asteroid:
-      default:
-        file: ../assets/star_control/effects/boom23.wav
+#      default:
+#        file: ../assets/star_control/effects/boom23.wav
       col_ship_asteroid_eat:
         file: ../assets/star_control/effects/lander-pickup.wav
       col_ship_asteroid_destroy:
@@ -47,12 +50,10 @@ teams:
     col_ship_ship:
       default:
         file: ../assets/star_control/effects/pkunk-jerk.wav
-        behavior:
-          mode: queue
       col_ship_friendly_ship:
         file: ../assets/star_control/effects/pkunk-dodo.wav
         behavior:
-          mode: queue
+          delay_ticks: 4
     col_station_asteroid:
       default:
         file: ../assets/star_control/effects/pkunk-shot.wav
@@ -60,22 +61,21 @@ teams:
       default:
         file: ../assets/star_control/effects/orz-go.wav
         behavior:
-          mode: queue
+          mode: truncate
       launch_from_friendly:
         inherit: team.launch.default
       launch_from_enemy:
         inherit: team.launch.default
     dock:
-      default:
-        file: ../assets/star_control/effects/lander-return.wav
+#      default:
+#        file: ../assets/star_control/effects/lander-return.wav
       dock_at_friendly:
         file: ../assets/star_control/effects/lander-return.wav
       dock_at_enemy:
-        file: ../assets/star_control/effects/orz-intruder.wav
-        behavior:
-          mode: queue
+        file: ../assets/star_control/effects/lander-return.wav
       dock_at_enemy_alert:
-        file: ../assets/star_control/effects/redalert.wav
+        file: ../assets/star_control/effects/orz-intruder.wav
+#../assets/star_control/effects/redalert.wav
         behavior:
           mode: queue
           delay_ticks: 1
@@ -84,25 +84,25 @@ teams:
         file: ../assets/star_control/effects/chmmr-tractor.wav
         behavior:
           mode: queue
-          duration_ticks: 16
+          duration_ticks: 1
           scale:
-            per_quantity: 8.0
+            per_quantity: 1.6
             min_loops: 1
-            max_loops: 8
-      deliver_vinyl_friendly:
-        inherit: team.deliver_vinyl.default
-      deliver_vinyl_enemy:
-        inherit: team.deliver_vinyl.default
+            max_loops: 25
+ #     deliver_vinyl_friendly:
+ #       inherit: team.deliver_vinyl.default
+ #     deliver_vinyl_enemy:
+ #       inherit: team.deliver_vinyl.default
     raise_shields:
       default:
         file: ../assets/star_control/effects/ilwrath-cloak.wav
     jettison:
       default:
         file: ../assets/star_control/effects/zoqfotpik-tongue.wav
-      jettison_vinyl:
-        inherit: team.jettison.default
-      jettison_uranium:
-        inherit: team.jettison.default
+#      jettison_vinyl:
+#        inherit: team.jettison.default
+#      jettison_uranium:
+#        inherit: team.jettison.default
     ship_destroyed:
       default:
         file: ../assets/star_control/effects/boom-shipdie.wav
@@ -112,51 +112,47 @@ teams:
     game_won:
       default:
         file: ../assets/star_control/effects/druuge-ditty.mp3
-    game_lost:
-      default:
-        file: ../assets/star_control/effects/pkunk-loser.wav
   team2:
     laser:
       default:
         file: ../assets/star_control/effects/ur-quan-fusion.wav
-        behavior:
-          duration_ticks: 12
-          scale:
-            per_quantity: 256.0
-            min_loops: 1
-            max_loops: 8
     launch:
       default:
         file: ../assets/star_control/effects/ur-quan-launch.wav
         behavior:
-          mode: queue
-      launch_from_friendly:
-        inherit: team2.launch.default
-      launch_from_enemy:
-        inherit: team2.launch.default
+          mode: truncate
+#      launch_from_friendly:
+#        inherit: team2.launch.default
+#      launch_from_enemy:
+#        inherit: team2.launch.default
     col_ship_ship:
       default:
         file: ../assets/star_control/effects/pkunk-worm.wav
         behavior:
-          mode: queue
+          delay_ticks: 2
       col_ship_friendly_ship:
         file: ../assets/star_control/effects/pkunk-idiot.wav
         behavior:
-          mode: queue
+	  delay_ticks: 6
     deliver_vinyl:
       default:
         file: ../assets/star_control/effects/melnorme-charge.wav
         behavior:
           mode: queue
-          duration_ticks: 16
+          duration_ticks: 2
           scale:
-            per_quantity: 8.0
+            per_quantity: 3.1
             min_loops: 1
-            max_loops: 8
-      deliver_vinyl_friendly:
-        inherit: team2.deliver_vinyl.default
-      deliver_vinyl_enemy:
-        inherit: team2.deliver_vinyl.default
+            max_loops: 13
+#      deliver_vinyl_friendly:
+#        inherit: team2.deliver_vinyl.default
+#      deliver_vinyl_enemy:
+#        inherit: team2.deliver_vinyl.default
+    dock:
+      dock_at_enemy_alert:
+        file: ../assets/star_control/effects/redalert.wav
+        behavior:
+          delay_ticks: 1
     raise_shields:
       default:
         file: ../assets/star_control/effects/slylandro-energize.wav
@@ -169,27 +165,24 @@ teams:
     game_won:
       default:
         file: ../assets/star_control/effects/yehat-ditty.mp3
-    game_lost:
-      default:
-        file: ../assets/star_control/effects/pkunk-worm.wav
   manual:
     audio:
       ping:
-        file: ../assets/star_control/effects/orz-go.wav
+        file: ../assets/star_control/effects/boom1.wav
     menu:
       toggle_enabled:
         file: ../assets/star_control/effects/menusnd01.wav
         behavior:
           mode: queue
       toggle_enabled_alt:
-        file: ../assets/star_control/effects/menusnd02.wav
+        file: ../assets/star_control/effects/menusnd01.wav
         behavior:
           mode: queue
       toggle_disabled:
-        file: ../assets/star_control/effects/menusnd03.wav
+        file: ../assets/star_control/effects/menusnd02.wav
         behavior:
           mode: queue
       toggle_disabled_alt:
-        file: ../assets/star_control/effects/menusnd04.wav
+        file: ../assets/star_control/effects/menusnd02.wav
         behavior:
           mode: queue

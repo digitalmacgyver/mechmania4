@@ -6,8 +6,10 @@
 #ifndef _ARGUMENTPARSER_H_MM4
 #define _ARGUMENTPARSER_H_MM4
 
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -40,6 +42,7 @@ class ArgumentParser {
   bool verbose = false;          // Verbose output for observer
   bool enableAudioTestPing = false;  // Enable manual audio diagnostics ping
   bool startAudioMuted = false;      // Start observer with audio muted
+  std::optional<uint32_t> playlistSeedOverride;  // Deterministic soundtrack seed
 
   // Config file
   std::string configFile;

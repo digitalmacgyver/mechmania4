@@ -6,6 +6,8 @@
 #ifndef _PARSER_MODERN_H_MM4
 #define _PARSER_MODERN_H_MM4
 
+#include <optional>
+
 #include "ArgumentParser.h"
 
 // CParser wrapper for backward compatibility
@@ -34,6 +36,9 @@ class CParser {
   }
   const std::string& GetAssetsRoot() const { return parser.assetsRoot; }
   bool StartAudioMuted() const { return parser.startAudioMuted; }
+  std::optional<uint32_t> GetPlaylistSeed() const {
+    return parser.playlistSeedOverride;
+  }
 
   // Direct access to the modern parser if needed
   ArgumentParser& GetModernParser() { return parser; }

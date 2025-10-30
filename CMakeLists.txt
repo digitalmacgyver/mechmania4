@@ -17,6 +17,13 @@ option(MM4_AUTO_VENDOR_DEPS "Automatically build vendored SDL dependencies if mi
 # Source directory
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/team/src)
 
+set(AUDIO_SOURCES
+    ${SRC_DIR}/audio/AudioSystem.C
+    ${SRC_DIR}/audio/SoundLibrary.C
+    ${SRC_DIR}/audio/SoundRequestBuffer.C
+    ${SRC_DIR}/audio/AudioEventTracker.C
+)
+
 # Common source files (physics and game logic)
 set(COMMON_SOURCES
     ${SRC_DIR}/Sendable.C
@@ -135,10 +142,7 @@ if(BUILD_WITH_GRAPHICS)
             ${SRC_DIR}/ObserverSDL.C
             ${SRC_DIR}/XPMLoader.C
             ${SRC_DIR}/SpriteManager.C
-            ${SRC_DIR}/audio/AudioSystem.C
-            ${SRC_DIR}/audio/SoundLibrary.C
-            ${SRC_DIR}/audio/SoundRequestBuffer.C
-            ${SRC_DIR}/audio/AudioEventTracker.C
+            ${AUDIO_SOURCES}
         )
 
         add_compile_definitions(BUILD_WITH_GRAPHICS USE_SDL2)
@@ -403,6 +407,46 @@ if(BUILD_WITH_GRAPHICS)
             ${X11_Xpm_LIB}
         )
         target_include_directories(mm4obs PRIVATE ${X11_INCLUDE_DIR})
+    endif()
+
+    if(USE_SDL2)
+        add_executable(mm4_audio_probe
+            ${SRC_DIR}/audio/AudioHeadlessProbe.C
+            ${AUDIO_SOURCES}
+        )
+
+        target_link_libraries(mm4_audio_probe
+            mm4_common
+            pthread
+            ${SDL2_LIBRARIES}
+        )
+        target_include_directories(mm4_audio_probe PRIVATE
+            ${SDL2_INCLUDE_DIRS}
+        )
+        target_compile_options(mm4_audio_probe PRIVATE
+            ${SDL2_CFLAGS_OTHER}
+        )
+
+        if(SDL2_MIXER_FOUND)
+            if(DEFINED pkgcfg_lib_SDL2_MIXER_SDL2_mixer)
+                target_link_libraries(mm4_audio_probe ${pkgcfg_lib_SDL2_MIXER_SDL2_mixer})
+            else()
+                target_link_libraries(mm4_audio_probe ${SDL2_MIXER_LIBRARIES})
+            endif()
+            if(SDL2_MIXER_LDFLAGS_OTHER)
+                target_link_options(mm4_audio_probe PRIVATE ${SDL2_MIXER_LDFLAGS_OTHER})
+            endif()
+            target_include_directories(mm4_audio_probe PRIVATE ${SDL2_MIXER_INCLUDE_DIRS})
+            target_compile_options(mm4_audio_probe PRIVATE ${SDL2_MIXER_CFLAGS_OTHER})
+            target_compile_definitions(mm4_audio_probe PRIVATE MM4_USE_SDL_MIXER=1)
+
+            pkg_check_modules(LIBMODPLUG IMPORTED_TARGET libmodplug)
+            if(LIBMODPLUG_FOUND)
+                target_link_libraries(mm4_audio_probe PkgConfig::LIBMODPLUG)
+            endif()
+        else()
+            message(WARNING "SDL2_mixer not found; audio probe will run with stubbed playback.")
+        endif()
     endif()
 endif()
 

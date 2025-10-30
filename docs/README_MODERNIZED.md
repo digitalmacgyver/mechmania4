@@ -84,6 +84,12 @@ Options:
 - `-G` - Enable full graphics mode
 - `-R` - Auto-reconnect on disconnect
 - `--assets-root <path>` - Override base directory for audio assets
+- `--mute` - Start with soundtrack and effects muted
+- `--verbose` - Print additional observer and audio logs
+- `--enable-audio-test-ping` - Emit a periodic diagnostics cue (requires `--verbose`)
+- `--playlist-seed <uint32>` - Override the soundtrack shuffle seed for deterministic playback
+
+Refer to `docs/SOUND.md` for a detailed overview of the audio catalog and runtime controls.
 
 ## Observer Controls
 
@@ -94,6 +100,13 @@ When running the SDL2 observer:
 - `SPACE` - Cycle through attractor modes
 - `M` - Toggle soundtrack mute
 - `E` - Toggle sound effects mute
+
+## Audio QA Checklist
+
+- Run `scripts/audio_headless_smoke.sh` after building to validate playlist initialization logs and effect scheduling in headless mode (`SDL_VIDEODRIVER=dummy`).
+- In the observer, confirm the footer displays the current soundtrack/effects mute state (update with `M`/`E`) and that the first unmute plays the confirmation cue even if the session started muted.
+- Use `--playlist-seed` to reproduce soundtrack ordering during replay investigations; the active and upcoming tracks appear in the right-hand audio controls panel.
+- Review `docs/SOUND.md` for catalog editing guidance and manual identifier conventions when adding new cues.
 
 ## Game Overview
 

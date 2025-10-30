@@ -31,6 +31,8 @@ The file is organised into a few high-level namespaces:
   for index 1, etc.). Each leaf becomes a logical identifier.
 - `manual.*`: non-gameplay events (menu interactions, diagnostics, scripted
   cues).
+- `volume.*`: optional global volume controls (`soundtrack`, `effects`). Values
+  are percentages between 0–100.
 
 Each effect leaf supports the following keys:
 
@@ -58,6 +60,8 @@ teams:
 - `behavior.mode`:
   - `simultaneous` (default) plays all requests immediately.
   - `queue` enforces serialized playback so repeated events run back-to-back.
+  - `truncate` (alias `cutoff`) halts any currently playing instance of the same
+    logical event before starting the new one; other sounds continue normally.
 - `behavior.delay_ticks`: adds a fixed frame delay before the effect can start.
 - `behavior.duration_ticks`: expected length of one loop; the mixer uses it to
   track channel lifetime when SDL_mixer does not provide it.
@@ -68,6 +72,20 @@ teams:
 
 If no `behavior` block is present, defaults are `simultaneous`, zero delay, and
 one loop.
+
+### Global Volume
+
+Set the `volume` block to scale music/effects output without touching the
+system mixer. Example:
+
+```yaml
+volume:
+  soundtrack: 100  # percent (0 disables music)
+  effects: 75      # play effects at 75% of the configured volume
+```
+
+Values outside 0–100 are clamped. Muting still takes precedence over these
+percentages.
 
 ### Music Configuration
 
@@ -90,10 +108,14 @@ logical identifier; declare its asset and behavior in the `manual` block.
 
 ## Providing New Assets
 
-1. Place the new `.wav`, `.mp3`, or `.mod` file under the asset tree. Relative
-   paths typically point at `assets/` from the repository root.
-2. Add or update the relevant node in `sound/defaults.txt`, or ship an alternate
+1. Add or update the relevant node in `sound/defaults.txt`, or ship an alternate
    config file and pass its path to `AudioSystem::Initialize`.
+2. Use either relative or absolute paths:
+   - Relative paths are resolved from the configuration file’s directory; if you
+     launch the observer with `--assets-root` the paths remain relative to that
+     override.
+   - Absolute paths (e.g., `/opt/mm4/audio/some.wav`) are used verbatim and can
+     live anywhere on the filesystem.
 3. Restart the observer; the library reloads assets during initialization only.
 
 If you need to package multiple configurations, commit a bespoke catalog (for
@@ -116,10 +138,13 @@ correctly.
 - `--verbose`: emit extra `[audio]` logging whenever effects are queued.
 - `--enable-audio-test-ping`: enable the diagnostics heartbeat (still gated by
   `--verbose`).
+- `--playlist-seed <uint32>`: override the soundtrack shuffle seed to reproduce
+  deterministic playlists (logged together with the catalog order).
 
-Headless CI (e.g., `build/quick_test.sh`) uses the same configuration but may
-run without SDL audio hardware. In that mode you can still inspect the logs to
-verify which logical events were scheduled.
+Headless smoke tests (`scripts/audio_headless_smoke.sh`) use the same
+configuration but run beneath `SDL_VIDEODRIVER=dummy`. Inspect the captured logs
+to confirm playlist initialization (`[audio] playlist context=…`) and effect
+dispatch (`[audio] tick=… schedule event=…`) when audio hardware is unavailable.
 
 ## Effect Requests From Code
 
@@ -133,3 +158,67 @@ When introducing a new logical identifier, prefer namespaced identifiers such as
 `teamX.some_event.variant` or `manual.menu.action` so that inheritence and
 fallback rules remain predictable. The loader automatically falls back to the
 `team` namespace when `teamN.*` is missing, reducing duplication.
+
+## Event Reference
+
+The observer only plays effects that the game code explicitly queues via
+`CWorld::LogAudioEvent()`. If you remove an entry from `sound/defaults.txt` you
+can re-add it later using the logical identifiers listed below.
+
+### Team-scoped events
+
+Unless noted otherwise these are queued as `teamN.<suffix>` where `team` is the
+baseline namespace and `team2`, `team3`, … fall back to those entries when a
+more specific block is absent.
+
+- `launch.default` – Ship undocks from any station.
+- `launch.launch_from_friendly` / `.launch_from_enemy` – Play alongside
+  `launch.default` when the launch came from a friendly or enemy station.
+- `dock.default` – Ship begins docking animation.
+- `dock.dock_at_friendly` – Friendly dock confirmation.
+- `dock.dock_at_enemy` – Enemy dock confirmation.
+- `dock.dock_at_enemy_alert` – Additional alert that fires with
+  `dock_at_enemy`.
+- `deliver_vinyl.default` – Vinyl delivered to any station.
+- `deliver_vinyl.deliver_vinyl_friendly` – Bonus cue when the delivery was to a
+  friendly station.
+- `deliver_vinyl.deliver_vinyl_enemy` – Bonus cue when delivering to an enemy
+  station.
+- `raise_shields.default` – Ship raises shields.
+- `jettison.default` – Any cargo jettison.
+- `jettison.jettison_vinyl` / `jettison.jettison_uranium` – Material-specific
+  cues emitted in addition to `jettison.default`.
+- `laser.default` – Ship fires its laser.
+- `laser.laser_asteroid.laser_asteroid_break` – Laser shot shatters an asteroid.
+- `laser.laser_asteroid.laser_asteroid_nobreak` – Laser shot glances off an
+  asteroid without breaking it.
+- `col_ship_laser.default` – Ship hit by an incoming laser.
+- `col_ship_asteroid.default` – Ship collides with an asteroid.
+- `col_ship_asteroid.col_ship_asteroid_eat` – Ship successfully ingests the
+  asteroid (queued alongside the default collision cue).
+- `col_ship_asteroid.col_ship_asteroid_destroy` – Ship destroys an asteroid on
+  impact (shatter events).
+- `col_ship_ship.default` – Ship-to-ship collision.
+- `col_ship_ship.col_ship_friendly_ship` – Friendly ship collision variant.
+- `col_station_asteroid.default` – Asteroid hits a station.
+- `damage.shield` – Shield drop detected by `AudioEventTracker` (queued as
+  `teamN.damage.shield`).
+- `ship_out_of_fuel.default` – Ship expends its last fuel.
+- `ship_destroyed.default` – Ship explodes.
+- `game_won.default` – Winning team celebration (only the winning team queues
+  this event).
+
+### Manual / UI events
+
+- `manual.menu.toggle_enabled` / `_alt` – Menu toggle confirmation when turning
+  music or effects back on.
+- `manual.menu.toggle_disabled` / `_alt` – Menu toggle when muting.
+- `manual.audio.ping` – Optional diagnostics heartbeat (`--enable-audio-test-ping`).
+
+### Station tracker
+
+The embedded tracker keeps an eye on station cargo and shield changes:
+
+- `team.damage.shield` – Queued when a ship takes appreciable shield damage in
+  a single turn. Configure `team.damage.shield` (without a numeric suffix) to
+  cover every team.

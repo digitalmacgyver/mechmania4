@@ -91,15 +91,17 @@ int main(int argc, char* argv[]) {
         bool isWinner =
             std::fabs(teamScores[i] - bestScore) <= kScoreEpsilon;
         std::string suffix =
-            isWinner ? "game_won.default" : "game_lost.default";
+            isWinner ? "game_won.default" : "";
         std::string metadata;
         if (team && team->GetName()) {
           metadata = team->GetName();
         }
         int teamIndex =
             team ? static_cast<int>(team->GetWorldIndex()) : -1;
-        pWorld->LogAudioEvent(makeEventId(team, suffix),
-                              teamIndex, teamScores[i], 1, metadata);
+        if (!suffix.empty()) {
+          pWorld->LogAudioEvent(makeEventId(team, suffix),
+                                teamIndex, teamScores[i], 1, metadata);
+        }
       }
 
       // Push final snapshot so observer hears game result cues.

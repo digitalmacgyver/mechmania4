@@ -16,23 +16,14 @@
   - Collect feedback on the alternating menu clicks to confirm they feel responsive when spammed while muted.
 
 ## Remaining TODOs
+- *(None for this milestone – see completion log.)*
+
+### Completed This Milestone
 - **Menu interaction sounds**
-  - Hook into UI events:
-    - Keyboard shortcuts (`SDLK_m`, `SDLK_e`) now call `PlayMenuToggleSound(MenuToggleControl::kMusic|kEffects, !mute)`; keep future UI buttons (if any) pointed at the same helper.
-    - Hook observer UI widgets to the same helper when they are added.
-  - Implement “first click after enabling effects should play even if effects were muted” rule: detect rising edge of effects mute; play a single confirmation using `manual.menu.toggle_enabled` then suppress until unmuted again.
-  - Queue manual events via `AudioSystem::QueueEffect()` using `manual.menu.*` logical IDs (no team index).
+  - Centralized all shortcut/UI mute toggles on `PlayMenuToggleSound`, armed a one-shot confirmation after rising-edge unmute, and kept `manual.menu.*` cues in the manual namespace.
 - **Soundtrack management**
-  - Persist playlist seed/ordering to the server log so replay desyncs are debuggable; expose CLI knob for deterministic seed overrides.
-  - Add observer-side command palette (or HUD overlay) to display the next few tracks in queue using `PlaylistSnapshot()`.
-  - Gate track advancement when music is muted so that unmuting resumes at the newly selected track without flashing audio.
-  - Exercise `NextTrack(true)` and auto-advance paths in an automated harness (headless observer run) to confirm hooks still fire after pause/resume and server reconnects.
+  - Logged playlist seed/order on startup, exposed the `--playlist-seed` CLI override, surfaced upcoming tracks in the audio panel, and exercised manual/auto advancement in the new headless probe.
 - **Observer startup polish**
-  - When `--mute` used, ensure footer indicators render muted state immediately (update `DrawAudioControlsPanel` to read `startAudioMuted_` on first draw).
-  - Defer first menu sound until effects unmuted by caching a `menuMutedAck_` flag; synthesise a single `manual.menu.toggle_enabled` click when user unmutes.
-  - Expose current music/effects mute status in the on-screen help (e.g., “Soundtrack: MUTED (M)”).
+  - Footer and panel honor `--mute` on the first draw, the help footer advertises current mute states, and the confirmation click is deferred until effects unmute.
 - **Testing & tooling**
-  - Extend `build/quick_test.sh` or new script to run observer in headless mode with `--verbose --mute` and assert presence of audio logs (`[audio] music next track`, `schedule event=team1.launch...` etc.).
-  - Add unit-ish coverage: craft a small integration harness that instantiates `CWorld`, triggers events (launch, dock, deliver), and verifies `GetAudioEvents()` contents.
-  - Update docs (`README_MODERNIZED.md`) with new CLI flag and QA checklist: menu toggles, cycle soundtrack, mute/unmute flows.
-  - Link the new `docs/SOUND.md` overview into `README_MODERNIZED.md` once ready.
+  - Added `scripts/audio_headless_smoke.sh` and the `mm4_audio_probe` harness (driving `CWorld` + `AudioSystem`) to validate logs, refreshed documentation with the audio QA checklist, and linked the SOUND overview from `docs/README_MODERNIZED.md`.

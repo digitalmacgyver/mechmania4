@@ -15,7 +15,8 @@ namespace mm4::audio {
 
 enum class EffectPlaybackMode {
   kSimultaneous,
-  kQueue
+  kQueue,
+  kTruncate
 };
 
 struct EffectScaleRule {
@@ -47,6 +48,8 @@ class SoundLibrary {
   std::vector<std::string> AllSoundtrackIds() const;
   void SetAssetRootOverride(const std::string& assetRoot);
   void Clear();
+  int SoundtrackVolumePercent() const { return soundtrackVolumePercent_; }
+  int EffectsVolumePercent() const { return effectsVolumePercent_; }
 
  private:
   void RegisterDefaultFallbacks();
@@ -56,6 +59,8 @@ class SoundLibrary {
   std::string defaultSoundtrackId_;
   std::string baseDirectory_;
   std::string assetRootOverride_;
+  int soundtrackVolumePercent_ = 100;
+  int effectsVolumePercent_ = 100;
 };
 
 }  // namespace mm4::audio

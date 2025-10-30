@@ -112,6 +112,8 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "enable-audio-test-ping",
          "Enable manual audio diagnostics ping (requires verbose for logs)")(
         "mute", "Start observer with music and effects muted")(
+        "playlist-seed",
+         "Override soundtrack playlist RNG seed (uint32)", cxxopts::value<uint32_t>())(
         "help", "Show help");
 
     // Feature flags
@@ -200,6 +202,11 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     verbose = result.count("verbose") > 0;
     enableAudioTestPing = result.count("enable-audio-test-ping") > 0;
     startAudioMuted = result.count("mute") > 0;
+    if (result.count("playlist-seed")) {
+      playlistSeedOverride = result["playlist-seed"].as<uint32_t>();
+    } else {
+      playlistSeedOverride.reset();
+    }
 
     // Parse timing options
     if (result.count("game-turn-duration")) {

@@ -22,7 +22,8 @@
 
 ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
                          const std::string& assetsRoot, bool verboseAudio,
-                         bool enableAudioDiagnostics, bool startAudioMuted)
+                         bool enableAudioDiagnostics, bool startAudioMuted,
+                         std::optional<uint32_t> playlistSeedOverride)
     : graphics(nullptr),
       spriteManager(nullptr),
       myWorld(nullptr),
@@ -34,7 +35,8 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
       assetRootOverride_(assetsRoot),
       verboseAudio_(verboseAudio),
       enableAudioDiagnostics_(enableAudioDiagnostics),
-      startAudioMuted_(startAudioMuted) {  // Enable sprite mode when -G is used
+      startAudioMuted_(startAudioMuted),
+      playlistSeedOverride_(playlistSeedOverride) {  // Enable sprite mode when -G is used
   (void)regFileName;
 
   drawnames = 1;
@@ -55,7 +57,7 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
 
   audioEventTracker.SetVerbose(verboseAudio_);
   audioEventTracker.Reset();
-  ResetMenuToggleSoundState();
+  ResetMenuToggleSoundState(startAudioMuted);
   graphics = new SDL2Graphics();
 }
 
@@ -145,6 +147,7 @@ bool ObserverSDL::Initialize() {
   if (availableGap > 10) {
     audioControlsGap = std::max(6, charH / 2);
     int desiredHeight = std::max(2 * lineHeight + 8, 36);
+    desiredHeight = desiredHeight + desiredHeight / 2;  // Increase height by 50%
     audioControlsHeight = std::min(desiredHeight, availableGap);
     if (availableGap - audioControlsHeight < audioControlsGap) {
       audioControlsHeight = std::max(20, availableGap - audioControlsGap);
@@ -179,14 +182,17 @@ bool ObserverSDL::Initialize() {
   if (!audioInitialized) {
     std::cerr << "Warning: Audio system failed to initialize" << std::endl;
   } else {
+    auto& audioSystem = mm4::audio::AudioSystem::Instance();
+    if (playlistSeedOverride_) {
+      audioSystem.SetPlaylistSeed(*playlistSeedOverride_);
+    }
     audioEventTracker.Reset();
     lastAudioTurnProcessed = std::numeric_limits<unsigned int>::max();
     nextDiagnosticsPingTime_ = -1.0;
     if (startAudioMuted_) {
-      auto& audioSystem = mm4::audio::AudioSystem::Instance();
       audioSystem.SetMuted(true);
-      ResetMenuToggleSoundState();
     }
+    ResetMenuToggleSoundState(audioSystem.EffectsMuted());
     if (enableAudioDiagnostics_) {
       if (verboseAudio_) {
         std::cout << "[audio] diagnostics heartbeat enabled (interval="
@@ -279,10 +285,11 @@ void ObserverSDL::MaybeEmitDiagnosticsPing(
   }
 }
 
-void ObserverSDL::ResetMenuToggleSoundState() {
+void ObserverSDL::ResetMenuToggleSoundState(bool effectsMuted) {
   genericMenuToggleUsesAlt_ = false;
   musicToggleCueState_ = {};
   effectsToggleCueState_ = {};
+  effectsUnmuteAckPending_ = effectsMuted;
 }
 
 void ObserverSDL::PlayMenuToggleSound() {
@@ -291,6 +298,12 @@ void ObserverSDL::PlayMenuToggleSound() {
 
 void ObserverSDL::PlayMenuToggleSound(ObserverSDL::MenuToggleControl control,
                                       bool enabled) {
+  if (control == MenuToggleControl::kEffects) {
+    if (!enabled) {
+      effectsUnmuteAckPending_ = true;
+    }
+  }
+
   if (!audioInitialized) {
     return;
   }
@@ -307,6 +320,18 @@ void ObserverSDL::PlayMenuToggleSound(ObserverSDL::MenuToggleControl control,
     request.logicalEvent = logicalEvent;
     audioSystem.QueueEffect(request);
   };
+
+  if (control == MenuToggleControl::kEffects && enabled &&
+      effectsUnmuteAckPending_) {
+    // Only acknowledge once per mute cycle so a single click is guaranteed.
+    if (!audioSystem.EffectsMuted()) {
+      queueEvent("manual.menu.toggle_enabled");
+      effectsToggleCueState_.nextEnabledAlt = true;
+      effectsUnmuteAckPending_ = false;
+      return;
+    }
+    // If we are still muted (e.g., deferred global mute), keep the ack armed.
+  }
 
   switch (control) {
     case MenuToggleControl::kGeneric: {
@@ -1223,37 +1248,76 @@ void ObserverSDL::DrawAudioControlsPanel() {
 
   bool audioReady = audioInitialized &&
                     mm4::audio::AudioSystem::Instance().IsInitialized();
-  bool musicMuted = true;
-  bool effectsMuted = true;
+  bool musicMuted = startAudioMuted_;
+  bool effectsMuted = startAudioMuted_;
   if (audioReady) {
     auto& audioSystem = mm4::audio::AudioSystem::Instance();
     musicMuted = audioSystem.MusicMuted();
     effectsMuted = audioSystem.EffectsMuted();
   }
 
+  std::string trackLabel = "[X] Next song:";
+  std::string trackPreviewText;
+  if (audioReady) {
+    auto preview = mm4::audio::AudioSystem::Instance().PlaylistSnapshot();
+    auto formatName = [](const std::string& id) {
+      std::string name = id;
+      auto split = name.find_last_of("/\\");
+      if (split != std::string::npos) {
+        name = name.substr(split + 1);
+      }
+      return name;
+    };
+    std::vector<std::string> previewNames;
+    previewNames.reserve(std::min<size_t>(preview.size(), 3));
+    for (size_t i = 0; i < preview.size() && i < 3; ++i) {
+      previewNames.push_back(formatName(preview[i]));
+    }
+    if (!previewNames.empty()) {
+      trackPreviewText = previewNames[0];
+      for (size_t i = 1; i < previewNames.size(); ++i) {
+        trackPreviewText.append("  |  ").append(previewNames[i]);
+      }
+    }
+  }
+  if (trackPreviewText.empty()) {
+    trackPreviewText = "<none queued>";
+  }
   std::string musicLabel = "[M]ute soundtrack:";
-  std::string effectsLabel = "Mute Sound [E]ffects:";
+  std::string effectsLabel = "[E] Mute special effects:";
 
-  int labelW = 0, labelH = 0;
-  graphics->GetTextSize(musicLabel, labelW, labelH, true);
-  int charW = 0, charH = 0;
-  graphics->GetTextSize("W", charW, charH, true);
-  int rowHeight = std::max(labelH + 4, 18);
-  int verticalPadding = std::max(6, (panelHeight - 2 * rowHeight) / 3);
-  int row1Y = panelY + verticalPadding;
-  int shiftUp = std::min(rowHeight / 2, row1Y - panelY - 2);
-  row1Y -= shiftUp;
-  int row2Y = row1Y + rowHeight;
-  if (row2Y + labelH > panelY + panelHeight - 2) {
-    row2Y = panelY + panelHeight - labelH - 2;
-    if (row2Y <= row1Y) {
-      row2Y = row1Y + std::max(12, rowHeight / 2);
+  int trackLabelW = 0, trackLabelH = 0;
+  int musicLabelW = 0, musicLabelH = 0;
+  int effectsLabelW = 0, effectsLabelH = 0;
+  graphics->GetTextSize(trackLabel, trackLabelW, trackLabelH, true);
+  graphics->GetTextSize(musicLabel, musicLabelW, musicLabelH, true);
+  graphics->GetTextSize(effectsLabel, effectsLabelW, effectsLabelH, true);
+
+  int maxLabelH = std::max({trackLabelH, musicLabelH, effectsLabelH});
+  int rowHeight = std::max(maxLabelH + 6, 20);
+  int totalRowsHeight = 3 * rowHeight;
+  int remaining = panelHeight - totalRowsHeight;
+  if (remaining < 0) {
+    remaining = 0;
+  }
+  int verticalGap = std::max(6, remaining / 4);
+  int row1Y = panelY + verticalGap;
+  int row2Y = row1Y + rowHeight + verticalGap;
+  int row3Y = row2Y + rowHeight + verticalGap;
+  int panelBottom = panelY + panelHeight;
+  if (row3Y + maxLabelH > panelBottom - verticalGap) {
+    row3Y = panelBottom - maxLabelH - verticalGap;
+    row2Y = row3Y - rowHeight - verticalGap;
+    row1Y = row2Y - rowHeight - verticalGap;
+    if (row1Y < panelY + verticalGap) {
+      row1Y = panelY + verticalGap;
     }
   }
 
   const int iconReserve = 48;
   int iconWidth = 22;
   int spacing = 6;
+  const int labelPadding = 12;
   int iconAreaLeft = panelX + panelWidth - iconReserve;
   if (iconAreaLeft < panelX) {
     iconAreaLeft = panelX;
@@ -1262,52 +1326,29 @@ void ObserverSDL::DrawAudioControlsPanel() {
   Color activeColor(0, 220, 0);
   Color inactiveColor(130, 130, 130);
 
+  Color trackColor = (!audioReady) ? inactiveColor : activeColor;
+  int trackLabelX = panelX + labelPadding;
+  graphics->DrawText(trackLabel, trackLabelX, row1Y, trackColor, true, true);
+  int nameW = 0, nameH = 0;
+  graphics->GetTextSize(trackPreviewText, nameW, nameH, true);
+  graphics->DrawText(trackPreviewText, trackLabelX + trackLabelW + spacing, row1Y,
+                     Color(200, 200, 200), true, true);
+
   Color musicColor = (!audioReady || musicMuted) ? inactiveColor : activeColor;
-  int musicLabelW = 0, musicLabelH = 0;
-  graphics->GetTextSize(musicLabel, musicLabelW, musicLabelH, true);
   int musicLabelX = iconAreaLeft - spacing - musicLabelW;
-  const int labelPadding = 12;
   if (musicLabelX < panelX + labelPadding) {
     musicLabelX = panelX + labelPadding;
   }
-  graphics->DrawText(musicLabel, musicLabelX, row1Y, musicColor, true, true);
-  DrawSpeakerIcon(iconX, row1Y - 2, musicMuted || !audioReady, musicColor);
+  graphics->DrawText(musicLabel, musicLabelX, row2Y, musicColor, true, true);
+  DrawSpeakerIcon(iconX, row2Y - 2, musicMuted || !audioReady, musicColor);
 
   Color fxColor = (!audioReady || effectsMuted) ? inactiveColor : activeColor;
-  int effectsLabelW = 0, effectsLabelH = 0;
-  graphics->GetTextSize(effectsLabel, effectsLabelW, effectsLabelH, true);
-  int effectsLabelX = iconAreaLeft - spacing - effectsLabelW - (charW > 0 ? charW : 8);
+  int effectsLabelX = iconAreaLeft - spacing - effectsLabelW;
   if (effectsLabelX < panelX + labelPadding) {
     effectsLabelX = panelX + labelPadding;
   }
-  graphics->DrawText(effectsLabel, effectsLabelX, row2Y, fxColor, true, true);
-  DrawSpeakerIcon(iconX, row2Y - 2, effectsMuted || !audioReady, fxColor);
-
-  int row3Y = row2Y + rowHeight;
-  if (row3Y + labelH > panelY + panelHeight - 2) {
-    row3Y = panelY + panelHeight - labelH - 2;
-  }
-  std::string trackLabel = "[X] Next song:";
-  std::string trackName;
-  if (audioReady) {
-    trackName = mm4::audio::AudioSystem::Instance().ActiveTrackId();
-    auto split = trackName.find_last_of("/\\");
-    if (split != std::string::npos) {
-      trackName = trackName.substr(split + 1);
-    }
-  }
-  if (trackName.empty()) {
-    trackName = "<none>";
-  }
-  int trackLabelW = 0, trackLabelH = 0;
-  graphics->GetTextSize(trackLabel, trackLabelW, trackLabelH, true);
-  int trackLabelX = panelX + labelPadding;
-  Color trackColor = (!audioReady) ? inactiveColor : activeColor;
-  graphics->DrawText(trackLabel, trackLabelX, row3Y, trackColor, true, true);
-  int nameW = 0, nameH = 0;
-  graphics->GetTextSize(trackName, nameW, nameH, true);
-  graphics->DrawText(trackName, trackLabelX + trackLabelW + spacing,
-                     row3Y, Color(200, 200, 200), true, true);
+  graphics->DrawText(effectsLabel, effectsLabelX, row3Y, fxColor, true, true);
+  DrawSpeakerIcon(iconX, row3Y - 2, effectsMuted || !audioReady, fxColor);
 }
 
 void ObserverSDL::DrawSpeakerIcon(int x, int y, bool muted,
@@ -1520,22 +1561,53 @@ void ObserverSDL::DrawHelpFooter() {
   }
 
   // Right-side status (align to right using measured widths)
-  const char* spriteStr = useSpriteMode ? "Sprites: ON" : "Sprites: OFF";
-  const char* stateStr = isPaused ? "PAUSED" : "RUNNING";
+  bool audioReady = audioInitialized &&
+                    mm4::audio::AudioSystem::Instance().IsInitialized();
+  bool musicMuted = startAudioMuted_;
+  bool effectsMuted = startAudioMuted_;
+  if (audioReady) {
+    auto& audioSystem = mm4::audio::AudioSystem::Instance();
+    musicMuted = audioSystem.MusicMuted();
+    effectsMuted = audioSystem.EffectsMuted();
+  }
 
-  int w1 = 0, h1 = 0, w2 = 0, h2 = 0;
-  graphics->GetTextSize(spriteStr, w1, h1, true);
-  graphics->GetTextSize(stateStr, w2, h2, true);
+  std::string spriteStr = useSpriteMode ? "Sprites: ON" : "Sprites: OFF";
+  std::string stateStr = isPaused ? "PAUSED" : "RUNNING";
+  std::string musicStr =
+      std::string("Soundtrack: ") + (musicMuted ? "MUTED (M)" : "ON (M)");
+  std::string effectsStr =
+      std::string("Effects: ") + (effectsMuted ? "MUTED (E)" : "ON (E)");
 
-  int rightGroupWidth = w1 + gapPixels + w2;
+  struct StatusLabel {
+    std::string text;
+    Color color;
+  };
+
+  std::vector<StatusLabel> labels = {
+      {musicStr, musicMuted ? Color(255, 80, 80) : Color(0, 220, 0)},
+      {effectsStr, effectsMuted ? Color(255, 80, 80) : Color(0, 220, 0)},
+      {spriteStr,
+       useSpriteMode ? Color(0, 255, 0) : Color(150, 150, 150)},
+      {stateStr, isPaused ? Color(255, 255, 0) : Color(0, 255, 0)}};
+
+  std::vector<int> labelWidths(labels.size(), 0);
+  std::vector<int> labelHeights(labels.size(), 0);
+  int rightGroupWidth = 0;
+  for (size_t i = 0; i < labels.size(); ++i) {
+    graphics->GetTextSize(labels[i].text, labelWidths[i], labelHeights[i], true);
+    rightGroupWidth += labelWidths[i];
+    if (i + 1 < labels.size()) {
+      rightGroupWidth += gapPixels;
+    }
+  }
+
   int rightX = displayWidth - 10 - rightGroupWidth;
-
-  graphics->DrawText(spriteStr, rightX, textY,
-                     useSpriteMode ? Color(0, 255, 0) : Color(150, 150, 150),
-                     true);
-  graphics->DrawText(stateStr, rightX + w1 + gapPixels, textY,
-                     isPaused ? Color(255, 255, 0) : Color(0, 255, 0), true,
-                     true);
+  int drawX = rightX;
+  for (size_t i = 0; i < labels.size(); ++i) {
+    graphics->DrawText(labels[i].text, drawX, textY, labels[i].color, true,
+                       true);
+    drawX += labelWidths[i] + gapPixels;
+  }
 }
 
 void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {

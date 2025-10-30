@@ -7,6 +7,7 @@
 #define _OBSERVERSDL_H_
 
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -69,6 +70,7 @@ class ObserverSDL {
   double diagnosticsPingIntervalSeconds_ = 5.0;
   double nextDiagnosticsPingTime_ = -1.0;
   bool startAudioMuted_ = false;
+  std::optional<uint32_t> playlistSeedOverride_;
   struct MenuToggleCueState {
     bool nextEnabledAlt = false;
     bool nextDisabledAlt = false;
@@ -76,6 +78,7 @@ class ObserverSDL {
   bool genericMenuToggleUsesAlt_ = false;
   MenuToggleCueState musicToggleCueState_;
   MenuToggleCueState effectsToggleCueState_;
+  bool effectsUnmuteAckPending_ = false;
 
   // Drawing helpers
   void DrawSpace();
@@ -106,7 +109,7 @@ class ObserverSDL {
   };
   void PlayMenuToggleSound();
   void PlayMenuToggleSound(MenuToggleControl control, bool enabled);
-  void ResetMenuToggleSoundState();
+  void ResetMenuToggleSoundState(bool effectsMuted);
 
   // Coordinate transformation
   int WorldToScreenX(double wx);
@@ -123,7 +126,8 @@ class ObserverSDL {
               const std::string& assetsRoot = std::string(),
               bool verboseAudio = false,
               bool enableAudioDiagnostics = false,
-              bool startAudioMuted = false);
+              bool startAudioMuted = false,
+              std::optional<uint32_t> playlistSeedOverride = std::nullopt);
   ~ObserverSDL();
 
   // Main methods
