@@ -23,24 +23,31 @@ Current Status
 
 To-Do / Next Steps
 ------------------
-1. ~~**Populate EffectRequest behavior hints**~~ (done)
-   - Handled during AudioSystem queuing: descriptor lookups set delay ticks, compute loop counts from scale rules, and mark queue-mode events so downstream schedulers can differentiate.
+1. **Menu interaction sounds**
+   - Introduce logical events (`menu.toggle.enabled`, `menu.toggle.disabled`, etc.) and map them to `menusnd01-04.wav` with alternating playback.
+   - Ensure the first toggle uses “A” (menusnd01) and the second uses “B” (menusnd02); continue alternating if the control keeps flipping.
+   - When effects are muted, play a single confirmation click then suppress further menu audio until effects are re-enabled.
+   - Update `sound/defaults.txt` and AudioSystem helpers so menu sounds respect the mute state rule.
 
-2. ~~**Enhance SoundRequestBuffer**~~ (done)
-   - Buffer tracks per-request metadata, keeps queue-mode events in arrival order without collapsing, and preserves requested loop counts while coalescing simultaneous effects.
+2. **Finalize Star Control effect coverage**
+   - Fill the remaining schema items from the pseudo-config (e.g., `launch_from_enemy`, `jettison_vinyl/uranium`, `dock_at_enemy` including `redalert.wav`).
+   - Encode loop/delay/queue semantics: laser loop duration tied to order magnitude, deliver_vinyl loop scaled by payload, queue mode for sequential collisions/docks.
+  - Verify both teams inherit sane defaults while honoring overrides (Team 1 vs Team 2 variation).
 
-3. ~~**Implement AudioSystem scheduler**~~ (done)
-   - Scheduler now caches descriptors, computes delay-aware start ticks, sequences queue-mode events, and enforces duration windows when dispatching Mix channels (with logging fallback when SDL_mixer is absent).
+3. **Observer startup muting (`--mute`)**
+   - Add CLI flag that starts the observer with both music/effects muted but still allows the UI to unmute.
+   - Update help text, argument plumbing, panel state, and footer indicators.
+   - Ensure menu sounds and soundtrack respect the startup mute state.
 
-4. ~~**Asset management**~~ (done)
-   - Effect chunks are cached per asset path and music playback now prefers the configured default soundtrack, using SDL_mixer loop counts for repetition.
+4. **Random soundtrack cycling + “[N]ext song” control**
+   - Shuffle through `arilou.mod`, `arispace.mod`, `battle.mod`, `comandr.mod`, `hyper.mod`, `introx.mod`, `outfit.mod`, `pkunk.mod`, `shipyard.mod`.
+   - When a track finishes (or “[N]ext song” is pressed), choose an unplayed track until all have been heard, then reshuffle.
+   - Insert a “[N]ext song” control above the mute row, expanding the panel layout as needed.
+   - Emit verbose logs for track transitions so tests can assert behaviour.
 
-5. ~~**Observer integration**~~ (done)
-   - ObserverSDL pumps scheduler ticks each update and now surfaces keyboard toggles plus footer status for music/effects mute state.
-
-6. **Testing & validation**
-   - Add targeted tests or debug logging to validate queue/delay/scale flows (possibly gated by verbose flag).
-   - Document run instructions for ensuring SDL_mixer pkg-config paths are present (via vendor script or manual build).
+5. **Testing & validation**
+   - Extend `test7.sh` once menu/playlist logging is in place (potentially send automated key events).
+   - Document manual QA: toggling menu items, verifying ping behaviour with new flag, checking soundtrack rotation.
 
 Open Questions
 --------------
@@ -48,43 +55,25 @@ Open Questions
 - Determine default duration_ticks when unspecified (current behavior treats 0 as "play to completion").
 - Clarify how inheritance should behave when behavior attributes are omitted in the child.
 
-Immediate Diagnostics (Audio Pipeline Gaps)
-------------------------------------------
-We currently have three blocking issues surfaced in `build/obs.log`. Tackle them in this order so we gain confidence that lower-level plumbing works before chasing codec support.
-
-**(c) Manual heartbeat effect never fires**
-- Instrument `ObserverSDL` to inject a diagnostics effect (e.g. `manual.audio.ping`) every 5 seconds *only when* the observer is launched with `--verbose` audio.
-- Add a guard in `AudioSystem::QueueEffect` that logs receipt of this diagnostics event before any early return.
-- Verify `AudioSystem::FlushPending` schedules and dispatches the chunk; expect `[audio] schedule event=manual.audio.ping` followed by `[audio] effect playing event=manual.audio.ping`.
-- Testing: new `teams/testteam/tests/test7.sh` (see below) must run `scripts/test_collision_modes.py` with `--observer-verbose --observer-assets-root ..` and fail if the observer log is missing these manual ping entries.
-
-**(b) Launch undock events never reach audio**
-- Extend `AudioEventTracker` verbose logging (guarded by the same `--verbose`) to dump docked→undocked transitions per ship so we can see if the world state fires.
-- In `ObserverSDL::Update`, log the number of gathered audio events each turn when verbose. If zero during known launch actions, dump the relevant ship IDs.
-- Ensure `SoundRequestBuffer` actually sees launch events by writing unit-style assertions in the diagnostics mode (e.g. increment a counter and print `[audio] launch event emitted ...`).
-- Testing: `test7.sh` should script two undocks via `test7_ship_launches.txt`. Success requires both the launch event log and the effect playback log to appear in the captured observer log.
-
-**(a) MOD soundtrack fails to load**
-- Confirm vendored SDL_mixer build bundles `libmodplug` (or an equivalent module decoder). During CMake configure, explicitly check for `libmodplug.so` under `vendor/local/lib` and trigger the vendor build if missing.
-- After a clean configure, log the actual `Mix_Init` result along with the list of enabled decoders (call `Mix_GetChunkDecoder`/`Mix_GetMusicDecoder` when verbose).
-- Extend diagnostics to attempt loading a tiny `.mod` shipped in `assets/star_control/music` and log success/failure immediately on observer start; this separates codec problems from runtime playback issues.
-- Testing: once (c) and (b) pass, re-run `test7.sh` and expect `[audio] music loaded` followed by `[audio] music start`. Add a follow-up smoke test that greps for those lines when soundtrack assets are present.
+Immediate Diagnostics
+---------------------
+- Validate menu sound logic once implemented (confirm alternating playback and mute suppression).
+- Verify soundtrack shuffling logs track IDs for `[N]ext song` and natural transitions.
+- Ensure new logical events appear in verbose logs so integration tests can latch onto them.
 
 Automation & Tooling Updates
 ----------------------------
-- `teams/testteam/tests/test7.sh`: clone from `test3.sh`, but update success criteria to require the manual ping log, launch event log, and launch effect log. Source the new moves file `test7_ship_launches.txt` (two undocks on turn 1) and ensure we emit the observer log path to stdout for the shell script to locate.
-- `scripts/test_collision_modes.py`: accept `--observer-verbose` and `--observer-assets-root` (already parsed) and feed them into the observer command for both legacy and new runs. While there, print the observer log file path so shell tests can grep it reliably.
-- Observer must honor `--assets-root` when resolving audio paths; diagnostics should state the resolved absolute path so log triage is easier.
+- `scripts/test_collision_modes.py`: already accepts observer flags; extend scripted scenarios if we need to fire the “[N]ext song” control automatically.
+- Consider adding a lightweight menu-audio regression script that toggles mute/effects via simulated inputs (optional future work).
 
 Validation Workflow
 -------------------
 1. `cmake -S . -B build` (no extra flags once vendoring auto-runs) then `cmake --build build`.
-2. `teams/testteam/tests/test7.sh` – fails if manual ping, launch event, or launch playback logs are missing.
-3. Once (c) and (b) pass, add a dedicated MOD codec smoke test (future) that plays `hyper.mod` and asserts `[audio] music start`.
+2. `teams/testteam/tests/test7.sh --observer-enable-audio-test-ping` – confirm launch audio, ping diagnostics, and (eventually) menu/soundtrack logging.
+3. Manual QA: exercise mute toggles, `[N]ext song`, and verify menu sounds respect the mute state; optionally run `./build/mm4_modtest -s ...` for codec smoke tests.
 
 Upcoming Debugging Tasks
 ------------------------
-- Implement the `manual.audio.ping` diagnostics trigger inside the observer (5s cadence, verbose mode only) and ensure `AudioSystem::QueueEffect` logs its receipt.
-- Trace the launch/undock flow: instrument `AudioEventTracker` and `ObserverSDL::Update` to log dock state transitions when verbose, then confirm the requests reach `SoundRequestBuffer`.
-- Add a temporary verbose dump of `SoundRequestBuffer::QueueEffect` so we can see the launch events arriving while tests run.
-- Extend `AudioSystem::FlushPending` verbose logs to show pending queue contents each tick when troubleshooting is active.
+- Define menu event IDs and fire them from the observer UI handlers.
+- Revisit `AudioEventTracker` for outstanding pseudo-config events (e.g., friendly/enemy launches, jettison variations) to ensure they emit the correct logical IDs.
+- Add soundtrack playlist management (shuffle queue) and wire `[N]ext song` keyboard shortcut + UI label.
