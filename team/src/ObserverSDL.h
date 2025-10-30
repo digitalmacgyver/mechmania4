@@ -69,7 +69,13 @@ class ObserverSDL {
   double diagnosticsPingIntervalSeconds_ = 5.0;
   double nextDiagnosticsPingTime_ = -1.0;
   bool startAudioMuted_ = false;
-  bool nextMenuToggleUsesAlt_ = false;
+  struct MenuToggleCueState {
+    bool nextEnabledAlt = false;
+    bool nextDisabledAlt = false;
+  };
+  bool genericMenuToggleUsesAlt_ = false;
+  MenuToggleCueState musicToggleCueState_;
+  MenuToggleCueState effectsToggleCueState_;
 
   // Drawing helpers
   void DrawSpace();
@@ -93,7 +99,14 @@ class ObserverSDL {
   void DrawVelocityVector(CThing* thing);
   void MaybeEmitDiagnosticsPing(mm4::audio::AudioSystem& audioSystem,
                                 double gameTimeSeconds);
+  enum class MenuToggleControl {
+    kGeneric,
+    kMusic,
+    kEffects,
+  };
   void PlayMenuToggleSound();
+  void PlayMenuToggleSound(MenuToggleControl control, bool enabled);
+  void ResetMenuToggleSoundState();
 
   // Coordinate transformation
   int WorldToScreenX(double wx);

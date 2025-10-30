@@ -55,6 +55,7 @@ ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
 
   audioEventTracker.SetVerbose(verboseAudio_);
   audioEventTracker.Reset();
+  ResetMenuToggleSoundState();
   graphics = new SDL2Graphics();
 }
 
@@ -184,6 +185,7 @@ bool ObserverSDL::Initialize() {
     if (startAudioMuted_) {
       auto& audioSystem = mm4::audio::AudioSystem::Instance();
       audioSystem.SetMuted(true);
+      ResetMenuToggleSoundState();
     }
     if (enableAudioDiagnostics_) {
       if (verboseAudio_) {
@@ -277,7 +279,18 @@ void ObserverSDL::MaybeEmitDiagnosticsPing(
   }
 }
 
+void ObserverSDL::ResetMenuToggleSoundState() {
+  genericMenuToggleUsesAlt_ = false;
+  musicToggleCueState_ = {};
+  effectsToggleCueState_ = {};
+}
+
 void ObserverSDL::PlayMenuToggleSound() {
+  PlayMenuToggleSound(MenuToggleControl::kGeneric, true);
+}
+
+void ObserverSDL::PlayMenuToggleSound(ObserverSDL::MenuToggleControl control,
+                                      bool enabled) {
   if (!audioInitialized) {
     return;
   }
@@ -285,14 +298,62 @@ void ObserverSDL::PlayMenuToggleSound() {
   if (!audioSystem.IsInitialized()) {
     return;
   }
-  mm4::audio::EffectRequest req;
-  if (nextMenuToggleUsesAlt_) {
-    req.logicalEvent = "manual.menu.toggle_enabled_alt";
-  } else {
-    req.logicalEvent = "manual.menu.toggle_enabled";
+
+  auto queueEvent = [&](const char* logicalEvent) {
+    if (!logicalEvent) {
+      return;
+    }
+    mm4::audio::EffectRequest request;
+    request.logicalEvent = logicalEvent;
+    audioSystem.QueueEffect(request);
+  };
+
+  switch (control) {
+    case MenuToggleControl::kGeneric: {
+      const char* logicalEvent =
+          genericMenuToggleUsesAlt_ ? "manual.menu.toggle_enabled_alt"
+                                    : "manual.menu.toggle_enabled";
+      genericMenuToggleUsesAlt_ = !genericMenuToggleUsesAlt_;
+      queueEvent(logicalEvent);
+      break;
+    }
+    case MenuToggleControl::kMusic: {
+      const char* logicalEvent = nullptr;
+      if (enabled) {
+        logicalEvent = musicToggleCueState_.nextEnabledAlt
+                           ? "manual.menu.toggle_enabled_alt"
+                           : "manual.menu.toggle_enabled";
+        musicToggleCueState_.nextEnabledAlt =
+            !musicToggleCueState_.nextEnabledAlt;
+      } else {
+        logicalEvent = musicToggleCueState_.nextDisabledAlt
+                           ? "manual.menu.toggle_disabled_alt"
+                           : "manual.menu.toggle_disabled";
+        musicToggleCueState_.nextDisabledAlt =
+            !musicToggleCueState_.nextDisabledAlt;
+      }
+      queueEvent(logicalEvent);
+      break;
+    }
+    case MenuToggleControl::kEffects: {
+      const char* logicalEvent = nullptr;
+      if (enabled) {
+        logicalEvent = effectsToggleCueState_.nextEnabledAlt
+                           ? "manual.menu.toggle_enabled_alt"
+                           : "manual.menu.toggle_enabled";
+        effectsToggleCueState_.nextEnabledAlt =
+            !effectsToggleCueState_.nextEnabledAlt;
+      } else {
+        logicalEvent = effectsToggleCueState_.nextDisabledAlt
+                           ? "manual.menu.toggle_disabled_alt"
+                           : "manual.menu.toggle_disabled";
+        effectsToggleCueState_.nextDisabledAlt =
+            !effectsToggleCueState_.nextDisabledAlt;
+      }
+      queueEvent(logicalEvent);
+      break;
+    }
   }
-  audioSystem.QueueEffect(req);
-  nextMenuToggleUsesAlt_ = !nextMenuToggleUsesAlt_;
 }
 
 void ObserverSDL::Draw() {
@@ -412,7 +473,7 @@ bool ObserverSDL::HandleEvents() {
                         << std::endl;
               AddMessage(mute ? "Soundtrack muted" : "Soundtrack unmuted",
                          -1);
-              PlayMenuToggleSound();
+              PlayMenuToggleSound(MenuToggleControl::kMusic, !mute);
             }
             break;
           }
@@ -427,7 +488,7 @@ bool ObserverSDL::HandleEvents() {
               AddMessage(mute ? "Sound effects muted"
                               : "Sound effects unmuted",
                          -1);
-              PlayMenuToggleSound();
+              PlayMenuToggleSound(MenuToggleControl::kEffects, !mute);
             }
             break;
           }

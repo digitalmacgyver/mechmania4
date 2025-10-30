@@ -17,10 +17,9 @@
 
 ## Remaining TODOs
 - **Menu interaction sounds**
-  - Add stateful toggling in `ObserverSDL`: track last effect used per control (music/effects toggles), alternate between `menusnd01`/`menusnd02` (enabled) and `menusnd03`/`menusnd04` (disabled). Store booleans in class state; reset when mute global toggled.
   - Hook into UI events:
-    - Keyboard shortcuts (`SDLK_m`, `SDLK_e`) once mute state toggles.
-    - Future UI buttons (if any) should call common helper `PlayMenuToggle(bool enabled, bool effectsMuted)`.
+    - Keyboard shortcuts (`SDLK_m`, `SDLK_e`) now call `PlayMenuToggleSound(MenuToggleControl::kMusic|kEffects, !mute)`; keep future UI buttons (if any) pointed at the same helper.
+    - Hook observer UI widgets to the same helper when they are added.
   - Implement “first click after enabling effects should play even if effects were muted” rule: detect rising edge of effects mute; play a single confirmation using `manual.menu.toggle_enabled` then suppress until unmuted again.
   - Queue manual events via `AudioSystem::QueueEffect()` using `manual.menu.*` logical IDs (no team index).
 - **Soundtrack management**
@@ -36,3 +35,4 @@
   - Extend `build/quick_test.sh` or new script to run observer in headless mode with `--verbose --mute` and assert presence of audio logs (`[audio] music next track`, `schedule event=team1.launch...` etc.).
   - Add unit-ish coverage: craft a small integration harness that instantiates `CWorld`, triggers events (launch, dock, deliver), and verifies `GetAudioEvents()` contents.
   - Update docs (`README_MODERNIZED.md`) with new CLI flag and QA checklist: menu toggles, cycle soundtrack, mute/unmute flows.
+  - Link the new `docs/SOUND.md` overview into `README_MODERNIZED.md` once ready.
