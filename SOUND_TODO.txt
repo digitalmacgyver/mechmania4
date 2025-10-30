@@ -32,7 +32,22 @@ To-Do / Next Steps
 2. **Finalize Star Control effect coverage**
    - Fill the remaining schema items from the pseudo-config (e.g., `launch_from_enemy`, `jettison_vinyl/uranium`, `dock_at_enemy` including `redalert.wav`).
    - Encode loop/delay/queue semantics: laser loop duration tied to order magnitude, deliver_vinyl loop scaled by payload, queue mode for sequential collisions/docks.
-  - Verify both teams inherit sane defaults while honoring overrides (Team 1 vs Team 2 variation).
+   - Verify both teams inherit sane defaults while honoring overrides (Team 1 vs Team 2 variation).
+   - Implementation guide (assets live under `assets/star_control/effects/` unless noted):
+     * `laser` – team1 default `chmmr-laser.wav`, team2 default `ur-quan-fusion.wav`; loop for `order_magnitude / 256.0` seconds (minimum one full playback).
+     * `laser_asteroid.laser_asteroid_break` → `boom45.wav` with 1-tick delay; `laser_asteroid_nobreak` → `boom1.wav` with 1-tick delay.
+     * `col_ship_asteroid` default `boom23.wav`; `.eat` overrides `lander-pickup.wav`; `.destroy` overrides `boom1.wav`; keep default for `.break` until asset decided.
+     * `col_ship_laser` → `flagship-guns.wav` with 1-tick delay.
+     * `col_ship_ship` queue mode using team1 `pkunk-jerk.wav`, team2 `pkunk-worm.wav`; friendly-fire override uses team1 `pkunk-dodo.wav`, team2 `pkunk-idiot.wav` (queue).
+     * `col_station_asteroid` → `pkunk-shot.wav`.
+     * `launch` queue mode: team1 `orz-go.wav`, team2 `ur-quan-launch.wav`; special cases `launch_from_friendly/enemy` inherit unless new assets assigned.
+     * `dock.dock_at_friendly` → `lander-return.wav`; `.dock_at_enemy` plays `orz-intruder.wav` immediately followed by `redalert.wav` (converted WAV lives in effects directory).
+     * `deliver_vinyl` queue + loop: team1 `chmmr-tractor.wav`, team2 `melnorme-charge.wav`; loop duration = `total_vinyl / 8.0` seconds with minimum one pass.
+     * `raise_shields` – team1 `ilwrath-cloak.wav`, team2 `slylandro-energize.wav`.
+     * `jettison` default `zoqfotpik-tongue.wav`; create overrides for `.jettison_vinyl` and `.jettison_uranium` as desired (currently inherit default).
+     * `ship_destroyed` → `boom-shipdie.wav` (preferred over missing `shipdies.wav`).
+     * `ship_out_of_fuel` → `androsynth-bubble.wav`.
+     * `game_won` – team1 `druuge-ditty.mp3`, team2 `yehat-ditty.mp3`; verify MP3 playback path or convert to WAV if necessary.
 
 3. **Observer startup muting (`--mute`)**
    - Add CLI flag that starts the observer with both music/effects muted but still allows the UI to unmute.
