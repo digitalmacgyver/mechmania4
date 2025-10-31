@@ -5,6 +5,7 @@
 
 #include "Client.h"
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <random>
 #include <set>
@@ -114,33 +115,87 @@ std::string ChooseRandomShipArt() {
   return options[dist(rng)];
 }
 
-std::string CanonicalizeShipArtRequest(const std::string& request) {
-  if (request.empty()) {
+std::string TrimString(const std::string& value) {
+  size_t start = value.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) {
     return std::string();
   }
-  if (request == "legacy:t1" || request == "legacy:t2") {
-    return request;
-  }
+  size_t end = value.find_last_not_of(" \t\r\n");
+  return value.substr(start, end - start + 1);
+}
 
+bool EqualsIgnoreCase(const std::string& lhs, const std::string& rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    unsigned char lc = static_cast<unsigned char>(lhs[i]);
+    unsigned char rc = static_cast<unsigned char>(rhs[i]);
+    if (std::tolower(lc) != std::tolower(rc)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string CanonicalizeShipArtRequest(const std::string& request) {
   const auto& options = GetShipArtOptions();
   if (options.empty()) {
     return std::string();
   }
 
-  auto hasOption = [&](const std::string& opt) {
-    return std::find(options.begin(), options.end(), opt) != options.end();
+  std::string trimmed = TrimString(request);
+  if (trimmed.empty()) {
+    return std::string();
+  }
+
+  auto findMatchForParts = [&](const std::string& faction,
+                               const std::string& ship,
+                               bool requireBothParts) -> std::string {
+    for (const auto& option : options) {
+      if (requireBothParts) {
+        if (EqualsIgnoreCase(option, faction + ":" + ship)) {
+          return option;
+        }
+      } else {
+        if (EqualsIgnoreCase(option, faction)) {
+          return option;
+        }
+      }
+
+      auto colon = option.find(':');
+      if (colon == std::string::npos) {
+        continue;
+      }
+      std::string optFaction = option.substr(0, colon);
+      std::string optShip = option.substr(colon + 1);
+
+      if (requireBothParts) {
+        if (EqualsIgnoreCase(optFaction, faction) &&
+            EqualsIgnoreCase(optShip, ship)) {
+          return option;
+        }
+      } else {
+        if (EqualsIgnoreCase(optFaction, faction) ||
+            EqualsIgnoreCase(optShip, faction)) {
+          return option;
+        }
+      }
+    }
+    return std::string();
   };
 
-  if (request.find(':') != std::string::npos) {
-    return hasOption(request) ? request : std::string();
+  auto colonPos = trimmed.find(':');
+  if (colonPos != std::string::npos) {
+    std::string faction = TrimString(trimmed.substr(0, colonPos));
+    std::string ship = TrimString(trimmed.substr(colonPos + 1));
+    if (faction.empty() || ship.empty()) {
+      return std::string();
+    }
+    return findMatchForParts(faction, ship, true);
   }
 
-  std::string canonical = request + ":" + request;
-  if (hasOption(canonical)) {
-    return canonical;
-  }
-
-  return std::string();
+  return findMatchForParts(trimmed, std::string(), false);
 }
 
 }  // namespace
