@@ -4,12 +4,101 @@
  */
 
 #include "Client.h"
+#include <algorithm>
+#include <filesystem>
+#include <random>
+#include <set>
+#include <system_error>
+#include <string>
+#include <vector>
+
 #include "ClientNet.h"
 #include "ParserModern.h"
 #include "Team.h"
 #include "World.h"
 
 extern CParser* g_pParser;
+
+namespace {
+
+const std::vector<std::string>& GetShipArtOptions() {
+  static std::vector<std::string> options;
+  static bool initialized = false;
+  if (initialized) {
+    return options;
+  }
+  initialized = true;
+
+  std::set<std::string> dedup;
+
+  std::vector<std::filesystem::path> roots = {
+      std::filesystem::path("assets/star_control/graphics"),
+      std::filesystem::path("../assets/star_control/graphics"),
+      std::filesystem::path("../../assets/star_control/graphics")};
+
+  for (const auto& root : roots) {
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec) ||
+        !std::filesystem::is_directory(root, ec)) {
+      continue;
+    }
+
+    for (const auto& factionEntry :
+         std::filesystem::directory_iterator(root, ec)) {
+      if (ec || !factionEntry.is_directory()) {
+        continue;
+      }
+      const auto factionName = factionEntry.path().filename().string();
+
+      for (const auto& shipEntry :
+           std::filesystem::directory_iterator(factionEntry.path(), ec)) {
+        if (ec || !shipEntry.is_directory()) {
+          continue;
+        }
+        const auto shipName = shipEntry.path().filename().string();
+
+        if (factionName == "yehat" && shipName == "shield") {
+          continue;  // Reserved for shield overlay logic
+        }
+
+        bool hasAllFrames = true;
+        for (int idx = 0; idx < 16; ++idx) {
+          std::filesystem::path framePath =
+              shipEntry.path() /
+              (shipName + ".big." + std::to_string(idx) + ".png");
+          if (!std::filesystem::exists(framePath, ec)) {
+            hasAllFrames = false;
+            break;
+          }
+        }
+
+        if (hasAllFrames) {
+          dedup.insert(factionName + ":" + shipName);
+        }
+      }
+    }
+  }
+
+  // Add legacy sprite sets as explicit options
+  dedup.insert("legacy:t1");
+  dedup.insert("legacy:t2");
+
+  options.assign(dedup.begin(), dedup.end());
+  return options;
+}
+
+std::string ChooseRandomShipArt() {
+  const auto& options = GetShipArtOptions();
+  if (options.empty()) {
+    return std::string();
+  }
+  static std::mt19937 rng(
+      static_cast<unsigned int>(std::random_device{}()));
+  std::uniform_int_distribution<size_t> dist(0, options.size() - 1);
+  return options[dist(rng)];
+}
+
+}  // namespace
 
 //////////////////////////////////////
 // Construction/Destruction
@@ -123,10 +212,19 @@ void CClient::MeetWorld() {
     aTms[i]->Create(numSh, i);
     pmyWorld->SetTeam(i, aTms[i]);
 
-    if (!bObflag && g_pParser && i == umyIndex) {
-      auto shipArtRequest = g_pParser->GetShipArtRequest();
-      if (shipArtRequest && !shipArtRequest->empty()) {
-        aTms[i]->SetShipArtRequest(*shipArtRequest);
+    if (!bObflag && i == umyIndex) {
+      std::string chosenArt;
+      if (g_pParser) {
+        auto shipArtRequest = g_pParser->GetShipArtRequest();
+        if (shipArtRequest && !shipArtRequest->empty()) {
+          chosenArt = *shipArtRequest;
+        }
+      }
+      if (chosenArt.empty()) {
+        chosenArt = ChooseRandomShipArt();
+      }
+      if (!chosenArt.empty()) {
+        aTms[i]->SetShipArtRequest(chosenArt);
       }
     }
   }

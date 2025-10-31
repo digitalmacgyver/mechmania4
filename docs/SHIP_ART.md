@@ -41,6 +41,10 @@ accepts a new flag:
   other uses a custom pack.
 * Custom art is applied to the base ship sprite for all thrust/turn states. The
   existing damage/shield overlays still render on top.
+* When no flag is supplied the client randomly picks from the installed packs,
+  including the two original legacy sprite sets. The special
+  `yehat/shield` helper art is excluded from random rotation because it is used
+  exclusively for shield overlays.
 
 Runtime search order
 --------------------
@@ -76,4 +80,3 @@ Troubleshooting
 * If assets are installed in a non-standard location, set `SDL_GetBasePath`
   by launching from the directory that contains the binaries plus the
   `assets/` tree, or extend the source tree search path.
-

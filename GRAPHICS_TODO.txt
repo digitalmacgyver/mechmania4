@@ -57,5 +57,5 @@ Project Milestones & Detailed TODOs
 - [ ] Capture final sign-off checklist (CLI parsing, rendering visuals, fallback warnings, docs updated).
 
 Future Tasks
-- [ ] Randomly select ship art (excluding `yehat/shield`) when `--ship-art` is not provided, choosing between default legacy art and available custom packs.
-- [ ] For `yehat:yehat`, replace legacy shield overlays with `yehat/shield` sprites rendered using the ship's current orientation frame.
+- [x] Randomly select ship art (excluding `yehat/shield`) when `--ship-art` is not provided, choosing between default legacy art and available custom packs.
+- [x] For `yehat:yehat`, replace legacy shield overlays with `yehat/shield` sprites rendered using the ship's current orientation frame.

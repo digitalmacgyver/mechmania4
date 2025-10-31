@@ -1618,6 +1618,9 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
   int imageSet = ship->GetImage();
 
   SDL_Texture* sprite = nullptr;
+  int orientationFrame = -1;
+  bool useYehatShieldOverlay = false;
+  int legacyOverrideTeam = -1;
 
   CTeam* team = ship->GetTeam();
   std::string artKey;
@@ -1628,52 +1631,62 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
     }
   }
 
-  if (!artKey.empty() && spriteManager->IsLoaded()) {
-    int colonPos = static_cast<int>(artKey.find(':'));
-    std::string faction;
-    std::string shipName;
-    if (colonPos >= 0) {
-      faction = artKey.substr(0, colonPos);
-      shipName = artKey.substr(colonPos + 1);
-    } else {
-      faction = artKey;
-      shipName = artKey;
-    }
-    if (faction.empty()) {
-      faction = artKey;
-    }
-    if (shipName.empty()) {
-      shipName = artKey;
-    }
+  if (!artKey.empty()) {
+    if (artKey == "legacy:t1") {
+      legacyOverrideTeam = 0;
+    } else if (artKey == "legacy:t2") {
+      legacyOverrideTeam = 1;
+    } else if (spriteManager->IsLoaded()) {
+      int colonPos = static_cast<int>(artKey.find(':'));
+      std::string faction;
+      std::string shipName;
+      if (colonPos >= 0) {
+        faction = artKey.substr(0, colonPos);
+        shipName = artKey.substr(colonPos + 1);
+      } else {
+        faction = artKey;
+        shipName = artKey;
+      }
+      if (faction.empty()) {
+        faction = artKey;
+      }
+      if (shipName.empty()) {
+        shipName = artKey;
+      }
 
-    std::string cacheKey = faction + ":" + shipName;
-    if (spriteManager->LoadCustomShipArt(cacheKey, "", faction, shipName)) {
-      double angle = ship->GetOrient();
-      // Custom art uses 16 evenly spaced frames starting at upwards (pi/2)
-      double normalized = angle;
-      while (normalized < 0) {
-        normalized += 2 * M_PI;
+      std::string cacheKey = faction + ":" + shipName;
+      if (spriteManager->LoadCustomShipArt(cacheKey, "", faction, shipName)) {
+        double angle = ship->GetOrient();
+        double normalized = angle;
+        constexpr double twoPi = 2.0 * M_PI;
+        const double halfPi = M_PI * 0.5;
+        while (normalized < 0) {
+          normalized += twoPi;
+        }
+        while (normalized >= twoPi) {
+          normalized -= twoPi;
+        }
+        normalized += halfPi;
+        if (normalized >= twoPi) {
+          normalized -= twoPi;
+        }
+        orientationFrame =
+            static_cast<int>(std::round(normalized / twoPi * 16.0)) % 16;
+        sprite = spriteManager->GetCustomShipTexture(cacheKey, orientationFrame);
+        useYehatShieldOverlay = (faction == "yehat" && shipName == "yehat");
+      } else {
+        std::cerr << "Observer: custom ship art missing for request '"
+                  << artKey << "', falling back to default sprites" << std::endl;
       }
-      while (normalized >= 2 * M_PI) {
-        normalized -= 2 * M_PI;
-      }
-      normalized += M_PI_2;
-      if (normalized >= 2 * M_PI) {
-        normalized -= 2 * M_PI;
-      }
-      int frame = static_cast<int>(
-                      std::round(normalized / (2 * M_PI) * 16.0)) %
-                  16;
-      sprite = spriteManager->GetCustomShipTexture(cacheKey, frame);
-    } else {
-      std::cerr << "Observer: custom ship art missing for request '"
-                << artKey << "', falling back to default sprites" << std::endl;
     }
   }
 
   // Get the appropriate sprite - use world index for sprite selection
   if (!sprite) {
     int worldIndex = ship->GetTeam()->GetWorldIndex();
+    if (legacyOverrideTeam >= 0) {
+      worldIndex = legacyOverrideTeam;
+    }
     sprite = spriteManager->GetShipSprite(worldIndex, imageSet, orient);
   }
 
@@ -1690,22 +1703,67 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
   }
 
   // Draw damage overlays if being hit
-  if (ship->bIsColliding != g_no_damage_sentinel) {
-    // Draw collision impact overlay
-    int frame = spriteManager->AngleToFrame(ship->bIsColliding);
-    SDL_Texture* impact = spriteManager->GetSprite(SPRITE_SHIP_IMPACT, frame);
-    if (impact) {
-      SDL_Rect dest = {x - 16, y - 16, 32, 32};
-      SDL_RenderCopy(graphics->GetRenderer(), impact, nullptr, &dest);
+  auto renderShieldOverlay = [&](int frame) {
+    if (frame < 0) {
+      return false;
     }
+    if (!spriteManager->LoadCustomShipArt("yehat:shield", "", "yehat",
+                                          "shield")) {
+      return false;
+    }
+    SDL_Texture* shieldTex =
+        spriteManager->GetCustomShipTexture("yehat:shield", frame);
+    if (!shieldTex) {
+      return false;
+    }
+    SDL_Rect dest = {x - 16, y - 16, 32, 32};
+    SDL_RenderCopy(graphics->GetRenderer(), shieldTex, nullptr, &dest);
+    return true;
+  };
+
+  bool drewYehatShield = false;
+  if (useYehatShieldOverlay &&
+      (ship->bIsColliding != g_no_damage_sentinel ||
+       ship->bIsGettingShot != g_no_damage_sentinel)) {
+    if (orientationFrame < 0) {
+      double angle = ship->GetOrient();
+      constexpr double twoPi = 2.0 * M_PI;
+      const double halfPi = M_PI * 0.5;
+      double normalized = angle;
+      while (normalized < 0) {
+        normalized += twoPi;
+      }
+      while (normalized >= twoPi) {
+        normalized -= twoPi;
+      }
+      normalized += halfPi;
+      if (normalized >= twoPi) {
+        normalized -= twoPi;
+      }
+      orientationFrame =
+          static_cast<int>(std::round(normalized / twoPi * 16.0)) % 16;
+    }
+    drewYehatShield = renderShieldOverlay(orientationFrame);
   }
-  if (ship->bIsGettingShot != g_no_damage_sentinel) {
-    // Draw laser hit overlay
-    int frame = spriteManager->AngleToFrame(ship->bIsGettingShot);
-    SDL_Texture* laser = spriteManager->GetSprite(SPRITE_SHIP_LASER, frame);
-    if (laser) {
-      SDL_Rect dest = {x - 16, y - 16, 32, 32};
-      SDL_RenderCopy(graphics->GetRenderer(), laser, nullptr, &dest);
+
+  if (!drewYehatShield) {
+    if (ship->bIsColliding != g_no_damage_sentinel) {
+      // Draw collision impact overlay
+      int frame = spriteManager->AngleToFrame(ship->bIsColliding);
+      SDL_Texture* impact = spriteManager->GetSprite(SPRITE_SHIP_IMPACT, frame);
+      if (impact) {
+        SDL_Rect dest = {x - 16, y - 16, 32, 32};
+        SDL_RenderCopy(graphics->GetRenderer(), impact, nullptr, &dest);
+      }
+    }
+    if (ship->bIsGettingShot != g_no_damage_sentinel) {
+      // Draw laser hit overlay
+      int frame = spriteManager->AngleToFrame(ship->bIsGettingShot);
+      SDL_Texture* laser = spriteManager->GetSprite(SPRITE_SHIP_LASER, frame);
+      if (laser) {
+        SDL_Rect dest = {x - 16, y - 16, 32, 32};
+        SDL_RenderCopy(graphics->GetRenderer(), laser, nullptr, &dest);
+      }
     }
   }
 
