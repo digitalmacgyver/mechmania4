@@ -13,107 +13,118 @@ def parse_log_file(filepath):
     # Define the regex pattern to capture the metrics
     # Gen X, GenBest: Y.YY, AvgFit: A.AA, StdDev: S.SS, BestFit: B.BB, Params: ...
     pattern = re.compile(
-        r"Gen (\d+), GenBest: ([\d\.]+), AvgFit: ([\d\.]+), StdDev: ([\d\.]+), BestFit: ([\d\.]+), Params: .*"
+        r"Gen (\d+), GenBest: ([\d\.]+), AvgFit: ([\d\.]+), StdDev: ([\d\.]+), BestFit: ([\d\.]+), Params: (.*)"
     )
     
     data = []
+    
     try:
         with open(filepath, 'r') as f:
             for line in f:
                 match = pattern.match(line)
                 if match:
-                    gen, gen_best, avg_fit, std_dev, best_fit = match.groups()
-                    data.append({
+                    gen, gen_best, avg_fit, std_dev, best_fit, params_str = match.groups()
+                    
+                    # Parse the parameters string into a dictionary
+                    params = {}
+                    # Handle both integer and float parameter formats
+                    param_parts = params_str.split(', ')
+                    for part in param_parts:
+                        try:
+                            key, value_str = part.split(': ')
+                            # Attempt to convert to float, then check if it looks like an integer
+                            value = float(value_str)
+                            if value_str.isdigit() or ('.' not in value_str and 'e' not in value_str.lower()):
+                                 try:
+                                     value = int(value_str)
+                                 except ValueError:
+                                     pass # Keep as float if int conversion fails unexpectedly
+                            params[key] = value
+                        except ValueError:
+                            # Handle potential parsing issues gracefully
+                            continue
+
+                    
+                    entry = {
                         'Generation': int(gen),
                         'GenBest': float(gen_best),
                         'AvgFit': float(avg_fit),
                         'StdDev': float(std_dev),
-                        'OverallBest': float(best_fit)
-                    })
+                        'BestFit': float(best_fit),
+                        'Params': params
+                    }
+                    data.append(entry)
+                    
     except FileNotFoundError:
         print(f"Error: Log file not found at {filepath}")
-        return None
-    
+        sys.exit(1)
+        
     if not data:
-        print(f"Error: No valid data found in log file. Ensure the log file uses the enhanced format.")
-        return None
+        print("Error: No valid data found in the log file. Check the file format.")
+        sys.exit(1)
         
     return pd.DataFrame(data)
 
-def plot_optimization(df, filepath):
-    """Generates the plot of the optimization process."""
+def analyze_results(data):
+    """Prints summary statistics and the best parameters found."""
+    
+    print("--- Optimization Analysis Summary ---")
+    print(f"Total Generations: {data['Generation'].max() + 1}")
+    print(f"Maximum Fitness Achieved: {data['BestFit'].max():.4f}")
+    
+    # Find the row corresponding to the final best fitness
+    # We use the parameters recorded in the very last generation's log entry
+    best_row = data.iloc[-1]
+    
+    print("\nBest Parameters Found (as of Generation {}):".format(best_row['Generation']))
+    # Ensure Params column is correctly accessed
+    if 'Params' in best_row and isinstance(best_row['Params'], dict):
+        for key, value in best_row['Params'].items():
+            if isinstance(value, int):
+                print(f"  {key}: {value}")
+            else:
+                # Handle potential float representations of integers
+                if isinstance(value, float) and value.is_integer():
+                     print(f"  {key}: {int(value)}")
+                else:
+                    print(f"  {key}: {value:.4f}")
+    else:
+        print("  Could not retrieve best parameters.")
+
+def plot_fitness(data, filepath):
+    """Generates a plot of the fitness progression."""
     plt.figure(figsize=(12, 7))
     
-    # Plotting the main fitness metrics
-    plt.plot(df['Generation'], df['OverallBest'], label='Overall Best Fitness (Convergence)', marker='o', linestyle='-', color='g')
-    plt.plot(df['Generation'], df['AvgFit'], label='Average Fitness (Population Quality)', marker='.', linestyle='-', color='r', alpha=0.7)
+    plt.plot(data['Generation'], data['BestFit'], label='BestFit (Overall)', linestyle='--', color='green', linewidth=2)
+    plt.plot(data['Generation'], data['GenBest'], label='GenBest (This Generation)', color='blue', alpha=0.7)
+    plt.plot(data['Generation'], data['AvgFit'], label='AvgFit (Population Average)', color='orange', alpha=0.7)
     
-    # Visualize standard deviation (diversity) using fill_between
-    plt.fill_between(df['Generation'], df['AvgFit'] - df['StdDev'], df['AvgFit'] + df['StdDev'], color='r', alpha=0.1, label='Std Dev (Diversity)')
+    # Adding StdDev visualization
+    plt.fill_between(data['Generation'], data['AvgFit'] - data['StdDev'], data['AvgFit'] + data['StdDev'], color='orange', alpha=0.2, label='StdDev Range')
 
-    plt.title(f'Genetic Algorithm Optimization Progress\n({os.path.basename(filepath)})')
+    
+    plt.title('Genetic Algorithm Fitness Progression')
     plt.xlabel('Generation')
-    plt.ylabel('Fitness (Vinyl Collected)')
+    plt.ylabel('Fitness (Score)')
     plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.grid(True, linestyle=':', alpha=0.6)
     
-    # Save the plot
-    output_filename = filepath + '.png'
-    plt.savefig(output_filename)
-    print(f"\nPlot saved to: {output_filename}")
-    # plt.show() # Uncomment if you want to display the plot interactively
+    # Determine the output filename
+    # FIX: Use os.path.splitext to correctly replace the extension
+    base_filename, _ = os.path.splitext(filepath)
+    output_path = base_filename + ".png"
+        
+    plt.tight_layout()
+    plt.savefig(output_path)
+    print(f"\nPlot saved to {output_path}")
+    # plt.show() # Uncomment if you want the plot to display interactively
 
-def analyze_trends(df):
-    """Provides a human-readable interpretation of the trends."""
-    print("\n--- Analysis ---")
-    
-    if len(df) < 5:
-        print("Insufficient data for trend analysis (requires 5+ generations).")
-        return
-
-    # 1. Convergence Analysis
-    final_best = df['OverallBest'].iloc[-1]
-    print(f"Final Best Fitness: {final_best:.2f}")
-
-    # Check the slope of the OverallBest in the last 20% of the run
-    lookback_period = max(1, int(len(df) * 0.2))
-    
-    start_val = df['OverallBest'].iloc[-lookback_period]
-    improvement_rate = (final_best - start_val) / lookback_period
-    
-    if improvement_rate > 1.0: # Threshold for "significant improvement" per generation
-        print("Interpretation: [Needs More Generations] The 'Overall Best Fitness' was still improving significantly at the end of the run.")
-    else:
-        print("Interpretation: [Converged] The 'Overall Best Fitness' appears to have plateaued.")
-    
-    # 2. Diversity Analysis
-    final_avg_fit = df['AvgFit'].iloc[-1]
-    
-    # Check if AvgFit converged close to BestFit
-    if final_best > 0 and final_avg_fit < final_best * 0.75:
-         print("Interpretation: [Potential Premature Convergence] The 'Average Fitness' is significantly lower than the 'Overall Best'. The population may lack diversity. Consider increasing Population Size (-p).")
-    else:
-         print("Interpretation: [Good Convergence Quality] The 'Average Fitness' is close to the 'Overall Best', indicating the population converged well.")
-
-def main():
-    parser = argparse.ArgumentParser(description="Analyze and visualize EvoAI optimization history logs.")
-    parser.add_argument('logfile', type=str, help="Path to the optimization_history_pidXXXX.log file.")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Analyze GA Optimization Log File")
+    parser.add_argument('logfile', type=str, help='Path to the optimization history log file (e.g., output/optimization_history_pidXXXX.log)')
     
     args = parser.parse_args()
     
-    df = parse_log_file(args.logfile)
-    
-    if df is not None:
-        plot_optimization(df, args.logfile)
-        analyze_trends(df)
-
-if __name__ == '__main__':
-    # Ensure required libraries are installed
-    try:
-        import pandas
-        import matplotlib
-    except ImportError:
-        print("Error: This script requires pandas and matplotlib.")
-        print("Please install them: pip install pandas matplotlib")
-        sys.exit(1)
-    main()
+    data = parse_log_file(args.logfile)
+    analyze_results(data)
+    plot_fitness(data, args.logfile)

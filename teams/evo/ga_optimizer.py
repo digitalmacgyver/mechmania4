@@ -13,7 +13,7 @@ import shutil
 import pickle
 import concurrent.futures
 import multiprocessing
-from datetime import datetime # Import datetime for timestamps
+from datetime import datetime
 
 # --- Configuration (Constants) ---
 
@@ -63,11 +63,17 @@ DESIRED_TOURNAMENT_SIZE = 4
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "../../build/"))
 
-# Logging Configuration
+# NEW: Output Directory for results (logs, checkpoints, best params, active params)
+# Defined relative to the Current Working Directory (CWD)
+OUTPUT_DIR = os.path.abspath(os.path.join(os.getcwd(), "output/"))
+
+
+# Logging Configuration (Simulation Logs - stdout/stderr of binaries)
 # Prefer /tmp if available and writable, otherwise use a local 'ga_logs' directory
 if os.path.exists("/tmp") and os.access("/tmp", os.W_OK):
     LOG_DIR = "/tmp/evo_ga_logs/"
 else:
+    # Fallback relative to SCRIPT_DIR if /tmp is unavailable
     LOG_DIR = os.path.join(SCRIPT_DIR, "ga_logs/")
 
 
@@ -84,24 +90,35 @@ GAME_TIMEOUT = 240 # 4 minutes timeout
 # --- Helper Functions ---
 
 def initialize_environment():
-    """Initializes the environment, including creating the log directory."""
+    """Initializes the environment, including creating log and output directories."""
+    # Create Log Directory
     if not os.path.exists(LOG_DIR):
         try:
             os.makedirs(LOG_DIR)
             print(f"Created logging directory: {LOG_DIR}")
         except OSError as e:
             print(f"Error: Failed to create logging directory {LOG_DIR}: {e}")
-            # Exit if logging is critical and the directory couldn't be created
+            sys.exit(1)
+    
+    # Create Output Directory
+    if not os.path.exists(OUTPUT_DIR):
+        try:
+            os.makedirs(OUTPUT_DIR)
+            print(f"Created output directory: {OUTPUT_DIR}")
+        except OSError as e:
+            print(f"Error: Failed to create output directory {OUTPUT_DIR}: {e}")
             sys.exit(1)
 
 def initialize_filenames(pid):
-    """Initializes unique filenames based on the PID."""
+    """Initializes unique filenames based on the PID, located in OUTPUT_DIR."""
+    # Prepend OUTPUT_DIR to the filenames
     filenames = {
         'pid': pid,
-        'history_log': f"optimization_history_pid{pid}.log",
-        'checkpoint_file': f"EvoAI_checkpoint_pid{pid}.pkl",
-        'param_file_best': f"EvoAI_params_best_pid{pid}.txt",
-        'active_prefix': f"EvoAI_params_active_pid{pid}"
+        'history_log': os.path.join(OUTPUT_DIR, f"optimization_history_pid{pid}.log"),
+        'checkpoint_file': os.path.join(OUTPUT_DIR, f"EvoAI_checkpoint_pid{pid}.pkl"),
+        'param_file_best': os.path.join(OUTPUT_DIR, f"EvoAI_params_best_pid{pid}.txt"),
+        # Active prefix is used for temporary files during simulation
+        'active_prefix': os.path.join(OUTPUT_DIR, f"EvoAI_params_active_pid{pid}")
     }
     return filenames
 
@@ -147,15 +164,14 @@ def parse_score_from_file(log_filepath, team_name):
     """Parses the final score from the server log file and checks for game completion."""
     pattern = re.escape(team_name) + r":\s*([\d\.]+)\s*vinyl"
     score = 0.0
-    game_completed = False
+    game_over_seen = False
 
     try:
         with open(log_filepath, 'r') as f:
             content = f.read()
-
-            # Check for game completion marker (FINAL SCORES section)
-            if "FINAL SCORES" in content:
-                game_completed = True
+            
+            if "Game Over" in content:
+                game_over_seen = True
 
             matches = re.findall(pattern, content)
             if matches:
@@ -168,10 +184,10 @@ def parse_score_from_file(log_filepath, team_name):
     except IOError:
         return 0.0, False # Failed to read log
 
-    # If FINAL SCORES was not seen, the simulation didn't complete properly.
-    if not game_completed:
+    # If Game Over was not seen, the simulation didn't complete properly.
+    if not game_over_seen:
         return 0.0, False
-
+        
     return score, True
 
 def terminate_process_group(process):
@@ -237,6 +253,41 @@ def prepare_parameters(params):
     
     return clamped_params
 
+# NEW: Function to load seed parameters
+def load_seed_parameters(filepath):
+    """Loads parameters from a file and converts them into a list matching PARAM_KEYS order."""
+    seed_dict = {}
+    # Ensure the path is absolute
+    abs_filepath = os.path.abspath(filepath)
+
+    print(f"Attempting to load seed file from: {abs_filepath}")
+    try:
+        with open(abs_filepath, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 2:
+                    key, value = parts[0], parts[1]
+                    if key in PARAMETERS:
+                        seed_dict[key] = float(value)
+    except IOError as e:
+        print(f"Error loading seed parameters from {abs_filepath}: {e}. Exiting.")
+        sys.exit(1)
+
+    if len(seed_dict) != NUM_PARAMS:
+        print(f"Error: Seed file {abs_filepath} does not contain all required parameters. Found {len(seed_dict)}, expected {NUM_PARAMS}. Exiting.")
+        sys.exit(1)
+
+    # Convert dictionary to ordered list
+    seed_list = []
+    for key in PARAM_KEYS:
+        val = seed_dict[key]
+        # Ensure integer constraints are applied correctly when loading
+        if key == "TEAM_NUM_HUNTERS_CONFIG":
+             val = int(round(val))
+        seed_list.append(val)
+    
+    return seed_list
+
 # --- Checkpointing ---
 
 def save_checkpoint(filename, state):
@@ -263,12 +314,12 @@ def load_checkpoint(filename):
 
 # --- Simulation (Worker Function) ---
 
-# UPDATED: Added comprehensive logging and error checking
 def run_simulation(candidate_id, params, config, filenames):
     """Runs the game simulation in a separate process and returns the fitness score."""
     
     # 1. Prepare Parameters
     clamped_params = prepare_parameters(params)
+    # Active parameter files are now located in OUTPUT_DIR
     param_filename = f"{filenames['active_prefix']}_worker{candidate_id}.txt"
     save_parameters(clamped_params, param_filename)
     
@@ -319,10 +370,6 @@ def run_simulation(candidate_id, params, config, filenames):
         return 0.0
 
     env = os.environ.copy()
-    # Set SDL to dummy drivers for headless mode
-    env["SDL_VIDEODRIVER"] = "dummy"
-    env["SDL_AUDIODRIVER"] = "dummy"
-
     fitness = 0.0
     simulation_failed = False
 
@@ -333,7 +380,7 @@ def run_simulation(candidate_id, params, config, filenames):
         
         # Server
         server_args = [SERVER_EXEC, "-p", str(port), "--max-turns", "300", "-g", GRAPHICS_REG_PATH]
-        # Redirect stdout/stderr to the log file. Do NOT use text=True when redirecting to file handles opened in text mode.
+        # Redirect stdout/stderr to the log file.
         processes['server'] = subprocess.Popen(
             server_args,
             stdout=log_handles['server'],
@@ -341,10 +388,10 @@ def run_simulation(candidate_id, params, config, filenames):
             env=env,
             **kwargs
         )
-        
+
         # Allow server time to initialize
-        time.sleep(0.5) 
-        
+        time.sleep(0.5)
+
         # Observer
         observer_args = [OBSERVER_EXEC, "-p", str(port), "-g", GRAPHICS_REG_PATH, "--mute", "--audio-lead-ms", "0"]
         processes['observer'] = subprocess.Popen(
@@ -457,12 +504,24 @@ def run_simulation(candidate_id, params, config, filenames):
     return fitness
 
 # --- Genetic Algorithm Components ---
-# (initialize_population, evaluate_population, selection, crossover, mutation remain the same)
 
-def initialize_population(size):
-    """Initializes a population with random parameters within defined ranges."""
+# UPDATED: Added seed_params argument
+def initialize_population(size, seed_params=None):
+    """Initializes a population, optionally seeding the first individual."""
     population = []
-    for _ in range(size):
+    
+    # Add the seed first if provided
+    if seed_params is not None:
+        print(f"Seeding individual 0 with provided parameters.")
+        # Ensure the seed is clamped/valid before adding (although load_seed_parameters also does this)
+        clamped_seed = prepare_parameters(seed_params)
+        population.append(clamped_seed)
+        start_index = 1
+    else:
+        start_index = 0
+
+    # Initialize the rest randomly
+    for _ in range(start_index, size):
         params = []
         for key in PARAM_KEYS:
             min_val, max_val = PARAMETERS[key]
@@ -471,7 +530,10 @@ def initialize_population(size):
                 val = int(round(val))
             params.append(val)
         population.append(params)
+        
     return np.array(population)
+
+# (evaluate_population, selection, crossover, mutation remain the same)
 
 def evaluate_population(population, config, filenames):
     """Evaluates the fitness of the entire population using parallel execution."""
@@ -479,8 +541,6 @@ def evaluate_population(population, config, filenames):
     
     num_workers = config.workers if config.workers > 0 else multiprocessing.cpu_count()
 
-    # Use ThreadPoolExecutor as it's suitable for managing external processes 
-    # where the main task is waiting for the simulation to complete and handling I/O.
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
         future_to_index = {}
 
@@ -582,7 +642,7 @@ def mutation(children, mutation_rate=MUTATION_RATE, mutation_strength=MUTATION_S
 def run_optimizer(config):
     """The main genetic algorithm optimization loop."""
     
-    # Initialize environment (create log dir)
+    # Initialize environment (create log/output dirs)
     initialize_environment()
 
     # Initialize filenames
@@ -590,16 +650,14 @@ def run_optimizer(config):
     filenames = initialize_filenames(pid)
     print(f"Starting optimization (PID: {pid})")
     print(f"Mode: {config.mode}, Generations: {config.generations}, Population: {config.population}, Workers: {config.workers}")
-    print(f"Simulation logs will be saved to: {LOG_DIR}")
-    if config.keep_all_logs:
-        print("Option --keep_all_logs enabled: Retaining logs for all simulations.")
-    else:
-        print("Option --keep_all_logs disabled: Retaining logs only for failed simulations.")
+    print(f"Primary output (logs, checkpoints, results) will be saved to: {OUTPUT_DIR}")
+    print(f"Simulation logs (binary stdout/stderr) will be saved to: {LOG_DIR}")
 
     
     check_executables(config)
 
-    population = initialize_population(config.population)
+    # Initialize state variables
+    population = None
     start_generation = 0
     best_fitness = -np.inf
     best_params = None
@@ -613,10 +671,22 @@ def run_optimizer(config):
             best_fitness = state['best_fitness']
             best_params = state['best_params']
             print(f"Resuming from generation {start_generation} with best fitness {best_fitness:.2f}")
+            if config.seed_file:
+                 print("Warning: --resume detected. Ignoring --seed_file.")
             if best_params is not None:
                 save_parameters(best_params, filenames['param_file_best'])
         else:
-             print("Resume requested but no valid checkpoint found. Starting fresh.")
+             print("Resume requested but no valid checkpoint found. Starting fresh (or using seed if provided).")
+
+    # Initialize population if not loaded from checkpoint
+    if population is None:
+        # Use the seed here if provided
+        seed_params_list = None
+        if config.seed_file:
+             seed_params_list = load_seed_parameters(config.seed_file)
+             
+        population = initialize_population(config.population, seed_params=seed_params_list)
+
 
     if start_generation == 0:
         if os.path.exists(filenames['history_log']):
@@ -644,7 +714,7 @@ def run_optimizer(config):
              print("Error: All evaluations failed or returned NaN in this generation. Check logs and configuration.")
              break
 
-        # Filter out NaNs for statistical analysis if necessary, though ideally they shouldn't occur.
+        # Filter out NaNs for statistical analysis
         valid_fitness = fitness_scores[np.isfinite(fitness_scores)]
         if len(valid_fitness) == 0:
              avg_fitness, std_fitness = 0.0, 0.0
@@ -729,13 +799,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Genetic Algorithm Optimizer for EvoAI")
     parser.add_argument('-g', '--generations', type=int, default=DEFAULT_NUM_GENERATIONS, help='Number of generations')
     parser.add_argument('-p', '--population', type=int, default=DEFAULT_POPULATION_SIZE, help='Population size')
-    parser.add_argument('-m', '--mode', choices=['pve', 'pvb', 'self'], default='pve', help='Optimization mode: pve (vs baseline), pvb (vs current best), self (self-play - experimental)')
+    parser.add_argument('-m', '--mode', choices=['pve', 'pvb', 'self'], default='pve', help='Optimization mode: pve (vs baseline), pvb (vs current best), self (experimental)')
     parser.add_argument('-o', '--opponent_exec', type=str, default=DEFAULT_OPPONENT_EXEC, help='Path to the opponent executable (for pve mode)')
     parser.add_argument('-w', '--workers', type=int, default=0, help='Number of parallel workers (0 = CPU count)')
     parser.add_argument('-n', '--games_per_eval', type=int, default=DEFAULT_GAMES_PER_EVAL, help='Number of games run per individual evaluation')
-    parser.add_argument('--resume', action='store_true', help='Resume from the latest checkpoint')
-    # New argument for logging control
+    parser.add_argument('--resume', action='store_true', help='Resume from the latest checkpoint in output/')
     parser.add_argument('--keep_all_logs', action='store_true', help='Retain logs for all simulations, even successful ones (Warning: fills disk quickly)')
+    # NEW: Seed argument
+    parser.add_argument('--seed_file', type=str, default=None, help='Path to a parameter file (.txt) to seed the initial population (used for phased training)')
 
     
     args = parser.parse_args()
