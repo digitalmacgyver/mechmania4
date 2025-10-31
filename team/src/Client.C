@@ -11,6 +11,7 @@
 #include <system_error>
 #include <string>
 #include <vector>
+#include <cstdlib>
 
 #include "ClientNet.h"
 #include "ParserModern.h"
@@ -23,11 +24,9 @@ namespace {
 
 const std::vector<std::string>& GetShipArtOptions() {
   static std::vector<std::string> options;
-  static bool initialized = false;
-  if (initialized) {
+  if (!options.empty()) {
     return options;
   }
-  initialized = true;
 
   std::set<std::string> dedup;
 
@@ -35,6 +34,23 @@ const std::vector<std::string>& GetShipArtOptions() {
       std::filesystem::path("assets/star_control/graphics"),
       std::filesystem::path("../assets/star_control/graphics"),
       std::filesystem::path("../../assets/star_control/graphics")};
+
+  if (g_pParser) {
+    const std::string& assetsRoot = g_pParser->GetAssetsRoot();
+    if (!assetsRoot.empty()) {
+      roots.push_back(std::filesystem::path(assetsRoot));
+      roots.push_back(std::filesystem::path(assetsRoot) /
+                      "star_control/graphics");
+    }
+  }
+
+  if (const char* envAssets = std::getenv("MM4_ASSETS_DIR")) {
+    roots.push_back(std::filesystem::path(envAssets));
+  }
+  if (const char* envShare = std::getenv("MM4_SHARE_DIR")) {
+    roots.push_back(std::filesystem::path(envShare) /
+                    "assets/star_control/graphics");
+  }
 
   for (const auto& root : roots) {
     std::error_code ec;
@@ -96,6 +112,35 @@ std::string ChooseRandomShipArt() {
       static_cast<unsigned int>(std::random_device{}()));
   std::uniform_int_distribution<size_t> dist(0, options.size() - 1);
   return options[dist(rng)];
+}
+
+std::string CanonicalizeShipArtRequest(const std::string& request) {
+  if (request.empty()) {
+    return std::string();
+  }
+  if (request == "legacy:t1" || request == "legacy:t2") {
+    return request;
+  }
+
+  const auto& options = GetShipArtOptions();
+  if (options.empty()) {
+    return std::string();
+  }
+
+  auto hasOption = [&](const std::string& opt) {
+    return std::find(options.begin(), options.end(), opt) != options.end();
+  };
+
+  if (request.find(':') != std::string::npos) {
+    return hasOption(request) ? request : std::string();
+  }
+
+  std::string canonical = request + ":" + request;
+  if (hasOption(canonical)) {
+    return canonical;
+  }
+
+  return std::string();
 }
 
 }  // namespace
@@ -217,7 +262,7 @@ void CClient::MeetWorld() {
       if (g_pParser) {
         auto shipArtRequest = g_pParser->GetShipArtRequest();
         if (shipArtRequest && !shipArtRequest->empty()) {
-          chosenArt = *shipArtRequest;
+          chosenArt = CanonicalizeShipArtRequest(*shipArtRequest);
         }
       }
       if (chosenArt.empty()) {

@@ -45,6 +45,8 @@ accepts a new flag:
   including the two original legacy sprite sets. The special
   `yehat/shield` helper art is excluded from random rotation because it is used
   exclusively for shield overlays.
+* Invalid CLI selections automatically fall back to a random pack so teams
+  always render with a full set of sprites.
 
 Runtime search order
 --------------------
