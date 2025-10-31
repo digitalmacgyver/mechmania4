@@ -346,7 +346,7 @@ def run_simulation(candidate_id, params, config, filenames):
         time.sleep(0.5) 
         
         # Observer
-        observer_args = [OBSERVER_EXEC, "-p", str(port), "-g", GRAPHICS_REG_PATH, "--mute"]
+        observer_args = [OBSERVER_EXEC, "-p", str(port), "-g", GRAPHICS_REG_PATH, "--mute", "--audio-lead-ms", "0"]
         processes['observer'] = subprocess.Popen(
             observer_args,
             stdout=log_handles['observer'],
