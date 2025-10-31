@@ -164,14 +164,15 @@ def parse_score_from_file(log_filepath, team_name):
     """Parses the final score from the server log file and checks for game completion."""
     pattern = re.escape(team_name) + r":\s*([\d\.]+)\s*vinyl"
     score = 0.0
-    game_over_seen = False
+    game_completed = False
 
     try:
         with open(log_filepath, 'r') as f:
             content = f.read()
-            
-            if "Game Over" in content:
-                game_over_seen = True
+
+            # Check for game completion marker (FINAL SCORES section)
+            if "FINAL SCORES" in content:
+                game_completed = True
 
             matches = re.findall(pattern, content)
             if matches:
@@ -184,10 +185,10 @@ def parse_score_from_file(log_filepath, team_name):
     except IOError:
         return 0.0, False # Failed to read log
 
-    # If Game Over was not seen, the simulation didn't complete properly.
-    if not game_over_seen:
+    # If FINAL SCORES was not seen, the simulation didn't complete properly.
+    if not game_completed:
         return 0.0, False
-        
+
     return score, True
 
 def terminate_process_group(process):
@@ -481,7 +482,7 @@ def run_simulation(candidate_id, params, config, filenames):
             fitness, game_completed = parse_score_from_file(log_files['server'], TEAM_NAME)
             
             if not game_completed and not simulation_failed:
-                 print(f"Warning: 'Game Over' not found in server output for candidate {candidate_id}. Simulation may have crashed early. Check log: {log_files['server']}")
+                 print(f"Warning: 'FINAL SCORES' not found in server output for candidate {candidate_id}. Simulation may have crashed early. Check log: {log_files['server']}")
                  simulation_failed = True
             
         except Exception as e:
