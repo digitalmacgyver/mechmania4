@@ -43,11 +43,11 @@ teams:
         file: ../assets/star_control/effects/lander-pickup.wav
       col_ship_asteroid_destroy:
         file: ../assets/star_control/effects/boom1.wav
-    col_ship_laser:
-      default:
-        file: ../assets/star_control/effects/flagship-guns.wav
-        behavior:
-          delay_ticks: 1
+#    col_ship_laser:
+#      default:
+#        file: ../assets/star_control/effects/flagship-guns.wav
+#        behavior:
+#          delay_ticks: 1
     col_ship_ship:
       default:
         file: ../assets/star_control/effects/pkunk-jerk.wav
@@ -55,18 +55,18 @@ teams:
         file: ../assets/star_control/effects/pkunk-dodo.wav
         behavior:
           delay_ticks: 4
-    col_station_asteroid:
-      default:
-        file: ../assets/star_control/effects/pkunk-shot.wav
+#    col_station_asteroid:
+#      default:
+#        file: ../assets/star_control/effects/pkunk-shot.wav
     launch:
       default:
         file: ../assets/star_control/effects/orz-go.wav
         behavior:
           mode: truncate
-      launch_from_friendly:
-        inherit: team.launch.default
-      launch_from_enemy:
-        inherit: team.launch.default
+#      launch_from_friendly:
+#        inherit: team.launch.default
+#      launch_from_enemy:
+#        inherit: team.launch.default
     dock:
 #      default:
 #        file: ../assets/star_control/effects/lander-return.wav
