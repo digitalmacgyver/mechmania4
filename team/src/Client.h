@@ -22,6 +22,7 @@ class CClient {
   void MeetWorld();
   void MeetTeams();  // Only called by observer, once
   unsigned int ReceiveWorld();
+  unsigned int ReceiveWorldNonBlocking();
 
   int SendAck();     // Send Observer acknowledge
   int SendPause();   // Send pause control

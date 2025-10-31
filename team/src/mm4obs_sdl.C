@@ -30,6 +30,7 @@ int main(int argc, char* argv[]) {
     printf("  -G:  Activate full graphics mode\n");
     printf("  --verbose: Show game time progress\n");
     printf("  --mute: Start observer with soundtrack and effects muted\n");
+    printf("  --audio-lead-ms ms: Delay video draw to let audio lead (default 40, 0 when headless)\n");
     printf("  port defaults to 2323\n  hostname defaults to localhost\n");
     printf("  gfxreg defaults to graphics.reg\n");
     printf("MechMania IV: The Vinyl Frontier - SDL2 Edition\n");
@@ -44,6 +45,40 @@ int main(int argc, char* argv[]) {
     if (PCmdLn.verbose) {
       printf("Running in headless mode (SDL_VIDEODRIVER=dummy)\n");
     }
+  }
+
+  const char* dummyVideoDriver = getenv("DUMMY_VIDEO_DRIVER");
+  bool suppressUiByEnv = dummyVideoDriver && dummyVideoDriver[0] != '\0';
+
+  int audioLeadDelayMs = 40;
+  bool audioLeadOverridden = false;
+  if ((headlessMode || suppressUiByEnv) &&
+      !PCmdLn.GetAudioLeadMilliseconds().has_value()) {
+    audioLeadDelayMs = 0;
+  }
+  if (auto overrideLead = PCmdLn.GetAudioLeadMilliseconds()) {
+    audioLeadDelayMs = *overrideLead;
+    audioLeadOverridden = true;
+  }
+  if (audioLeadDelayMs < 0) {
+    audioLeadDelayMs = 0;
+  }
+
+  int postDrawDelayMs = 16;
+  if (audioLeadDelayMs >= postDrawDelayMs) {
+    postDrawDelayMs = 0;
+  } else {
+    postDrawDelayMs -= audioLeadDelayMs;
+  }
+
+  if (PCmdLn.verbose) {
+    const char* latencyReason = audioLeadOverridden
+                                    ? "command-line override"
+                                    : ((headlessMode || suppressUiByEnv)
+                                           ? "headless default"
+                                           : "default");
+    printf("Audio lead latency: %d ms (%s)\n", audioLeadDelayMs,
+           latencyReason);
   }
 
   printf("Initializing graphics...\n");
@@ -101,6 +136,13 @@ int main(int argc, char* argv[]) {
   while (running) {
     Uint32 currentTime = SDL_GetTicks();
 
+    if (!headlessMode) {
+      if (!myObs.HandleEvents()) {
+        running = false;
+        break;
+      }
+    }
+
     // Handle server connection/reconnection
     if (!connected && PCmdLn.reconnect) {
       // Try to reconnect periodically (non-blocking)
@@ -139,9 +181,8 @@ int main(int argc, char* argv[]) {
 
     // Receive world state from server if connected
     if (connected && myClient) {
-      unsigned int received = myClient->ReceiveWorld();
-
-      if (received > 0) {
+      unsigned int received = 0;
+      while ((received = myClient->ReceiveWorldNonBlocking()) > 0) {
         // Send acknowledgment to server (critical for observer!)
         myClient->SendAck();
 
@@ -175,27 +216,22 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    // Update and draw based on mode
-    if (!headlessMode) {
-      // Normal graphics mode: update and draw
-      myObs.Update();
-      myObs.Draw();
+    myObs.Update();
 
-      // Handle events (keyboard, mouse, etc.)
-      running = myObs.HandleEvents();
+    if (!headlessMode) {
+      if (audioLeadDelayMs > 0) {
+        SDL_Delay(static_cast<Uint32>(audioLeadDelayMs));
+      }
+      myObs.Draw();
     } else {
       // Headless mode: still run update so audio diagnostics can fire.
-      myObs.Update();
       // Keep running unless we lose connection
       running = connected || PCmdLn.reconnect;
+      SDL_Delay(1);
     }
 
-    if (headlessMode) {
-      // In headless mode, run as fast as possible without delay
-      // The ReceiveWorld() call will naturally block and wait for data
-    } else {
-      // Normal graphics mode: limit to ~60 FPS
-      SDL_Delay(16);
+    if (!headlessMode && postDrawDelayMs > 0) {
+      SDL_Delay(static_cast<Uint32>(postDrawDelayMs));
     }
   }
 

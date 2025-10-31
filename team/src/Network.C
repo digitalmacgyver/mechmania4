@@ -95,11 +95,22 @@ int CNetwork::SendPkt(int conn, const char *data, int len) {
 }
 
 int CNetwork::RecvPkt(char *data, int &len) {
+  struct timeval timeout = {5, 0};  // default to 5 second timeout
+  return RecvPktWithTimeout(data, len, timeout);
+}
+
+int CNetwork::RecvPktNonBlocking(char *data, int &len) {
+  struct timeval timeout = {0, 0};
+  return RecvPktWithTimeout(data, len, timeout);
+}
+
+int CNetwork::RecvPktWithTimeout(char *data, int &len,
+                                 const struct timeval &timeout_value) {
   fd_set r_fds, e_fds;
   int v, fd, rd_len;
   int conn;
 
-  struct timeval timeout = {5, 0};  // default to 5 second timeout
+  struct timeval timeout = timeout_value;
 
   r_fds = e_fds = sockets_fds;
 
@@ -159,6 +170,30 @@ int CNetwork::CatchPkt() {
   if (conn < 1 || conn > maxconn)
     return conn;
   // Sloppy error reporting, but it'll do for now
+
+  left = maxqlen - queuelen[conn - 1];
+  if (left < len)
+    len = left;
+  if (len <= 0)
+    return conn;
+
+  memcpy(queue[conn - 1] + queuelen[conn - 1], queuebuf, len);
+  queuelen[conn - 1] += len;
+
+  return conn;
+}
+
+int CNetwork::CatchPktNonBlocking() {
+  int conn, left, len = maxqlen;
+
+  conn = RecvPktNonBlocking(queuebuf, len);
+  if (conn <= 0)
+    return conn;
+
+  if (len < 1)
+    return (-conn);
+  if (conn < 1 || conn > maxconn)
+    return conn;
 
   left = maxqlen - queuelen[conn - 1];
   if (left < len)

@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
     printf("  -R:  Attempt reconnect after server disconnect\n");
     printf("  -G:  Activate full graphics mode\n");
     printf("  --mute: Start observer with soundtrack and effects muted\n");
+    printf("  --audio-lead-ms ms: Delay video draw to let audio lead (default 40, 0 when headless)\n");
     printf("  port defaults to 2323\n  hostname defaults to localhost\n");
     printf("  gfxreg defaults to graphics.reg\n");
     printf("MechMania IV: The Vinyl Frontier   10/2/98\n");

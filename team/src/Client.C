@@ -180,6 +180,51 @@ unsigned int CClient::ReceiveWorld() {
   return aclen;
 }
 
+unsigned int CClient::ReceiveWorldNonBlocking() {
+  if (IsOpen() == 0) {
+    pmyWorld->bGameOver = true;
+    pmyWorld->PhysicsModel(0.1);
+    return 0;
+  }
+
+  unsigned int netlen, len, aclen;
+  char *buf = pmyNet->GetQueue();
+
+  if (pmyNet->GetQueueLength() < static_cast<int>(sizeof(unsigned int))) {
+    int conn = pmyNet->CatchPktNonBlocking();
+    (void)conn;
+    if (IsOpen() == 0 || pmyNet->GetQueueLength() <
+                              static_cast<int>(sizeof(unsigned int))) {
+      return 0;
+    }
+  }
+
+  memcpy(&netlen, buf, sizeof(unsigned int));
+  len = ntohl(netlen);
+
+  if (len > MAX_THINGS * 256) {
+    return 0;
+  }
+
+  const int required =
+      static_cast<int>(len + sizeof(unsigned int));
+  if (pmyNet->GetQueueLength() < required) {
+    int conn = pmyNet->CatchPktNonBlocking();
+    (void)conn;
+    if (IsOpen() == 0 || pmyNet->GetQueueLength() < required) {
+      return 0;
+    }
+  }
+
+  aclen = pmyWorld->SerialUnpack(buf + sizeof(unsigned int), len);
+  pmyNet->FlushQueue();
+
+  if (aclen != len) {
+    printf("World length incongruency; %d!=%d\n", aclen, len);
+  }
+  return aclen;
+}
+
 void CClient::MeetTeams() {
   if (bObflag != true) {
     return;  // Only observer allowed

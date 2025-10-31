@@ -39,6 +39,9 @@ class CParser {
   std::optional<uint32_t> GetPlaylistSeed() const {
     return parser.playlistSeedOverride;
   }
+  std::optional<int> GetAudioLeadMilliseconds() const {
+    return parser.audioLeadMillisecondsOverride;
+  }
 
   // Direct access to the modern parser if needed
   ArgumentParser& GetModernParser() { return parser; }

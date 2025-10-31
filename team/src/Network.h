@@ -39,6 +39,7 @@ class CNetwork {
   fd_set sockets_fds;
 
   int fd2conn(int fd);
+  int RecvPktWithTimeout(char *data, int &len, const timeval &timeout);
 
  protected:
   int NewConn(int fd);
@@ -72,9 +73,11 @@ class CNetwork {
   // the connection number from which it read.  If length is less than
   // one a timeout has occured.
   int RecvPkt(char *data, int &len);
+  int RecvPktNonBlocking(char *data, int &len);
 
   // Misha's crazy queue-related stuff
   int CatchPkt();  // Waits for pkt, adds to appropriate conn queue
+  int CatchPktNonBlocking();  // Attempts to grab pkt without blocking
   int GetQueueLength(int conn = 1);  // Returns amt of data in queue #conn
   char *GetQueue(int conn = 1);      // Returns ptr to bottom of queue #conn
   void FlushQueue(int conn = 1);     // Empties data out of queue #conn

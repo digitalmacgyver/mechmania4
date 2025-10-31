@@ -70,15 +70,12 @@ teams:
     dock:
 #      default:
 #        file: ../assets/star_control/effects/lander-return.wav
-      dock_at_friendly:
-        file: ../assets/star_control/effects/lander-return.wav
-      dock_at_enemy:
-        file: ../assets/star_control/effects/lander-return.wav
+#      dock_at_friendly:
+#        file: ../assets/star_control/effects/lander-return.wav
+#      dock_at_enemy:
+#        file: ../assets/star_control/effects/lander-return.wav
       dock_at_enemy_alert:
         file: ../assets/star_control/effects/orz-intruder.wav
-#../assets/star_control/effects/redalert.wav
-        behavior:
-          delay_ticks: 1
     deliver_vinyl:
       default:
         file: ../assets/star_control/effects/chmmr-tractor.wav
@@ -149,8 +146,6 @@ teams:
     dock:
       dock_at_enemy_alert:
         file: ../assets/star_control/effects/redalert.wav
-        behavior:
-          delay_ticks: 1
     raise_shields:
       default:
         file: ../assets/star_control/effects/slylandro-energize.wav

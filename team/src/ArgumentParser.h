@@ -43,6 +43,7 @@ class ArgumentParser {
   bool enableAudioTestPing = false;  // Enable manual audio diagnostics ping
   bool startAudioMuted = false;      // Start observer with audio muted
   std::optional<uint32_t> playlistSeedOverride;  // Deterministic soundtrack seed
+  std::optional<int> audioLeadMillisecondsOverride;  // Audio lead latency override (ms)
 
   // Config file
   std::string configFile;

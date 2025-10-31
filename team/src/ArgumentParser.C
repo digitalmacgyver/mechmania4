@@ -114,6 +114,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "mute", "Start observer with music and effects muted")(
         "playlist-seed",
          "Override soundtrack playlist RNG seed (uint32)", cxxopts::value<uint32_t>())(
+        "audio-lead-ms",
+         "Audio lead latency in milliseconds (default depends on environment)",
+         cxxopts::value<int>())(
         "help", "Show help");
 
     // Feature flags
@@ -206,6 +209,16 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
       playlistSeedOverride = result["playlist-seed"].as<uint32_t>();
     } else {
       playlistSeedOverride.reset();
+    }
+    if (result.count("audio-lead-ms")) {
+      int leadMs = result["audio-lead-ms"].as<int>();
+      if (leadMs < 0) {
+        std::cerr << "Error: --audio-lead-ms must be >= 0" << std::endl;
+        return false;
+      }
+      audioLeadMillisecondsOverride = leadMs;
+    } else {
+      audioLeadMillisecondsOverride.reset();
     }
 
     // Parse timing options
