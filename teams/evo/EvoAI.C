@@ -820,7 +820,7 @@ bool UnifiedBrain::AttemptToShoot(CThing* target) {
 
     // 6. Execute Orders
     
-    // Final check: Ensure the beam actually hits the target
+    // Final check: Ensure the beam actually hits the target 
     if (B_opt > distance_D + 0.01) {
         // Calculate the required turn delta
         double angle_error = target_angle - pShip->GetOrient();
