@@ -492,6 +492,9 @@ if(BUILD_WITH_GRAPHICS)
     install(DIRECTORY ${SRC_DIR}/gfx DESTINATION share/mm4)
     # Install fonts so runtime can load them relative to install prefix
     install(DIRECTORY ${SRC_DIR}/fonts DESTINATION share/mm4)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/assets/star_control/graphics
+            DESTINATION share/mm4/assets/star_control
+            PATTERN ".*" EXCLUDE)
 endif()
 
 # Add a custom target for cleaning generated files
@@ -514,6 +517,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E create_symlink
             ${CMAKE_SOURCE_DIR}/team/src/graphics.reg
             ${CMAKE_BINARY_DIR}/graphics.reg
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${CMAKE_SOURCE_DIR}/assets
+            ${CMAKE_BINARY_DIR}/assets
     COMMENT "Setting up graphics resources for observer"
 )
 

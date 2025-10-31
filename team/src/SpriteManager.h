@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "SDL2Graphics.h"
+
 // Sprite types based on graphics.reg - indices match order in parsed file
 // (comments excluded)
 enum SpriteType {
@@ -68,6 +70,17 @@ class SpriteManager {
   // Parse graphics.reg file
   std::vector<std::string> ParseGraphicsRegistry(const std::string& filename);
 
+  struct CustomShipArt {
+    SDL_Texture* frames[16]{};
+    bool valid = false;
+  };
+  std::map<std::string, CustomShipArt> customShipArtCache;
+
+  CustomShipArt LoadCustomShipArtInternal(const std::string& artKey,
+                                          const std::string& baseDir,
+                                          const std::string& faction,
+                                          const std::string& ship);
+
  public:
   SpriteManager(SDL_Renderer* rend);
   ~SpriteManager();
@@ -92,6 +105,12 @@ class SpriteManager {
 
   // Convert angle to sprite frame (0-17)
   int AngleToFrame(double angle);
+
+  // Custom ship art handling
+  bool LoadCustomShipArt(const std::string& artKey, const std::string& baseDir,
+                         const std::string& faction,
+                         const std::string& ship);
+  SDL_Texture* GetCustomShipTexture(const std::string& artKey, int frame) const;
 
  private:
 };

@@ -8,6 +8,8 @@
 #ifndef _TEAM_H_DSEJFKWEJFWEHF
 #define _TEAM_H_DSEJFKWEJFWEHF
 
+#include <string>
+
 #include "Brain.h"
 #include "Coord.h"
 #include "MessageResult.h"
@@ -25,6 +27,10 @@
 #define maxTextLen 512
 #endif
 
+#ifndef maxShipArtNameLen
+#define maxShipArtNameLen 64
+#endif
+
 class CTeam : public CSendable {
  public:
   CTeam(unsigned int TNum = 0, CWorld* pWrld = NULL);
@@ -39,6 +45,7 @@ class CTeam : public CSendable {
   double GetScore() const;
   unsigned int GetWorldIndex() const;
   char* GetName();
+  const char* GetShipArtRequest() const;
 
   CShip* SetShip(unsigned int n, CShip* pSh);   // Returns ptr to old ship
   CStation* SetStation(CStation* pSt);  // Returns ptr to old station
@@ -47,6 +54,7 @@ class CTeam : public CSendable {
   unsigned int SetTeamNumber(unsigned int newTN);      // Returns old
   char* SetName(const char* strname);  // Returns ptr to Name
   void Reset();                        // Resets orders and text
+  void SetShipArtRequest(const std::string& request);
 
   // Safe messaging interface
   MessageResult SetMessage(const char* message);     // Replace entire message buffer
@@ -85,6 +93,7 @@ class CTeam : public CSendable {
   CStation* pStation;
   CWorld* pmyWorld;
   char Name[maxTeamNameLen];
+  char ShipArtName[maxShipArtNameLen];
 };
 
 #endif  // ! _TEAM_H_DSEJFKWEJFWEHF

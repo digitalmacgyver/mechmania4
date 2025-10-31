@@ -3,6 +3,7 @@
  */
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 
 #include <cmath>
 #include <fstream>
@@ -28,6 +29,15 @@ SpriteManager::~SpriteManager() {
       SDL_DestroyTexture(sprite);
     }
   }
+
+  for (auto& pair : customShipArtCache) {
+    for (SDL_Texture* tex : pair.second.frames) {
+      if (tex) {
+        SDL_DestroyTexture(tex);
+      }
+    }
+  }
+  customShipArtCache.clear();
 }
 
 static inline std::string JoinPath(const std::string& a, const std::string& b) {
@@ -296,4 +306,134 @@ int SpriteManager::AngleToFrame(double angle) {
   int frame = static_cast<int>((degrees + 10.0) / 20.0) % 18;
 
   return frame;
+}
+
+SpriteManager::CustomShipArt SpriteManager::LoadCustomShipArtInternal(
+    const std::string& artKey, const std::string& baseDir,
+    const std::string& faction, const std::string& ship) {
+  CustomShipArt art{};
+  for (SDL_Texture*& tex : art.frames) {
+    tex = nullptr;
+  }
+  art.valid = false;
+
+  if (!renderer) {
+    std::cerr << "SpriteManager: renderer not initialized, cannot load custom "
+                 "art for "
+              << artKey << std::endl;
+    return art;
+  }
+
+  std::vector<std::string> searchRoots;
+  if (!baseDir.empty()) {
+    searchRoots.push_back(baseDir);
+  }
+
+  auto baseDirs = GetBaseDirs();
+  for (const auto& d : baseDirs) {
+    searchRoots.push_back(JoinPath(d, "assets/star_control/graphics"));
+    searchRoots.push_back(JoinPath(d, "../assets/star_control/graphics"));
+  }
+  searchRoots.push_back("assets/star_control/graphics");
+
+  bool loaded = false;
+  for (const auto& root : searchRoots) {
+    if (root.empty()) {
+      continue;
+    }
+
+    std::string artDir = JoinPath(JoinPath(root, faction), ship);
+    bool allFramesLoaded = true;
+    CustomShipArt candidate{};
+    for (SDL_Texture*& tex : candidate.frames) {
+      tex = nullptr;
+    }
+    candidate.valid = false;
+
+    for (int idx = 0; idx < 16; ++idx) {
+      std::ostringstream name;
+      name << ship << ".big." << idx << ".png";
+      std::string path = JoinPath(artDir, name.str());
+
+      if (!FileExists(path)) {
+        allFramesLoaded = false;
+        break;
+      }
+
+      SDL_Surface* surface = IMG_Load(path.c_str());
+      if (!surface) {
+        std::cerr << "SpriteManager: failed to load custom ship art frame "
+                  << path << " (" << IMG_GetError() << ")" << std::endl;
+        allFramesLoaded = false;
+        break;
+      }
+
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      SDL_FreeSurface(surface);
+
+      if (!texture) {
+        std::cerr << "SpriteManager: failed to create texture from "
+                  << path << " (" << SDL_GetError() << ")" << std::endl;
+        allFramesLoaded = false;
+        break;
+      }
+
+      candidate.frames[idx] = texture;
+    }
+
+    if (allFramesLoaded) {
+      candidate.valid = true;
+      art = candidate;
+      loaded = true;
+      break;
+    } else {
+      for (SDL_Texture* tex : candidate.frames) {
+        if (tex) {
+          SDL_DestroyTexture(tex);
+        }
+      }
+    }
+  }
+
+  if (!loaded) {
+    std::cerr << "SpriteManager: custom ship art not found or incomplete for "
+              << artKey << std::endl;
+  } else {
+    art.valid = true;
+  }
+
+  return art;
+}
+
+bool SpriteManager::LoadCustomShipArt(const std::string& artKey,
+                                      const std::string& baseDir,
+                                      const std::string& faction,
+                                      const std::string& ship) {
+  auto it = customShipArtCache.find(artKey);
+  if (it != customShipArtCache.end()) {
+    return it->second.valid;
+  }
+
+  CustomShipArt art = LoadCustomShipArtInternal(artKey, baseDir, faction, ship);
+  customShipArtCache[artKey] = art;
+  return art.valid;
+}
+
+SDL_Texture* SpriteManager::GetCustomShipTexture(const std::string& artKey,
+                                                 int frame) const {
+  auto it = customShipArtCache.find(artKey);
+  if (it == customShipArtCache.end()) {
+    return nullptr;
+  }
+
+  const CustomShipArt& art = it->second;
+  if (!art.valid) {
+    return nullptr;
+  }
+
+  if (frame < 0) {
+    frame = 0;
+  }
+  frame %= 16;
+  return art.frames[frame];
 }

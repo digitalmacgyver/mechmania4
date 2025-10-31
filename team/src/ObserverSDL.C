@@ -1617,10 +1617,65 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
   // Get image set from ship (0=normal, 1=thrust, 2=brake, 3=left, 4=right)
   int imageSet = ship->GetImage();
 
+  SDL_Texture* sprite = nullptr;
+
+  CTeam* team = ship->GetTeam();
+  std::string artKey;
+  if (team) {
+    const char* artRequest = team->GetShipArtRequest();
+    if (artRequest && artRequest[0] != '\0') {
+      artKey = artRequest;
+    }
+  }
+
+  if (!artKey.empty() && spriteManager->IsLoaded()) {
+    int colonPos = static_cast<int>(artKey.find(':'));
+    std::string faction;
+    std::string shipName;
+    if (colonPos >= 0) {
+      faction = artKey.substr(0, colonPos);
+      shipName = artKey.substr(colonPos + 1);
+    } else {
+      faction = artKey;
+      shipName = artKey;
+    }
+    if (faction.empty()) {
+      faction = artKey;
+    }
+    if (shipName.empty()) {
+      shipName = artKey;
+    }
+
+    std::string cacheKey = faction + ":" + shipName;
+    if (spriteManager->LoadCustomShipArt(cacheKey, "", faction, shipName)) {
+      double angle = ship->GetOrient();
+      // Custom art uses 16 evenly spaced frames starting at upwards (pi/2)
+      double normalized = angle;
+      while (normalized < 0) {
+        normalized += 2 * M_PI;
+      }
+      while (normalized >= 2 * M_PI) {
+        normalized -= 2 * M_PI;
+      }
+      normalized += M_PI_2;
+      if (normalized >= 2 * M_PI) {
+        normalized -= 2 * M_PI;
+      }
+      int frame = static_cast<int>(
+                      std::round(normalized / (2 * M_PI) * 16.0)) %
+                  16;
+      sprite = spriteManager->GetCustomShipTexture(cacheKey, frame);
+    } else {
+      std::cerr << "Observer: custom ship art missing for request '"
+                << artKey << "', falling back to default sprites" << std::endl;
+    }
+  }
+
   // Get the appropriate sprite - use world index for sprite selection
-  int worldIndex = ship->GetTeam()->GetWorldIndex();
-  SDL_Texture* sprite =
-      spriteManager->GetShipSprite(worldIndex, imageSet, orient);
+  if (!sprite) {
+    int worldIndex = ship->GetTeam()->GetWorldIndex();
+    sprite = spriteManager->GetShipSprite(worldIndex, imageSet, orient);
+  }
 
   if (sprite) {
     // Draw at native texture size for pixel-perfect crispness

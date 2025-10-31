@@ -37,6 +37,7 @@ class ArgumentParser {
   std::string teamLogFile;      // Empty = use team default
   std::string teamParamsFile;   // Empty = use team default
   std::string testMovesFile;    // Test moves file for scripted teams (e.g., testteam)
+  std::optional<std::string> shipArtSelection;  // Custom ship art request (SNAME or FNAME:SNAME)
 
   // Observer options
   bool verbose = false;          // Verbose output for observer

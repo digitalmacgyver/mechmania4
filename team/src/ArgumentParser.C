@@ -108,6 +108,8 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
          cxxopts::value<std::string>())(
         "test-file", "Path to test moves file (for testteam), use '-' for stdin",
          cxxopts::value<std::string>())(
+        "ship-art", "Custom ship art package (SNAME or FNAME:SNAME)",
+         cxxopts::value<std::string>())(
         "verbose", "Enable verbose output")(
         "enable-audio-test-ping",
          "Enable manual audio diagnostics ping (requires verbose for logs)")(
@@ -200,6 +202,16 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     }
     if (result.count("test-file")) {
       testMovesFile = result["test-file"].as<std::string>();
+    }
+    if (result.count("ship-art")) {
+      auto selection = result["ship-art"].as<std::string>();
+      if (!selection.empty()) {
+        shipArtSelection = selection;
+      } else {
+        shipArtSelection.reset();
+      }
+    } else {
+      shipArtSelection.reset();
     }
 
     verbose = result.count("verbose") > 0;
@@ -525,6 +537,12 @@ bool ArgumentParser::ParseConfigJson(const std::string& content) {
         gfxflag = (value == "true");
       } else if (key == "reconnect") {
         reconnect = retry = (value == "true");
+      } else if (key == "ship-art") {
+        if (value.empty() || value == "null") {
+          shipArtSelection.reset();
+        } else {
+          shipArtSelection = value;
+        }
       }
     } else if (line.find("\"profile\"") != std::string::npos) {
       // Parse profile line
@@ -563,7 +581,13 @@ bool ArgumentParser::SaveConfig(const std::string& filename) const {
   file << "    \"gfxreg\": \"" << gfxreg << "\",\n";
   file << "    \"numteams\": " << numteams << ",\n";
   file << "    \"graphics\": " << (gfxflag ? "true" : "false") << ",\n";
-  file << "    \"reconnect\": " << (reconnect ? "true" : "false") << "\n";
+  file << "    \"reconnect\": " << (reconnect ? "true" : "false") << ",\n";
+  file << "    \"ship-art\": ";
+  if (shipArtSelection) {
+    file << "\"" << *shipArtSelection << "\"\n";
+  } else {
+    file << "null\n";
+  }
   file << "  },\n";
 
   // Write features

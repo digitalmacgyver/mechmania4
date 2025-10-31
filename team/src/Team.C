@@ -5,6 +5,8 @@
  * Misha Voloshin 6/1/98
  */
 
+#include <algorithm>
+
 #include "Team.h"
 
 ///////////////////////////////////////////////////
@@ -17,6 +19,7 @@ CTeam::CTeam(unsigned int TNum, CWorld* pworld) {
   TeamNum = TNum;
   uImgSet = 0;
   memset(MsgText, 0, maxTextLen);  // Initialize message buffer to prevent garbled text
+  memset(ShipArtName, 0, maxShipArtNameLen);
 }
 
 bool CTeam::Create(unsigned int numSh, unsigned int uCrd) {
@@ -91,6 +94,8 @@ unsigned int CTeam::GetWorldIndex() const { return uWorldIndex; }
 
 char* CTeam::GetName() { return Name; }
 
+const char* CTeam::GetShipArtRequest() const { return ShipArtName; }
+
 CBrain* CTeam::GetBrain() { return pBrain; }
 
 ///////
@@ -162,6 +167,24 @@ char* CTeam::SetName(const char* strname) {
 
   Name[maxTeamNameLen - 1] = 0;
   return Name;
+}
+
+void CTeam::SetShipArtRequest(const std::string& request) {
+  memset(ShipArtName, 0, maxShipArtNameLen);
+  if (request.empty()) {
+    return;
+  }
+
+  size_t start = request.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) {
+    return;
+  }
+  size_t end = request.find_last_not_of(" \t\r\n");
+  std::string trimmed = request.substr(start, end - start + 1);
+  size_t copyLen =
+      std::min(trimmed.size(), static_cast<size_t>(maxShipArtNameLen - 1));
+  memcpy(ShipArtName, trimmed.c_str(), copyLen);
+  ShipArtName[copyLen] = '\0';
 }
 
 CBrain* CTeam::SetBrain(CBrain* pBr) {
@@ -271,6 +294,7 @@ unsigned CTeam::GetSerInitSize() const {
   totsize += BufWrite(NULL, TeamNum);
   totsize += maxTeamNameLen;
   totsize += maxnamelen;
+  totsize += maxShipArtNameLen;
 
   double carcap = 0.0, fuelcap = 0.0;
   char name[maxnamelen];
@@ -293,6 +317,7 @@ unsigned CTeam::SerPackInitData(char* buf, unsigned len) const {
   vpb += BufWrite(vpb, TeamNum);
   vpb += BufWrite(vpb, Name, maxTeamNameLen);
   vpb += BufWrite(vpb, GetStation()->GetName(), maxnamelen);
+  vpb += BufWrite(vpb, ShipArtName, maxShipArtNameLen);
 
   double carcap, fuelcap;
   char name[maxnamelen];
@@ -328,6 +353,7 @@ unsigned CTeam::SerUnpackInitData(char* buf, unsigned len) {
 
   GetStation()->SetName(vpb);
   vpb += maxnamelen;
+  vpb += BufRead(vpb, ShipArtName, maxShipArtNameLen);
 
   double carcap, fuelcap;
   char name[maxnamelen];

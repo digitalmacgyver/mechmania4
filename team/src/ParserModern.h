@@ -34,6 +34,9 @@ class CParser {
   const std::string& GetTeamParamsFile() const {
     return parser.teamParamsFile;
   }
+  std::optional<std::string> GetShipArtRequest() const {
+    return parser.shipArtSelection;
+  }
   const std::string& GetAssetsRoot() const { return parser.assetsRoot; }
   bool StartAudioMuted() const { return parser.startAudioMuted; }
   std::optional<uint32_t> GetPlaylistSeed() const {

@@ -5,8 +5,11 @@
 
 #include "Client.h"
 #include "ClientNet.h"
+#include "ParserModern.h"
 #include "Team.h"
 #include "World.h"
+
+extern CParser* g_pParser;
 
 //////////////////////////////////////
 // Construction/Destruction
@@ -119,6 +122,13 @@ void CClient::MeetWorld() {
     aTms[i]->SetWorld(pmyWorld);
     aTms[i]->Create(numSh, i);
     pmyWorld->SetTeam(i, aTms[i]);
+
+    if (!bObflag && g_pParser && i == umyIndex) {
+      auto shipArtRequest = g_pParser->GetShipArtRequest();
+      if (shipArtRequest && !shipArtRequest->empty()) {
+        aTms[i]->SetShipArtRequest(*shipArtRequest);
+      }
+    }
   }
 
   pmyWorld->ResolvePendingOperations();

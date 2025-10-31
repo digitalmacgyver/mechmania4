@@ -51,6 +51,7 @@ teams/evo/EvoAI_params*.txt
 teams/evo/*.pkl
 teams/evo/*.tmp
 teams/evo/optimization*.log
+teams/evo/output/
 
 # CMake
 CMakeFiles/
