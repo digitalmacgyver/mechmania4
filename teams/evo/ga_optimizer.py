@@ -370,6 +370,10 @@ def run_simulation(candidate_id, params, config, filenames):
         return 0.0
 
     env = os.environ.copy()
+    # Set SDL to dummy drivers for headless mode
+    env["SDL_VIDEODRIVER"] = "dummy"
+    env["SDL_AUDIODRIVER"] = "dummy"
+
     fitness = 0.0
     simulation_failed = False
 
