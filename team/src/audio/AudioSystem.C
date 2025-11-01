@@ -239,7 +239,13 @@ int ComputeRequestedLoops(const EffectRequest& request,
 
   double quantity = std::max(0.0, request.quantity);
   double scaled = quantity / scale.perQuantity;
-  int computed = static_cast<int>(std::ceil(scaled));
+  int computed = scale.maxLoops;
+  if (std::isfinite(scaled)) {
+    double bounded =
+        std::min(scaled,
+                 static_cast<double>(std::numeric_limits<int>::max()));
+    computed = static_cast<int>(std::ceil(bounded));
+  }
   if (computed <= 0) {
     computed = scale.minLoops;
   }
@@ -555,6 +561,12 @@ void AudioSystem::DispatchEffect(const ScheduledEffect& pending) {
 }
 
 void AudioSystem::EnsureMusicPlaying() {
+#ifdef MM4_USE_SDL_MIXER
+  if (!musicMuted_ &&
+      musicAdvancePending_.exchange(false, std::memory_order_acq_rel)) {
+    AdvancePlaylist(false);
+  }
+#endif
   if (musicMuted_) {
 #ifdef MM4_USE_SDL_MIXER
     if (Mix_PlayingMusic() != 0) {
@@ -774,7 +786,13 @@ void AudioSystem::AdvancePlaylist(bool manualSource) {
 
 void AudioSystem::NextTrack(bool fromManual) {
 #ifdef MM4_USE_SDL_MIXER
+  if (fromManual) {
+    musicAdvancePending_.store(false, std::memory_order_release);
+  }
   AdvancePlaylist(fromManual);
+  if (fromManual) {
+    musicAdvancePending_.store(false, std::memory_order_release);
+  }
 #else
   (void)fromManual;
 #endif
@@ -843,9 +861,7 @@ bool AudioSystem::StartTrack(const std::string& trackId, bool manualSource) {
 
 void AudioSystem::OnTrackFinished() {
 #ifdef MM4_USE_SDL_MIXER
-  if (!musicMuted_) {
-    AdvancePlaylist(false);
-  }
+  musicAdvancePending_.store(true, std::memory_order_release);
 #endif
 }
 

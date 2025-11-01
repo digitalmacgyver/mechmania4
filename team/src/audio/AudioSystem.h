@@ -5,9 +5,9 @@
 #ifndef MM4_AUDIO_AUDIO_SYSTEM_H_
 #define MM4_AUDIO_AUDIO_SYSTEM_H_
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <mutex>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -115,6 +115,7 @@ class AudioSystem {
   std::vector<ChannelState> channels_;
   Mix_Music* activeMusic_ = nullptr;
   bool nextMenuToggleUsesAlt_ = false;
+  std::atomic<bool> musicAdvancePending_{false};
 #else
   void ProcessPendingEffects(int currentTurn);
 #endif

@@ -1,25 +1,17 @@
 # This is a scratchpad of everything I'm considering for this
 # project. Please ignore.
 
+Best parameters saved to: EvoAI_params_best_pid499368.txt
 
-Produce a README.md for how to use this overall system, how to invoke
-GA optimizer, with wha command line parameters, and whether it's
-recommended to initially train against:
+Optimization finished.
+Best fitness achieved: 198.83
+Best parameters saved to: /home/viblio/coding_projects/mm_claude/teams/evo/output/EvoAI_params_best_pid563522.txt
 
-A very bad enemy team
-A mediocre enemy team
-A good enemy team
+Optimization finished.
+Best fitness achieved: 93.33
+Best parameters saved to: /home/viblio/coding_projects/mm_claude/teams/evo/output/EvoAI_params_best_pid609893.txt
 
-And whether once this intial training is done, whether it's good to do
-successive trainings against evo generations against themselves, or
-whether it's best to train successive generations vs. known enemy
-teams. (Assume the goal is to make EvoAI good enough to regularly beat
-the good enemy team).
-
-Also include instructions on how to run analyze_ga_log.py and how to
-interpret the results to know if the GA algorithm is progressing and
-working well, or if it's just randomly driting and not generating
-improvements / converging.
+/home/viblio/coding_projects/mm_claude/teams/evo/output/EvoAI_params_best_pid609893.txt
 
 == EVO Combat ==
 

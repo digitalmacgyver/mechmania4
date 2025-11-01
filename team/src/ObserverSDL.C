@@ -9,6 +9,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <system_error>
 
 #include "Asteroid.h"
 #include "GameConstants.h"
@@ -19,6 +20,10 @@
 #include "World.h"      // For BAD_INDEX
 #include "XPMLoader.h"  // For loading logo
 #include "audio/AudioSystem.h"
+
+namespace {
+int NormalizeToFrame(double angle);
+}
 
 ObserverSDL::ObserverSDL(const char* regFileName, int gfxFlag,
                          const std::string& assetsRoot, bool verboseAudio,
@@ -163,17 +168,42 @@ bool ObserverSDL::Initialize() {
   // Initialize message buffer (start empty; we keep full history)
   messageBuffer.clear();
 
-  std::string soundConfigPath = "sound/defaults.txt";
-  if (!std::filesystem::exists(soundConfigPath)) {
-    const char* candidates[] = {"../sound/defaults.txt",
-                                "../../sound/defaults.txt",
-                                "../../../sound/defaults.txt"};
-    for (const char* candidate : candidates) {
-      if (std::filesystem::exists(candidate)) {
-        soundConfigPath = candidate;
-        break;
-      }
+  namespace fs = std::filesystem;
+  auto pushCandidate = [](std::vector<fs::path>& list, const fs::path& candidate) {
+    if (!candidate.empty()) {
+      list.push_back(candidate);
     }
+  };
+
+  std::vector<fs::path> soundConfigCandidates;
+  if (!assetRootOverride_.empty()) {
+    std::error_code ec;
+    fs::path overridePath(assetRootOverride_);
+    if (fs::is_regular_file(overridePath, ec)) {
+      pushCandidate(soundConfigCandidates, overridePath);
+      pushCandidate(soundConfigCandidates,
+                    overridePath.parent_path() / "sound/defaults.txt");
+    } else {
+      pushCandidate(soundConfigCandidates,
+                    overridePath / "sound/defaults.txt");
+      pushCandidate(soundConfigCandidates, overridePath / "defaults.txt");
+    }
+  }
+  pushCandidate(soundConfigCandidates, fs::path("sound/defaults.txt"));
+  pushCandidate(soundConfigCandidates, fs::path("../sound/defaults.txt"));
+  pushCandidate(soundConfigCandidates, fs::path("../../sound/defaults.txt"));
+  pushCandidate(soundConfigCandidates, fs::path("../../../sound/defaults.txt"));
+
+  std::string soundConfigPath;
+  for (const auto& candidate : soundConfigCandidates) {
+    std::error_code ec;
+    if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+      soundConfigPath = candidate.lexically_normal().string();
+      break;
+    }
+  }
+  if (soundConfigPath.empty()) {
+    soundConfigPath = "sound/defaults.txt";
   }
 
   audioInitialized =
@@ -250,6 +280,53 @@ void ObserverSDL::Update() {
       audioSystem.FlushPending(static_cast<int>(currentTurn));
     }
   }
+}
+
+const std::string& ObserverSDL::GetCustomArtBaseDir() const {
+  if (customArtBaseResolved_) {
+    return customArtBaseDir_;
+  }
+  customArtBaseResolved_ = true;
+  customArtBaseDir_.clear();
+
+  if (assetRootOverride_.empty()) {
+    return customArtBaseDir_;
+  }
+
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::path overridePath(assetRootOverride_);
+  std::vector<fs::path> candidates;
+
+  if (fs::is_regular_file(overridePath, ec)) {
+    fs::path parent = overridePath.parent_path();
+    if (!parent.empty()) {
+      candidates.push_back(parent / "assets/star_control/graphics");
+      candidates.push_back(parent / "star_control/graphics");
+      candidates.push_back(parent);
+    }
+  } else {
+    candidates.push_back(overridePath / "assets/star_control/graphics");
+    candidates.push_back(overridePath / "star_control/graphics");
+    candidates.push_back(overridePath);
+  }
+
+  auto pickCandidate = [&](const fs::path& candidate) {
+    if (!candidate.empty() && customArtBaseDir_.empty()) {
+      if (fs::exists(candidate, ec) && fs::is_directory(candidate, ec)) {
+        customArtBaseDir_ = candidate.lexically_normal().string();
+      }
+    }
+  };
+
+  for (const auto& candidate : candidates) {
+    pickCandidate(candidate);
+    if (!customArtBaseDir_.empty()) {
+      break;
+    }
+  }
+
+  return customArtBaseDir_;
 }
 
 void ObserverSDL::MaybeEmitDiagnosticsPing(
@@ -1631,16 +1708,18 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
     }
   }
 
+  const std::string& customArtBase = GetCustomArtBaseDir();
+
   if (!artKey.empty()) {
     if (artKey == "legacy:t1") {
       legacyOverrideTeam = 0;
     } else if (artKey == "legacy:t2") {
       legacyOverrideTeam = 1;
     } else if (spriteManager->IsLoaded()) {
-      int colonPos = static_cast<int>(artKey.find(':'));
+      std::string::size_type colonPos = artKey.find(':');
       std::string faction;
       std::string shipName;
-      if (colonPos >= 0) {
+      if (colonPos != std::string::npos) {
         faction = artKey.substr(0, colonPos);
         shipName = artKey.substr(colonPos + 1);
       } else {
@@ -1655,23 +1734,10 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
       }
 
       std::string cacheKey = faction + ":" + shipName;
-      if (spriteManager->LoadCustomShipArt(cacheKey, "", faction, shipName)) {
+      if (spriteManager->LoadCustomShipArt(cacheKey, customArtBase, faction,
+                                           shipName)) {
         double angle = ship->GetOrient();
-        double normalized = angle;
-        constexpr double twoPi = 2.0 * M_PI;
-        const double halfPi = M_PI * 0.5;
-        while (normalized < 0) {
-          normalized += twoPi;
-        }
-        while (normalized >= twoPi) {
-          normalized -= twoPi;
-        }
-        normalized += halfPi;
-        if (normalized >= twoPi) {
-          normalized -= twoPi;
-        }
-        orientationFrame =
-            static_cast<int>(std::round(normalized / twoPi * 16.0)) % 16;
+        orientationFrame = NormalizeToFrame(angle);
         sprite = spriteManager->GetCustomShipTexture(cacheKey, orientationFrame);
         useYehatShieldOverlay = (faction == "yehat" && shipName == "yehat");
       } else {
@@ -1707,7 +1773,7 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
     if (frame < 0) {
       return false;
     }
-    if (!spriteManager->LoadCustomShipArt("yehat:shield", "", "yehat",
+    if (!spriteManager->LoadCustomShipArt("yehat:shield", customArtBase, "yehat",
                                           "shield")) {
       return false;
     }
@@ -1727,21 +1793,7 @@ void ObserverSDL::DrawShipSprite(CShip* ship, int teamNum) {
        ship->bIsGettingShot != g_no_damage_sentinel)) {
     if (orientationFrame < 0) {
       double angle = ship->GetOrient();
-      constexpr double twoPi = 2.0 * M_PI;
-      const double halfPi = M_PI * 0.5;
-      double normalized = angle;
-      while (normalized < 0) {
-        normalized += twoPi;
-      }
-      while (normalized >= twoPi) {
-        normalized -= twoPi;
-      }
-      normalized += halfPi;
-      if (normalized >= twoPi) {
-        normalized -= twoPi;
-      }
-      orientationFrame =
-          static_cast<int>(std::round(normalized / twoPi * 16.0)) % 16;
+      orientationFrame = NormalizeToFrame(angle);
     }
     drewYehatShield = renderShieldOverlay(orientationFrame);
   }
@@ -1976,3 +2028,22 @@ void ObserverSDL::Run() {
     }
   }
 }
+
+namespace {
+int NormalizeToFrame(double angle) {
+  if (!std::isfinite(angle)) {
+    return 0;
+  }
+  constexpr double twoPi = 2.0 * M_PI;
+  const double halfPi = M_PI * 0.5;
+  double normalized = std::fmod(angle, twoPi);
+  if (normalized < 0.0) {
+    normalized += twoPi;
+  }
+  normalized += halfPi;
+  if (normalized >= twoPi) {
+    normalized -= twoPi;
+  }
+  return static_cast<int>(std::round(normalized / twoPi * 16.0)) % 16;
+}
+}  // namespace

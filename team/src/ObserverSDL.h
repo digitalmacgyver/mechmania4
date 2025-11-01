@@ -79,6 +79,8 @@ class ObserverSDL {
   MenuToggleCueState musicToggleCueState_;
   MenuToggleCueState effectsToggleCueState_;
   bool effectsUnmuteAckPending_ = false;
+  mutable bool customArtBaseResolved_ = false;
+  mutable std::string customArtBaseDir_;
 
   // Drawing helpers
   void DrawSpace();
@@ -102,6 +104,7 @@ class ObserverSDL {
   void DrawVelocityVector(CThing* thing);
   void MaybeEmitDiagnosticsPing(mm4::audio::AudioSystem& audioSystem,
                                 double gameTimeSeconds);
+  const std::string& GetCustomArtBaseDir() const;
   enum class MenuToggleControl {
     kGeneric,
     kMusic,

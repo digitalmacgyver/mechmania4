@@ -57,24 +57,44 @@ void DiscoverFromRoot(const std::filesystem::path& root,
   if (!out) {
     return;
   }
-  std::error_code ec;
-  if (!std::filesystem::exists(root, ec) ||
-      !std::filesystem::is_directory(root, ec)) {
+  std::error_code statusEc;
+  if (!std::filesystem::exists(root, statusEc) ||
+      !std::filesystem::is_directory(root, statusEc)) {
     return;
   }
 
-  for (const auto& factionEntry :
-       std::filesystem::directory_iterator(root, ec)) {
-    if (ec || !factionEntry.is_directory()) {
+  std::error_code factionEc;
+  std::filesystem::directory_iterator factionEnd;
+  for (std::filesystem::directory_iterator factionIt(root, factionEc);
+       factionIt != factionEnd; factionIt.increment(factionEc)) {
+    if (factionEc) {
+      factionEc.clear();
       continue;
     }
+    const auto& factionEntry = *factionIt;
+    std::error_code factionStatusEc;
+    if (!std::filesystem::is_directory(factionEntry.path(), factionStatusEc) ||
+        factionStatusEc) {
+      continue;
+    }
+
     const auto factionName = factionEntry.path().filename().string();
 
-    for (const auto& shipEntry :
-         std::filesystem::directory_iterator(factionEntry.path(), ec)) {
-      if (ec || !shipEntry.is_directory()) {
+    std::error_code shipEc;
+    for (std::filesystem::directory_iterator shipIt(factionEntry.path(), shipEc),
+         shipEnd;
+         shipIt != shipEnd; shipIt.increment(shipEc)) {
+      if (shipEc) {
+        shipEc.clear();
         continue;
       }
+      const auto& shipEntry = *shipIt;
+      std::error_code shipStatusEc;
+      if (!std::filesystem::is_directory(shipEntry.path(), shipStatusEc) ||
+          shipStatusEc) {
+        continue;
+      }
+
       const auto shipName = shipEntry.path().filename().string();
 
       if (EqualsIgnoreCase(factionName, "yehat") &&
@@ -84,10 +104,11 @@ void DiscoverFromRoot(const std::filesystem::path& root,
 
       bool hasAllFrames = true;
       for (int idx = 0; idx < 16; ++idx) {
+        std::error_code frameEc;
         std::filesystem::path framePath =
             shipEntry.path() /
             (shipName + ".big." + std::to_string(idx) + ".png");
-        if (!std::filesystem::exists(framePath, ec)) {
+        if (!std::filesystem::exists(framePath, frameEc) || frameEc) {
           hasAllFrames = false;
           break;
         }

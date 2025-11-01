@@ -203,6 +203,10 @@ bool SoundLibrary::LoadDefaults(const std::string& configPath) {
       if (std::filesystem::exists(overridePath, ec)) {
         return overridePath.lexically_normal().string();
       }
+      if (ec) {
+        std::cerr << "[audio] Warning: unable to access override asset path "
+                  << overridePath << " (" << ec.message() << ")" << std::endl;
+      }
     }
 
     if (!baseDirectory_.empty() && rel.is_relative()) {
@@ -211,6 +215,10 @@ bool SoundLibrary::LoadDefaults(const std::string& configPath) {
       std::error_code baseEc;
       if (!alt.empty() && std::filesystem::exists(alt, baseEc)) {
         return alt.lexically_normal().string();
+      }
+      if (baseEc) {
+        std::cerr << "[audio] Warning: unable to access fallback asset path "
+                  << alt << " (" << baseEc.message() << ")" << std::endl;
       }
       rel = base / rel;
     }
