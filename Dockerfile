@@ -20,6 +20,12 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /build
 COPY . .
 
+# Ensure vendored pkg-config files reference the in-container path
+RUN if [ -d vendor/local/lib/pkgconfig ]; then \
+      find vendor/local/lib/pkgconfig -name "*.pc" -print0 | \
+        xargs -0 sed -i 's#^prefix=.*#prefix=/build/vendor/local#'; \
+    fi
+
 # Build the project
 RUN mkdir -p build && cd build && \
     cmake .. && \

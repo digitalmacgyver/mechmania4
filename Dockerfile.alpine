@@ -3,13 +3,14 @@
 
 FROM alpine:3.18 AS builder
 
-# Install build dependencies
+# Install build dependencies (use musl-native SDL2 packages)
 RUN apk add --no-cache \
     build-base \
     cmake \
     sdl2-dev \
     sdl2_image-dev \
     sdl2_ttf-dev \
+    sdl2_mixer-dev \
     pkgconfig
 
 # Copy source code
@@ -29,6 +30,7 @@ RUN apk add --no-cache \
     sdl2 \
     sdl2_image \
     sdl2_ttf \
+    sdl2_mixer \
     libstdc++ \
     mesa-gl \
     ttf-dejavu
@@ -41,10 +43,12 @@ WORKDIR /home/mechmania/game
 COPY --from=builder /build/build/mm4serv .
 COPY --from=builder /build/build/mm4obs .
 COPY --from=builder /build/build/mm4team* .
-# Copy graphics resources directly from source (not symlinks)
+# Copy graphics/sound assets (avoid symlinks)
 COPY --from=builder /build/team/src/gfx ./gfx
 COPY --from=builder /build/team/src/graphics.reg .
 COPY --from=builder /build/team/src/fonts ./fonts
+COPY --from=builder /build/assets ./assets
+COPY --from=builder /build/sound ./sound
 
 # Create shell scripts using heredoc
 RUN cat > quick_test.sh << 'EOF'

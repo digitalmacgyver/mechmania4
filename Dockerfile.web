@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y \
 # Copy and build MechMania
 WORKDIR /build
 COPY . .
+RUN if [ -d vendor/local/lib/pkgconfig ]; then \
+      find vendor/local/lib/pkgconfig -name "*.pc" -print0 | \
+        xargs -0 sed -i 's#^prefix=.*#prefix=/build/vendor/local#'; \
+    fi
 RUN mkdir -p build && cd build && \
     cmake .. && \
     make -j$(nproc)
@@ -38,7 +42,9 @@ RUN cp /build/build/mm4* . || true && \
     rm -f gfx graphics.reg && \
     cp -r /build/team/src/gfx . && \
     cp /build/team/src/graphics.reg . && \
-    cp -r /build/team/src/fonts ./fonts
+    cp -r /build/team/src/fonts ./fonts && \
+    cp -r /build/assets ./assets && \
+    cp -r /build/sound ./sound
 
 # Create run_game.sh script using heredoc
 RUN cat > run_game.sh << 'EOF'
@@ -60,6 +66,23 @@ trap "kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null; exit" INT
 wait
 EOF
 RUN chmod +x run_game.sh
+
+# Quick headless smoke test
+RUN cat > quick_test.sh << 'EOF'
+#!/bin/bash
+echo "Running quick headless test..."
+./mm4serv -p2323 -h127.0.0.1 &
+SERVER_PID=$!
+sleep 1
+./mm4team -p2323 -h127.0.0.1 &
+TEAM1_PID=$!
+./mm4team -p2323 -h127.0.0.1 &
+TEAM2_PID=$!
+sleep 5
+kill $SERVER_PID $TEAM1_PID $TEAM2_PID 2>/dev/null
+echo "Test completed!"
+EOF
+RUN chmod +x quick_test.sh
 
 # Create supervisor configuration
 RUN mkdir -p /etc/supervisor/conf.d
