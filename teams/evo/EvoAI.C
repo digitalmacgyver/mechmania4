@@ -1,5 +1,7 @@
 #include "EvoAI.h"
 #include "GameConstants.h"
+#include "ArgumentParser.h"
+#include "ParserModern.h"
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
@@ -8,6 +10,9 @@
 #include <algorithm>
 #include <vector>
 #include <iostream> // Required for file operations in LoadParameters
+
+// Global parser instance for accessing command-line arguments
+extern CParser* g_pParser;
 
 // Initialize static members
 bool EvoAI::s_loggingEnabled = false;
@@ -86,7 +91,18 @@ EvoAI::~EvoAI() {
 }
 
 void EvoAI::LoadParameters() {
-    std::ifstream file(s_paramFile.c_str());
+    // Check for command-line override first
+    std::string param_file = s_paramFile;  // Default: "EvoAI_params.txt"
+
+    if (g_pParser) {
+        const std::string& cmd_params = g_pParser->GetTeamParamsFile();
+        if (!cmd_params.empty()) {
+            param_file = cmd_params;
+        }
+    }
+
+    // Load from the selected file
+    std::ifstream file(param_file.c_str());
     if (file.is_open()) {
         std::string key;
         double value;
