@@ -4,20 +4,14 @@
  */
 
 #include "Client.h"
-#include <algorithm>
-#include <cctype>
-#include <filesystem>
-#include <random>
-#include <set>
-#include <system_error>
 #include <string>
 #include <vector>
-#include <cstdlib>
 
 #include "ClientNet.h"
 #include "ParserModern.h"
 #include "Team.h"
 #include "World.h"
+#include "ShipArtUtil.h"
 
 extern CParser* g_pParser;
 
@@ -25,177 +19,14 @@ namespace {
 
 const std::vector<std::string>& GetShipArtOptions() {
   static std::vector<std::string> options;
-  if (!options.empty()) {
-    return options;
-  }
-
-  std::set<std::string> dedup;
-
-  std::vector<std::filesystem::path> roots = {
-      std::filesystem::path("assets/star_control/graphics"),
-      std::filesystem::path("../assets/star_control/graphics"),
-      std::filesystem::path("../../assets/star_control/graphics")};
-
-  if (g_pParser) {
-    const std::string& assetsRoot = g_pParser->GetAssetsRoot();
-    if (!assetsRoot.empty()) {
-      roots.push_back(std::filesystem::path(assetsRoot));
-      roots.push_back(std::filesystem::path(assetsRoot) /
-                      "star_control/graphics");
+  if (options.empty()) {
+    std::string assetsRoot;
+    if (g_pParser) {
+      assetsRoot = g_pParser->GetAssetsRoot();
     }
+    options = shipart::DiscoverShipArtOptions(assetsRoot);
   }
-
-  if (const char* envAssets = std::getenv("MM4_ASSETS_DIR")) {
-    roots.push_back(std::filesystem::path(envAssets));
-  }
-  if (const char* envShare = std::getenv("MM4_SHARE_DIR")) {
-    roots.push_back(std::filesystem::path(envShare) /
-                    "assets/star_control/graphics");
-  }
-
-  for (const auto& root : roots) {
-    std::error_code ec;
-    if (!std::filesystem::exists(root, ec) ||
-        !std::filesystem::is_directory(root, ec)) {
-      continue;
-    }
-
-    for (const auto& factionEntry :
-         std::filesystem::directory_iterator(root, ec)) {
-      if (ec || !factionEntry.is_directory()) {
-        continue;
-      }
-      const auto factionName = factionEntry.path().filename().string();
-
-      for (const auto& shipEntry :
-           std::filesystem::directory_iterator(factionEntry.path(), ec)) {
-        if (ec || !shipEntry.is_directory()) {
-          continue;
-        }
-        const auto shipName = shipEntry.path().filename().string();
-
-        if (factionName == "yehat" && shipName == "shield") {
-          continue;  // Reserved for shield overlay logic
-        }
-
-        bool hasAllFrames = true;
-        for (int idx = 0; idx < 16; ++idx) {
-          std::filesystem::path framePath =
-              shipEntry.path() /
-              (shipName + ".big." + std::to_string(idx) + ".png");
-          if (!std::filesystem::exists(framePath, ec)) {
-            hasAllFrames = false;
-            break;
-          }
-        }
-
-        if (hasAllFrames) {
-          dedup.insert(factionName + ":" + shipName);
-        }
-      }
-    }
-  }
-
-  // Add legacy sprite sets as explicit options
-  dedup.insert("legacy:t1");
-  dedup.insert("legacy:t2");
-
-  options.assign(dedup.begin(), dedup.end());
   return options;
-}
-
-std::string ChooseRandomShipArt() {
-  const auto& options = GetShipArtOptions();
-  if (options.empty()) {
-    return std::string();
-  }
-  static std::mt19937 rng(
-      static_cast<unsigned int>(std::random_device{}()));
-  std::uniform_int_distribution<size_t> dist(0, options.size() - 1);
-  return options[dist(rng)];
-}
-
-std::string TrimString(const std::string& value) {
-  size_t start = value.find_first_not_of(" \t\r\n");
-  if (start == std::string::npos) {
-    return std::string();
-  }
-  size_t end = value.find_last_not_of(" \t\r\n");
-  return value.substr(start, end - start + 1);
-}
-
-bool EqualsIgnoreCase(const std::string& lhs, const std::string& rhs) {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-  for (size_t i = 0; i < lhs.size(); ++i) {
-    unsigned char lc = static_cast<unsigned char>(lhs[i]);
-    unsigned char rc = static_cast<unsigned char>(rhs[i]);
-    if (std::tolower(lc) != std::tolower(rc)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-std::string CanonicalizeShipArtRequest(const std::string& request) {
-  const auto& options = GetShipArtOptions();
-  if (options.empty()) {
-    return std::string();
-  }
-
-  std::string trimmed = TrimString(request);
-  if (trimmed.empty()) {
-    return std::string();
-  }
-
-  auto findMatchForParts = [&](const std::string& faction,
-                               const std::string& ship,
-                               bool requireBothParts) -> std::string {
-    for (const auto& option : options) {
-      if (requireBothParts) {
-        if (EqualsIgnoreCase(option, faction + ":" + ship)) {
-          return option;
-        }
-      } else {
-        if (EqualsIgnoreCase(option, faction)) {
-          return option;
-        }
-      }
-
-      auto colon = option.find(':');
-      if (colon == std::string::npos) {
-        continue;
-      }
-      std::string optFaction = option.substr(0, colon);
-      std::string optShip = option.substr(colon + 1);
-
-      if (requireBothParts) {
-        if (EqualsIgnoreCase(optFaction, faction) &&
-            EqualsIgnoreCase(optShip, ship)) {
-          return option;
-        }
-      } else {
-        if (EqualsIgnoreCase(optFaction, faction) ||
-            EqualsIgnoreCase(optShip, faction)) {
-          return option;
-        }
-      }
-    }
-    return std::string();
-  };
-
-  auto colonPos = trimmed.find(':');
-  if (colonPos != std::string::npos) {
-    std::string faction = TrimString(trimmed.substr(0, colonPos));
-    std::string ship = TrimString(trimmed.substr(colonPos + 1));
-    if (faction.empty() || ship.empty()) {
-      return std::string();
-    }
-    return findMatchForParts(faction, ship, true);
-  }
-
-  return findMatchForParts(trimmed, std::string(), false);
 }
 
 }  // namespace
@@ -313,15 +144,14 @@ void CClient::MeetWorld() {
     pmyWorld->SetTeam(i, aTms[i]);
 
     if (!bObflag && i == umyIndex) {
+      const auto& artOptions = GetShipArtOptions();
       std::string chosenArt;
       if (g_pParser) {
         auto shipArtRequest = g_pParser->GetShipArtRequest();
         if (shipArtRequest && !shipArtRequest->empty()) {
-          chosenArt = CanonicalizeShipArtRequest(*shipArtRequest);
+          chosenArt = shipart::CanonicalizeShipArtRequest(
+              *shipArtRequest, artOptions);
         }
-      }
-      if (chosenArt.empty()) {
-        chosenArt = ChooseRandomShipArt();
       }
       if (!chosenArt.empty()) {
         aTms[i]->SetShipArtRequest(chosenArt);

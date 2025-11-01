@@ -36,6 +36,7 @@ set(COMMON_SOURCES
     ${SRC_DIR}/PhysicsUtils.C
     ${SRC_DIR}/World.C
     ${SRC_DIR}/Team.C
+    ${SRC_DIR}/ShipArtUtil.C
     ${SRC_DIR}/ArgumentParser.C
     ${SRC_DIR}/ParserModern.C
     ${SRC_DIR}/GameConstants.C

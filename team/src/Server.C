@@ -11,6 +11,13 @@
 #include "World.h"
 #include "GameConstants.h"
 #include "ParserModern.h"
+#include "ShipArtUtil.h"
+
+#include <set>
+#include <string>
+#include <vector>
+
+extern CParser* g_pParser;
 
 ///////////////////////////////////////////
 // Construction/Destruction
@@ -293,6 +300,14 @@ void CServer::MeetTeams() {
   char *buf;
   bool *abGotFlag = new bool[GetNumTeams()];
 
+  std::string assetsRoot;
+  if (g_pParser) {
+    assetsRoot = g_pParser->GetAssetsRoot();
+  }
+  std::vector<std::string> availableArt =
+      shipart::DiscoverShipArtOptions(assetsRoot);
+  std::set<std::string> assignedArtLower;
+
   for (tn = 0; tn < GetNumTeams(); ++tn) {
     abGotFlag[tn] = false;
   }
@@ -323,11 +338,26 @@ void CServer::MeetTeams() {
     buf = pmyNet->GetQueue(conn);
 
     aTms[tn]->SerUnpackInitData(buf, len);
-    len = aTms[tn]->GetSerInitSize();  // Make *sure* length is right
-    WaitForObserver();
-    pmyNet->SendPkt(ObsConn, buf, len);  // And send to observer
-
     pmyNet->FlushQueue(conn);
+
+    std::string assignedArt;
+    const char* requested = aTms[tn]->GetShipArtRequest();
+    if (requested && requested[0] != '\0') {
+      assignedArt = shipart::CanonicalizeShipArtRequest(requested, availableArt);
+    }
+    if (assignedArt.empty()) {
+      assignedArt = shipart::ChooseRandomShipArt(availableArt, assignedArtLower);
+    }
+    if (!assignedArt.empty()) {
+      aTms[tn]->SetShipArtRequest(assignedArt);
+      assignedArtLower.insert(shipart::ToLower(assignedArt));
+    }
+
+    unsigned int initSize = aTms[tn]->GetSerInitSize();
+    std::vector<char> packed(initSize);
+    aTms[tn]->SerPackInitData(packed.data(), initSize);
+    WaitForObserver();
+    pmyNet->SendPkt(ObsConn, packed.data(), initSize);  // And send to observer
   }
 
   delete[] abGotFlag;

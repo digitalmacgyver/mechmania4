@@ -41,12 +41,14 @@ accepts a new flag:
   other uses a custom pack.
 * Custom art is applied to the base ship sprite for all thrust/turn states. The
   existing damage/shield overlays still render on top.
-* When no flag is supplied the client randomly picks from the installed packs,
-  including the two original legacy sprite sets. The special
-  `yehat/shield` helper art is excluded from random rotation because it is used
-  exclusively for shield overlays.
+* When no flag is supplied the server randomly assigns different packs to each
+  team, avoiding duplicates whenever possible. The special `yehat/shield`
+  helper art is excluded from random rotation because it is used exclusively for
+  shield overlays.
 * Invalid CLI selections automatically fall back to a random pack so teams
   always render with a full set of sprites.
+* `--ship-art mm4orange` and `--ship-art mm4blue` map to the classic Team 1 and
+  Team 2 assets from `graphics.reg`.
 
 Runtime search order
 --------------------
