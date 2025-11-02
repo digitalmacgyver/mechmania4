@@ -103,13 +103,15 @@ class CWorld : public CSendable {
       std::vector<SpawnRequest>& all_spawns,
       bool use_new_physics,
       bool disable_eat_damage,
-      bool use_docking_fix);
+      bool use_docking_fix,
+      bool preserve_nonfrag_asteroids);
   void ApplyCollisionResults(const std::vector<CollisionPair>& collisions,
                              const std::vector<CollisionCommand>& all_commands,
                              const std::vector<SpawnRequest>& all_spawns,
                              bool use_new_physics,
                              bool disable_eat_damage,
-                             bool use_docking_fix);
+                             bool use_docking_fix,
+                             bool preserve_nonfrag_asteroids);
 
   CThing* GetThing(unsigned int index) const;      // returns NULL on failure
   unsigned int GetNextIndex(unsigned int curindex) const;  // returns (unsigned int)-1 if at end of list

@@ -58,6 +58,7 @@ void ArgumentParser::InitializeFeatures() {
   features["collision-detection"] = true;  // New collision detection is default
   features["velocity-limits"] = true;      // New velocity/acceleration limits is default
   features["asteroid-eat-damage"] = true;  // New: no damage when eating asteroids that fit
+  features["asteroid-bounce"] = true;      // New: preserve non-fragmenting asteroids by bouncing off ships
   features["physics"] = true;              // New: correct collision physics and momentum conservation
   features["collision-handling"] = true;   // New: deterministic snapshot/command collision pipeline (fixes multi-hit bugs)
   features["cargo-calc"] = true;           // New: tolerant cargo capacity checks for asteroid ingestion
@@ -127,6 +128,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
                                     "Use legacy collision detection")(
         "legacy-velocity-limits", "Use legacy velocity and acceleration limits")(
         "legacy-asteroid-eat-damage", "Ships take damage when eating asteroids (legacy behavior)")(
+        "legacy-asteroid-destruction", "Destroy asteroids that can't fragment when colliding with ships (legacy behavior)")(
         "legacy-physics", "Use legacy collision physics and momentum conservation")(
         "legacy-collision-handling", "Use legacy collision processing (allows multi-hit bugs)")(
         "legacy-laser-exploit", "Enable TOCTOU laser exploit (fire before validation)")(
@@ -368,6 +370,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-asteroid-eat-damage")) {
       features["asteroid-eat-damage"] = false;
     }
+    if (result.count("legacy-asteroid-destruction")) {
+      features["asteroid-bounce"] = false;
+    }
     if (result.count("legacy-physics")) {
       features["physics"] = false;
     }
@@ -420,6 +425,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-detection"] = true;
     features["velocity-limits"] = true;
     features["asteroid-eat-damage"] = true;
+    features["asteroid-bounce"] = true;
     features["cargo-calc"] = true;
     features["physics"] = true;              // Enable correct collision physics and momentum
     features["collision-handling"] = true;   // Enable improved collision processing
@@ -430,6 +436,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
     features["asteroid-eat-damage"] = false;
+    features["asteroid-bounce"] = false;
     features["cargo-calc"] = false;
     features["physics"] = false;            // Use legacy collision physics (no laser momentum)
     features["collision-handling"] = false; // Use legacy collision processing (with multi-hit bugs)
@@ -515,12 +522,16 @@ bool ArgumentParser::ParseConfigJson(const std::string& content) {
           features["cargo-calc"] = !(value == "true");
         } else if (key == "legacy-ship-destruction") {
           features["ship-destruction"] = !(value == "true");
+        } else if (key == "legacy-asteroid-destruction") {
+          features["asteroid-bounce"] = !(value == "true");
         } else if (key == "announcer-velocity-clamping") {
           features[key] = (value == "true");
         } else if (key == "cargo-calc") {
           features["cargo-calc"] = (value == "true");
         } else if (key == "ship-destruction") {
           features["ship-destruction"] = (value == "true");
+        } else if (key == "asteroid-bounce") {
+          features["asteroid-bounce"] = (value == "true");
         }
       }
     } else if (inOptions && line.find(":") != std::string::npos) {
@@ -617,6 +628,9 @@ bool ArgumentParser::SaveConfig(const std::string& filename) const {
     } else if (name == "ship-destruction") {
       // Convert to legacy-ship-destruction boolean format
       file << "    \"legacy-ship-destruction\": " << (useNew ? "false" : "true");
+    } else if (name == "asteroid-bounce") {
+      // Convert to legacy-asteroid-destruction boolean format
+      file << "    \"legacy-asteroid-destruction\": " << (useNew ? "false" : "true");
     } else {
       // Other features use direct boolean format
       file << "    \"" << name << "\": " << (useNew ? "true" : "false");

@@ -929,6 +929,10 @@ CollisionOutcome CShip::HandleAsteroidCollision(const CollisionContext& ctx,
   CollisionOutcome outcome;
 
   bool asteroidFits = AsteroidFitsSnapshot(self_state, other_state);
+  double fragment_mass = other_state->mass / static_cast<double>(g_asteroid_split_child_count);
+  bool asteroid_can_fragment = (fragment_mass >= g_thing_minmass);
+  bool preserve_nonfrag =
+      ctx.preserve_nonfragmenting_asteroids && !asteroid_can_fragment;
 
   if (ctx.world) {
     int teamIndex = self_state->team ? static_cast<int>(self_state->team->GetWorldIndex()) : -1;
@@ -970,6 +974,8 @@ CollisionOutcome CShip::HandleAsteroidCollision(const CollisionContext& ctx,
   }
 
   double damage;
+  bool use_elastic_model = ctx.use_new_physics || preserve_nonfrag;
+
   if (ctx.use_new_physics) {
     double m1 = self_state->mass;
     double m2 = other_state->mass;
@@ -991,7 +997,7 @@ CollisionOutcome CShip::HandleAsteroidCollision(const CollisionContext& ctx,
     outcome.AddCommand(CollisionCommand::Announce(msg));
   }
 
-  if (ctx.use_new_physics) {
+  if (use_elastic_model) {
     auto elastic = PhysicsUtils::CalculateElastic2DCollision(
         self_state->mass, self_state->velocity, self_state->position,
         other_state->mass, other_state->velocity, other_state->position,
@@ -1886,6 +1892,11 @@ void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
     }
 
     bool asteroidFits = AsteroidFits((CAsteroid *)pOthThing);
+    double fragment_mass = pOthThing->GetMass() / static_cast<double>(g_asteroid_split_child_count);
+    bool asteroid_can_fragment = (fragment_mass >= g_thing_minmass);
+    bool preserve_nonfrag =
+        (!asteroid_can_fragment) &&
+        (!g_pParser || g_pParser->UseNewFeature("asteroid-bounce"));
 
     if (asteroidFits) {
       // SMALL ASTEROID (fits in cargo): Perfectly inelastic collision
@@ -1920,7 +1931,9 @@ void CShip::HandleCollisionOld(CThing *pOthThing, CWorld *pWorld) {
       }
     } else {
       // LARGE ASTEROID (doesn't fit): Collision physics depends on mode
-      if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+      bool use_elastic_model =
+          (g_pParser && g_pParser->UseNewFeature("physics")) || preserve_nonfrag;
+      if (!use_elastic_model) {
         // Legacy mode: Inelastic collision (even though asteroid doesn't stick!)
         // This is physically incorrect but preserves old behavior
         CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();
@@ -2169,6 +2182,11 @@ void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
     }
 
     bool asteroidFits = AsteroidFits((CAsteroid *)pOthThing);
+    double fragment_mass = pOthThing->GetMass() / static_cast<double>(g_asteroid_split_child_count);
+    bool asteroid_can_fragment = (fragment_mass >= g_thing_minmass);
+    bool preserve_nonfrag =
+        (!asteroid_can_fragment) &&
+        (!g_pParser || g_pParser->UseNewFeature("asteroid-bounce"));
 
     if (asteroidFits) {
       // SMALL ASTEROID (fits in cargo): Perfectly inelastic collision
@@ -2203,7 +2221,9 @@ void CShip::HandleCollisionNew(CThing *pOthThing, CWorld *pWorld) {
       }
     } else {
       // LARGE ASTEROID (doesn't fit): Collision physics depends on mode
-      if (g_pParser && !g_pParser->UseNewFeature("physics")) {
+      bool use_elastic_model =
+          (g_pParser && g_pParser->UseNewFeature("physics")) || preserve_nonfrag;
+      if (!use_elastic_model) {
         // Legacy mode: Inelastic collision (even though asteroid doesn't stick!)
         // This is physically incorrect but preserves old behavior
         CTraj MomTot = GetMomentum() + pOthThing->GetMomentum();

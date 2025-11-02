@@ -6,7 +6,7 @@
  */
 
 #include "Asteroid.h"
-#include "ArgumentParser.h"
+#include "ParserModern.h"
 #include "GameConstants.h"
 #include "PhysicsUtils.h"
 #include "Ship.h"
@@ -16,7 +16,7 @@
 #include "CollisionTypes.h"  // For deterministic collision engine
 #include <string>
 
-extern ArgumentParser* g_pParser;
+extern CParser* g_pParser;
 
 namespace {
 std::string MakeTeamEventSuffix(const CTeam* team, const std::string& suffix) {
@@ -320,12 +320,41 @@ CollisionOutcome CAsteroid::GenerateCollisionCommands(const CollisionContext& ct
       return outcome;
     }
 
-    // Asteroid doesn't fit - fragment it
+    double fragment_mass = self_state->mass / static_cast<double>(g_asteroid_split_child_count);
+    bool can_fragment = (fragment_mass >= g_thing_minmass);
+    bool preserve_nonfrag =
+        ctx.preserve_nonfragmenting_asteroids && !can_fragment;
+
+    if (preserve_nonfrag) {
+      // NEW DEFAULT: Preserve asteroids that cannot fragment by bouncing them off the ship.
+      auto elastic = PhysicsUtils::CalculateElastic2DCollision(
+          other_state->mass, other_state->velocity, other_state->position,  // Ship (object 1)
+          self_state->mass, self_state->velocity, self_state->position,
+          ctx.random_separation_angle, true);    // Asteroid (object 2)
+
+      CTraj new_vel = elastic.v2_final;
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+      outcome.AddCommand(CollisionCommand::SetVelocity(self_state->thing, new_vel));
+
+      // Move asteroid outside the ship's collision radius to prevent immediate re-collision.
+      double separation = self_state->size + other_state->size + 1.0;
+      double normal_theta = elastic.collision_normal.rho > g_fp_error_epsilon
+                                ? elastic.collision_normal.theta
+                                : other_state->position.AngleTo(self_state->position);
+      CTraj separation_vec(separation, normal_theta);
+      CCoord new_pos = other_state->position;
+      new_pos += separation_vec.ConvertToCoord();
+      outcome.AddCommand(CollisionCommand::SetPosition(self_state->thing, new_pos));
+
+      return outcome;
+    }
+
+    // Asteroid doesn't fit - fragment it (if possible)
     outcome.AddCommand(CollisionCommand::Kill(self_state->thing));
 
-    double fragment_mass = self_state->mass / 3.0;
-
-    if (fragment_mass >= g_thing_minmass) {
+    if (can_fragment) {
       // Create 3 fragments
 
       if (ctx.use_new_physics) {
@@ -477,6 +506,44 @@ void CAsteroid::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
     return;
   }
 
+  if (OthKind == SHIP) {
+    CShip* ship = static_cast<CShip*>(pOthThing);
+    bool ship_exists = (ship != NULL);
+    bool asteroid_fits = ship_exists ? ship->AsteroidFits(this) : false;
+    double fragment_mass = GetMass() / static_cast<double>(g_asteroid_split_child_count);
+    bool can_fragment = (fragment_mass >= g_thing_minmass);
+    bool preserve_nonfrag =
+        (!can_fragment) &&
+        (!g_pParser || g_pParser->UseNewFeature("asteroid-bounce"));
+
+    if (ship_exists && !asteroid_fits && preserve_nonfrag) {
+      pThEat = NULL;
+      auto elastic = PhysicsUtils::CalculateElastic2DCollision(
+          ship->GetMass(), ship->GetVelocity(), ship->GetPos(),
+          GetMass(), Vel, Pos);
+
+      CTraj new_vel = elastic.v2_final;
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+      Vel = new_vel;
+
+      double separation = size + ship->GetSize() + 1.0;
+      double normal_theta = elastic.collision_normal.rho > g_fp_error_epsilon
+                                ? elastic.collision_normal.theta
+                                : ship->GetPos().AngleTo(Pos);
+      CTraj separation_vec(separation, normal_theta);
+      Pos = ship->GetPos();
+      Pos += separation_vec.ConvertToCoord();
+
+      bIsColliding = normal_theta;
+      CTraj opposite_dir(1.0, normal_theta + PI);
+      ship->bIsColliding = opposite_dir.theta;
+
+      return;
+    }
+  }
+
   // Handle laser-blast:
   // --------------------
   // Lasers are delivered as a temporary GENTHING synthesized by
@@ -491,6 +558,45 @@ void CAsteroid::HandleCollisionOld(CThing* pOthThing, CWorld* pWorld) {
   if (OthKind == GENTHING &&
       pOthThing->GetMass() < g_asteroid_laser_shatter_threshold) {
     return;
+  }
+
+  if (OthKind == SHIP) {
+    CShip* ship = static_cast<CShip*>(pOthThing);
+    bool ship_exists = (ship != NULL);
+    bool asteroid_fits = ship_exists ? ship->AsteroidFits(this) : false;
+    double fragment_mass = GetMass() / static_cast<double>(g_asteroid_split_child_count);
+    bool can_fragment = (fragment_mass >= g_thing_minmass);
+    bool preserve_nonfrag =
+        (!can_fragment) &&
+        (!g_pParser || g_pParser->UseNewFeature("asteroid-bounce"));
+
+    if (ship_exists && !asteroid_fits && preserve_nonfrag) {
+      pThEat = NULL;
+      // Preserve asteroid by bouncing it off the ship.
+      auto elastic = PhysicsUtils::CalculateElastic2DCollision(
+          ship->GetMass(), ship->GetVelocity(), ship->GetPos(),
+          GetMass(), Vel, Pos);
+
+      CTraj new_vel = elastic.v2_final;
+      if (new_vel.rho > g_game_max_speed) {
+        new_vel.rho = g_game_max_speed;
+      }
+      Vel = new_vel;
+
+      double separation = size + ship->GetSize() + 1.0;
+      double normal_theta = elastic.collision_normal.rho > g_fp_error_epsilon
+                                ? elastic.collision_normal.theta
+                                : ship->GetPos().AngleTo(Pos);
+      CTraj separation_vec(separation, normal_theta);
+      Pos = ship->GetPos();
+      Pos += separation_vec.ConvertToCoord();
+
+      bIsColliding = normal_theta;
+      CTraj opposite_dir(1.0, normal_theta + PI);
+      ship->bIsColliding = opposite_dir.theta;  // Opposite impact direction
+
+      return;
+    }
   }
 
   DeadFlag = true;

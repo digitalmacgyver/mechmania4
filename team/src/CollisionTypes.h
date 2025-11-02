@@ -186,6 +186,7 @@ struct CollisionContext {
   bool use_new_physics;               // physics flag
   bool disable_eat_damage;            // asteroid-eat-damage flag: when true, eating small asteroids is damage-free
   bool use_docking_fix;               // docking flag
+  bool preserve_nonfragmenting_asteroids;  // asteroid-bounce flag: when true, preserve asteroids that can't fragment
 
   // Random separation angle for ship-ship collisions (third preference fallback)
   // Used only when ships have same velocity AND same position
@@ -197,6 +198,7 @@ struct CollisionContext {
   CollisionContext();
   CollisionContext(CWorld* w, const CollisionState* self, const CollisionState* other,
                    double dt, bool physics, bool eat_dmg, bool dock,
+                   bool preserve_nonfrag,
                    double random_angle = 0.0, bool random_forward = false);
 };
 

@@ -593,6 +593,7 @@ void CWorld::LaserModelNew() {
   bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
   bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
   bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
+  bool preserve_nonfrag_asteroids = g_pParser ? g_pParser->UseNewFeature("asteroid-bounce") : true;
 
   for (nteam = 0; nteam < GetNumTeams(); ++nteam) {
     pTeam = GetTeam(nteam);
@@ -737,7 +738,8 @@ void CWorld::LaserModelNew() {
         }
 
         CollisionContext ctx(this, current_target_state, &laser_state, 1.0,
-                             use_new_physics, disable_eat_damage, use_docking_fix);
+                             use_new_physics, disable_eat_damage, use_docking_fix,
+                             preserve_nonfrag_asteroids);
 
         // Generate commands from target's perspective (target being hit by laser)
         CollisionOutcome outcome = pTarget->GenerateCollisionCommands(ctx);
@@ -764,7 +766,8 @@ void CWorld::LaserModelNew() {
               return GetCommandTypePriority(a.type) < GetCommandTypePriority(b.type);
             });
 
-  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage, use_docking_fix);
+  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage,
+                             use_docking_fix, preserve_nonfrag_asteroids);
 
   for (size_t i = 0; i < all_commands.size(); ++i) {
     const CollisionCommand& cmd = all_commands[i];
@@ -1183,7 +1186,8 @@ void CWorld::GenerateCollisionOutputs(
     std::vector<SpawnRequest>& all_spawns,
     bool use_new_physics,
     bool disable_eat_damage,
-    bool use_docking_fix) {
+    bool use_docking_fix,
+    bool preserve_nonfrag_asteroids) {
   std::set<CThing*> pending_kills;
   std::set<CThing*> pending_docks;
   std::uniform_int_distribution<int> coin_flip(0, 1);
@@ -1230,9 +1234,11 @@ void CWorld::GenerateCollisionOutputs(
 
     CollisionContext ctx1(this, &state1, &state2, 1.0,
                           use_new_physics, disable_eat_damage, use_docking_fix,
+                          preserve_nonfrag_asteroids,
                           random_angle, random_forward);
     CollisionContext ctx2(this, &state2, &state1, 1.0,
                           use_new_physics, disable_eat_damage, use_docking_fix,
+                          preserve_nonfrag_asteroids,
                           random_angle, !random_forward);
 
     CollisionOutcome out1 = state1.thing->GenerateCollisionCommands(ctx1);
@@ -1276,14 +1282,16 @@ void CWorld::ApplyCollisionResults(const std::vector<CollisionPair>& collisions,
                                    const std::vector<SpawnRequest>& all_spawns,
                                    bool use_new_physics,
                                    bool disable_eat_damage,
-                                   bool use_docking_fix) {
+                                   bool use_docking_fix,
+                                   bool preserve_nonfrag_asteroids) {
   std::vector<CollisionCommand> sorted_commands = all_commands;
   std::sort(sorted_commands.begin(), sorted_commands.end(),
             [](const CollisionCommand& a, const CollisionCommand& b) {
               return GetCommandTypePriority(a.type) < GetCommandTypePriority(b.type);
             });
 
-  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage, use_docking_fix);
+  CollisionContext apply_ctx(this, NULL, NULL, 1.0, use_new_physics, disable_eat_damage,
+                             use_docking_fix, preserve_nonfrag_asteroids);
 
   for (const CollisionCommand& cmd : sorted_commands) {
     if (cmd.type == CollisionCommandType::kAnnounceMessage) {
@@ -1514,12 +1522,15 @@ unsigned int CWorld::CollisionEvaluationNew() {
   bool use_new_physics = g_pParser ? g_pParser->UseNewFeature("physics") : true;
   bool disable_eat_damage = g_pParser ? g_pParser->UseNewFeature("asteroid-eat-damage") : true;
   bool use_docking_fix = g_pParser ? g_pParser->UseNewFeature("docking") : true;
+  bool preserve_nonfrag_asteroids = g_pParser ? g_pParser->UseNewFeature("asteroid-bounce") : true;
 
   GenerateCollisionOutputs(collisions, current_states, all_commands, all_spawns,
-                           use_new_physics, disable_eat_damage, use_docking_fix);
+                           use_new_physics, disable_eat_damage, use_docking_fix,
+                           preserve_nonfrag_asteroids);
 
   ApplyCollisionResults(collisions, all_commands, all_spawns,
-                        use_new_physics, disable_eat_damage, use_docking_fix);
+                        use_new_physics, disable_eat_damage, use_docking_fix,
+                        preserve_nonfrag_asteroids);
 
   return collisions.size();
 }

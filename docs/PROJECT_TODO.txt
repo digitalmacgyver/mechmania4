@@ -502,6 +502,14 @@ Re-enabled with --legacy-velocity-limits:
     order at each sub-tick in the game, which caused these orders to be
     artificially clamped in very low fuel conditions.
 
+Re-enabled with --legacy-asteroid-destruction:
+
+  * Asteroids which collide with ships, and which are too large for
+    the ship to pick up, but who are too small to be subdivided into 3
+    equal size asteroids instead just bounce off the ship in an ideal
+    elastic collision (previously these asteroids were destroyed
+    utterly by such collisions).
+
 Re-enabled with --legacy-asteroid-eat-damage:
 
   * Eatable Asteroid Collision Handling - The original simulation
@@ -608,7 +616,7 @@ Re-enabled with --legacy-rangecheck-bug:
     beam_computed_way_2. Ideally this would never be true - however
     due to floating point errors it can be. When it is true otherwise
     valid laser targets are missed.
-
+    
 Re-enabled with --legacy-physics:
 
   * Non-conservation of momentum on jettison - When jettisoning
@@ -665,10 +673,6 @@ Not re-enableable:
 * Game option to prevent docking at enemy bases (set at start time of
   either the server or observer) (counts as collision with asteroid
   for damage?)
-
-* Game option to create uranium and vinyl equal to fuel and vinyl
-  carried when a ship is blown up, so long as that amount is greater
-  than or equal to the smallest world item mass.
 
 * Game option to prevent asteroid dust due to collision - if a
   collision happens and you can't pick up and it would result in too

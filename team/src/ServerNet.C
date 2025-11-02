@@ -6,6 +6,7 @@
 // connection numbers start at 1
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 
@@ -16,6 +17,12 @@ using namespace std;
 CServerNet::CServerNet(int themaxconn, int port, int maxqueuelen)
     : CNetwork(themaxconn, maxqueuelen) {
   int i;
+
+  const char* fake_net = getenv("MM4_FAKE_NET");
+  if (fake_net) {
+    main_socket = -1;
+    return;
+  }
 
   if ((main_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     perror("socket");
@@ -51,7 +58,11 @@ int CServerNet::WaitForConn(void) {
   socklen_t sin_len = sizeof(struct sockaddr_in);
 
   FD_ZERO(&main_fds);
-  FD_SET(main_socket, &main_fds);
+  if (main_socket >= 0) {
+    FD_SET(main_socket, &main_fds);
+  } else {
+    return -1;
+  }
 
   e_fds = main_fds;
 

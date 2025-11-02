@@ -4,14 +4,14 @@
  * Misha Voloshin 5/28/98
  */
 
-#include "ArgumentParser.h"
+#include "ParserModern.h"
 #include "GameConstants.h"
 #include "Ship.h"
 #include "Station.h"
 #include "Team.h"
 #include "CollisionTypes.h"  // For deterministic collision engine
 
-extern ArgumentParser* g_pParser;
+extern CParser* g_pParser;
 
 ///////////////////////////////////////////
 // Construction/Destruction

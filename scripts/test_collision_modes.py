@@ -59,7 +59,8 @@ def check_executables(team_names):
 def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', test_file=None,
                   show_team_output=False, use_stdin=False, max_turns=None,
                   observer_verbose=False, observer_assets_root=None,
-                  observer_enable_audio_test_ping=False):
+                  observer_enable_audio_test_ping=False,
+                  extra_server_flags=None):
     """
     Run a single test game with specified server flags.
 
@@ -83,7 +84,10 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
     print(f"{'='*60}")
     print(f"Port: {port}")
     print(f"Teams: {team1} vs {team2}")
-    print(f"Server flags: {' '.join(server_flags) if server_flags else '(none)'}")
+    combined_flags = list(server_flags)
+    if extra_server_flags:
+        combined_flags.extend(extra_server_flags)
+    print(f"Server flags: {' '.join(combined_flags) if combined_flags else '(none)'}")
 
     # Setup process arguments for headless execution
     popen_kwargs = {
@@ -138,6 +142,8 @@ def run_test_game(mode_name, server_flags, team1='groogroo', team2='groogroo', t
         if max_turns is not None:
             server_cmd.extend(["--max-turns", str(max_turns)])
         server_cmd.extend(server_flags)
+        if extra_server_flags:
+            server_cmd.extend(extra_server_flags)
         print(f"Starting server: {' '.join(server_cmd)}")
         print(f"Server log: {server_log_path}")
         if testteam_log_path:
@@ -395,6 +401,8 @@ def main():
                         help='Override assets root passed to observer (--assets-root)')
     parser.add_argument('--observer-enable-audio-test-ping', action='store_true',
                         help='Enable observer manual audio diagnostics ping')
+    parser.add_argument('--server-arg', action='append', default=[],
+                        help='Additional flag to pass to mm4serv (repeatable)')
     args = parser.parse_args()
 
     print("MechMania IV - Collision Handling Test Harness")
@@ -435,7 +443,8 @@ def main():
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
             observer_assets_root=args.observer_assets_root,
-            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping,
+            extra_server_flags=args.server_arg
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -452,7 +461,8 @@ def main():
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
             observer_assets_root=args.observer_assets_root,
-            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping,
+            extra_server_flags=args.server_arg
         )
     # If --legacy-mode is specified, only run one test with full legacy mode
     elif args.legacy_mode:
@@ -468,7 +478,8 @@ def main():
             max_turns=args.max_turns,
             observer_verbose=args.observer_verbose,
             observer_assets_root=args.observer_assets_root,
-            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping,
+            extra_server_flags=args.server_arg
         )
     else:
         # For groogroo vs groogroo test, use shorter game (100 turns) unless specified
@@ -488,7 +499,8 @@ def main():
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
             observer_assets_root=args.observer_assets_root,
-            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping,
+            extra_server_flags=args.server_arg
         )
 
         time.sleep(1)  # Brief pause between tests
@@ -505,18 +517,29 @@ def main():
             max_turns=max_turns,
             observer_verbose=args.observer_verbose,
             observer_assets_root=args.observer_assets_root,
-            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping
+            observer_enable_audio_test_ping=args.observer_enable_audio_test_ping,
+            extra_server_flags=args.server_arg
         )
 
     # Summary
+    legacy_pass = results.get('legacy')
+    new_pass = results.get('new')
+
+    def status_label(value):
+        if value is None:
+            return 'N/A'
+        return '✓ PASSED' if value else '✗ FAILED'
+
     print(f"\n{'='*60}")
     print("Test Summary")
     print(f"{'='*60}")
-    print(f"Legacy mode: {'✓ PASSED' if results['legacy'] else '✗ FAILED'}")
-    print(f"New mode:    {'✓ PASSED' if results['new'] else '✗ FAILED'}")
+    print(f"Legacy mode: {status_label(legacy_pass)}")
+    print(f"New mode:    {status_label(new_pass)}")
     print(f"{'='*60}")
 
-    if all(results.values()):
+    overall_pass = all(results.values()) if results else False
+
+    if overall_pass:
         print("\n✓ All tests passed!")
         return 0
     else:
