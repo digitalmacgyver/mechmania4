@@ -288,17 +288,17 @@ std::vector<ViolenceTarget> IdentifyAndPrioritizeTargets(
 
       if (cargo > g_fp_error_epsilon) {
         // Second priority: ships with vinyl
-        // Sort by: most vinyl (desc), least shields (asc), least fuel (asc)
+        // Sort by: most vinyl (desc), most fuel (desc), least shields (asc)
         target.priority_class = 2;
-        target.sort_key1 = -cargo;   // Negate for descending
-        target.sort_key2 = shields;  // Ascending
-        target.sort_key3 = fuel;     // Ascending
+        target.sort_key1 = -cargo;    // Most cargo first (descending)
+        target.sort_key2 = -fuel;     // Most fuel second (descending)
+        target.sort_key3 = shields;   // Least shields third (ascending)
       } else {
         // Third priority: other enemy ships
-        // Sort by: least shields (asc), least fuel (asc)
+        // Sort by: most fuel (desc), least shields (asc)
         target.priority_class = 3;
-        target.sort_key1 = shields;
-        target.sort_key2 = fuel;
+        target.sort_key1 = -fuel;     // Most fuel first (descending)
+        target.sort_key2 = shields;   // Least shields second (ascending)
         target.sort_key3 = 0.0;
       }
     }
