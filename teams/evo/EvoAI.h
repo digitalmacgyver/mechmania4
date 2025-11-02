@@ -105,11 +105,14 @@ public:
 
 private:
     ParamMap params_;
+    ParamMap default_params_;  // Store default parameter values
+    std::string loaded_param_file_;  // Track which file was loaded
     int hunter_config_count_; // Number of ships configured with high fuel capacity in Init
     void LoadParameters();
     void PopulateMagicBag();
     void AssessStrategy();
     void AssignRoles();
+    void PrintStartupInfo();  // Print parameter information at startup
 };
 
 // Structure to cache GA parameters

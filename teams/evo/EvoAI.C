@@ -46,23 +46,23 @@ void MagicBag::clear() {
 
 // --- EvoAI (CTeam) Implementation ---
 
-EvoAI::EvoAI() : mb(NULL), hunter_config_count_(0) {
+EvoAI::EvoAI() : mb(NULL), hunter_config_count_(0), loaded_param_file_("") {
     // Initialize parameters for GA tuning
 
     // Resource Management
     params_["LOW_FUEL_THRESHOLD"] = 5.0;
     params_["RETURN_CARGO_THRESHOLD"] = 13.01;
-    
+
     // Safety
     params_["MIN_SHIELD_LEVEL"] = 11.0;
     params_["EMERGENCY_FUEL_RESERVE"] = 5.0;
-    
+
     // Navigation
     params_["NAV_ALIGNMENT_THRESHOLD"] = 0.1;
 
     // Team Composition & Configuration
     // TEAM_NUM_HUNTERS_CONFIG determines the physical configuration (fuel/cargo ratio)
-    params_["TEAM_NUM_HUNTERS_CONFIG"] = 1.0; 
+    params_["TEAM_NUM_HUNTERS_CONFIG"] = 1.0;
     params_["GATHERER_CARGO_RATIO"] = 0.666;  // e.g., 40 Cargo / 20 Fuel
     params_["HUNTER_CARGO_RATIO"] = 0.25;     // e.g., 15 Cargo / 45 Fuel
 
@@ -74,6 +74,9 @@ EvoAI::EvoAI() : mb(NULL), hunter_config_count_(0) {
 
     // Strategy
     params_["STRATEGY_ENDGAME_TURN"] = 270.0;
+
+    // Save default parameters before loading from file
+    default_params_ = params_;
 
     LoadParameters();
     srand(time(NULL));
@@ -104,6 +107,7 @@ void EvoAI::LoadParameters() {
     // Load from the selected file
     std::ifstream file(param_file.c_str());
     if (file.is_open()) {
+        loaded_param_file_ = param_file;  // Track which file was loaded
         std::string key;
         double value;
         while (file >> key >> value) {
@@ -113,11 +117,51 @@ void EvoAI::LoadParameters() {
         }
         file.close();
     }
+    // If file wasn't opened, loaded_param_file_ remains empty
+}
+
+void EvoAI::PrintStartupInfo() {
+    std::cout << "\n========================================" << std::endl;
+    std::cout << "EvoAI Startup Configuration" << std::endl;
+    std::cout << "========================================" << std::endl;
+
+    // Print default parameter values
+    std::cout << "\nDefault Parameter Values:" << std::endl;
+    std::cout << "----------------------------------------" << std::endl;
+    for (const auto& pair : default_params_) {
+        std::cout << "  " << pair.first << " = " << pair.second << std::endl;
+    }
+
+    // Print param file information
+    std::cout << "\nParameter File:" << std::endl;
+    std::cout << "----------------------------------------" << std::endl;
+    if (loaded_param_file_.empty()) {
+        std::cout << "  No parameter file loaded (using defaults)" << std::endl;
+    } else {
+        std::cout << "  Loaded from: " << loaded_param_file_ << std::endl;
+    }
+
+    // Print current (active) parameter values
+    std::cout << "\nActive Parameter Values:" << std::endl;
+    std::cout << "----------------------------------------" << std::endl;
+    for (const auto& pair : params_) {
+        std::cout << "  " << pair.first << " = " << pair.second;
+        // Mark parameters that were changed from defaults
+        if (default_params_[pair.first] != pair.second) {
+            std::cout << " (MODIFIED from default: " << default_params_[pair.first] << ")";
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << "========================================\n" << std::endl;
 }
 
 // Configure ships based on GA parameters. Roles are assigned dynamically in Turn().
 void EvoAI::Init() {
     SetName("EvoAI-Dynamic");
+
+    // Print startup information
+    PrintStartupInfo();
 
     if (!mb) {
         mb = new MagicBag(GetShipCount());
