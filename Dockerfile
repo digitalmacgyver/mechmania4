@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     libsdl2-dev \
     libsdl2-image-dev \
     libsdl2-ttf-dev \
+    libsdl2-mixer-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
@@ -20,15 +21,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /build
 COPY . .
 
-# Ensure vendored pkg-config files reference the in-container path
-RUN if [ -d vendor/local/lib/pkgconfig ]; then \
-      find vendor/local/lib/pkgconfig -name "*.pc" -print0 | \
-        xargs -0 sed -i 's#^prefix=.*#prefix=/build/vendor/local#'; \
-    fi
-
-# Build the project
+# Build the project (disable vendored deps, use system packages)
 RUN mkdir -p build && cd build && \
-    cmake .. && \
+    cmake -DMM4_AUTO_VENDOR_DEPS=OFF .. && \
     make -j$(nproc)
 
 # Runtime stage - smaller image for running
@@ -41,6 +36,7 @@ RUN apt-get update && apt-get install -y \
     libsdl2-2.0-0 \
     libsdl2-image-2.0-0 \
     libsdl2-ttf-2.0-0 \
+    libsdl2-mixer-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
