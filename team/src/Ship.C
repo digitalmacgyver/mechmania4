@@ -5,6 +5,7 @@
  * Misha Voloshin 5/28/98
  */
 
+#include "Asteroid.h"
 #include "Brain.h"
 #include "GameConstants.h"
 #include "ParserModern.h"
@@ -16,8 +17,10 @@
 #include "CollisionTypes.h"  // For deterministic collision engine
 #include <algorithm>         // For std::swap
 #include <cmath>
+#include <cstdlib>
 #include <functional>        // For std::function (recursive lambda)
 #include <string>
+#include <vector>
 
 extern CParser* g_pParser;
 
@@ -29,7 +32,229 @@ std::string MakeTeamEventSuffix(const CTeam* team, const std::string& suffix) {
   int index = static_cast<int>(team->GetWorldIndex());
   return "team" + std::to_string(index + 1) + "." + suffix;
 }
+
+double UniformRandom(double min_value, double max_value) {
+  if (max_value <= min_value) {
+    return min_value;
+  }
+  double unit = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+  return min_value + (max_value - min_value) * unit;
 }
+
+double ComputeSpreadSpeed(double ship_speed) {
+  const double kMinSpread = 2.0;
+  const double kMaxSpread = g_game_max_speed * 0.6;
+  double spread = std::max(kMinSpread, ship_speed * 0.5);
+  if (spread > kMaxSpread) {
+    spread = kMaxSpread;
+  }
+  return spread;
+}
+
+void ClampVelocityMagnitude(CTraj& velocity) {
+  if (velocity.rho > g_game_max_speed) {
+    velocity.rho = g_game_max_speed;
+  }
+}
+
+CCoord BuildPerpendicularDelta(const CCoord& base_velocity, double magnitude) {
+  CCoord delta(-base_velocity.fY, base_velocity.fX);
+  double length_sq = delta.fX * delta.fX + delta.fY * delta.fY;
+  if (length_sq < g_fp_error_epsilon) {
+    double angle = UniformRandom(-PI, PI);
+    CTraj fallback(magnitude, angle);
+    return fallback.ConvertToCoord();
+  }
+  double length = std::sqrt(length_sq);
+  if (length < g_fp_error_epsilon) {
+    return CCoord(0.0, 0.0);
+  }
+  CCoord normalized = delta;
+  normalized.fX = normalized.fX / length * magnitude;
+  normalized.fY = normalized.fY / length * magnitude;
+  return normalized;
+}
+
+void SpawnResourceAsteroid(CWorld* world,
+                           const CCoord& base_pos,
+                           const CCoord& position_offset,
+                           const CCoord& velocity_cartesian,
+                           double mass,
+                           AsteroidKind material) {
+  if (!world || mass < g_thing_minmass) {
+    return;
+  }
+
+  CAsteroid* asteroid = new CAsteroid(mass, material);
+
+  CCoord spawn_pos = base_pos;
+  spawn_pos += position_offset;
+  asteroid->SetPos(spawn_pos);
+
+  CTraj velocity(velocity_cartesian);
+  ClampVelocityMagnitude(velocity);
+  asteroid->SetVel(velocity);
+
+  world->AddThingToWorld(asteroid);
+}
+
+void SpawnTripleFragmentsForShip(CWorld* world,
+                                 const CCoord& base_pos,
+                                 const CCoord& center_velocity,
+                                 double total_mass,
+                                 AsteroidKind material,
+                                 double base_heading,
+                                 double spread_speed,
+                                 double jitter_radius) {
+  if (!world || total_mass < g_thing_minmass) {
+    return;
+  }
+
+  unsigned int fragment_count = std::max(3u, g_asteroid_split_child_count);
+  if (fragment_count == 0) {
+    return;
+  }
+
+  double fragment_mass = total_mass / static_cast<double>(fragment_count);
+  if (fragment_mass < g_thing_minmass) {
+    return;
+  }
+
+  double angle_step = PI2 / static_cast<double>(fragment_count);
+  CTraj spread(spread_speed, base_heading);
+
+  for (unsigned int i = 0; i < fragment_count; ++i) {
+    CCoord fragment_velocity = center_velocity + spread.ConvertToCoord();
+    CTraj final_velocity(fragment_velocity);
+    ClampVelocityMagnitude(final_velocity);
+
+    CAsteroid* fragment = new CAsteroid(fragment_mass, material);
+
+    CCoord spawn_pos = base_pos;
+    if (jitter_radius > 0.0) {
+      double jitter_angle = base_heading + angle_step * static_cast<double>(i) + UniformRandom(-0.3, 0.3);
+      CTraj jitter(jitter_radius, jitter_angle);
+      spawn_pos += jitter.ConvertToCoord();
+    }
+    fragment->SetPos(spawn_pos);
+    fragment->SetVel(final_velocity);
+    world->AddThingToWorld(fragment);
+
+    spread.Rotate(angle_step);
+  }
+}
+
+void SpawnShipResourceDebris(CShip& ship, CWorld* world) {
+  if (!world) {
+    return;
+  }
+
+  const double min_mass = g_thing_minmass;
+  if (min_mass <= 0.0) {
+    return;
+  }
+
+  double vinyl_mass = ship.GetAmount(S_CARGO);
+  double uranium_mass = ship.GetAmount(S_FUEL);
+
+  const double case_i_threshold = 3.0 * min_mass;
+
+  bool vinyl_case_i = vinyl_mass >= case_i_threshold;
+  bool uranium_case_i = uranium_mass >= case_i_threshold;
+
+  bool vinyl_case_ii = !vinyl_case_i && vinyl_mass >= min_mass;
+  bool uranium_case_ii = !uranium_case_i && uranium_mass >= min_mass;
+
+  CCoord base_pos = ship.GetPos();
+  const CTraj& velocity_traj = ship.GetVelocity();
+  CCoord ship_velocity = velocity_traj.ConvertToCoord();
+  double ship_speed = velocity_traj.rho;
+  double base_heading = velocity_traj.theta;
+
+  if (vinyl_case_i || uranium_case_i) {
+    double base_spread = ComputeSpreadSpeed(ship_speed);
+    double vinyl_heading_offset = 0.0;
+    double uranium_heading_offset = 0.0;
+    double vinyl_spread = base_spread;
+    double uranium_spread = base_spread;
+    double vinyl_jitter = ship.GetSize() * 0.15;
+    double uranium_jitter = ship.GetSize() * 0.15;
+
+    if (vinyl_case_i && uranium_case_i) {
+      double shared_offset = UniformRandom(-PI / 6.0, PI / 6.0);
+      vinyl_heading_offset = shared_offset;
+      uranium_heading_offset = shared_offset + UniformRandom(PI / 4.0, PI / 2.0);
+      vinyl_spread *= UniformRandom(0.85, 1.15);
+      uranium_spread *= UniformRandom(0.85, 1.15);
+      vinyl_jitter *= 1.2;
+      uranium_jitter *= 1.2;
+    }
+
+    if (vinyl_case_i) {
+      double heading = base_heading + vinyl_heading_offset;
+      SpawnTripleFragmentsForShip(world, base_pos, ship_velocity, vinyl_mass, VINYL,
+                                  heading, vinyl_spread, vinyl_jitter);
+    }
+    if (uranium_case_i) {
+      double heading = base_heading + uranium_heading_offset;
+      SpawnTripleFragmentsForShip(world, base_pos, ship_velocity, uranium_mass, URANIUM,
+                                  heading, uranium_spread, uranium_jitter);
+    }
+  }
+
+  struct CaseTwoEntry {
+    AsteroidKind material;
+    double mass;
+  };
+
+  std::vector<CaseTwoEntry> case_two_entries;
+  if (vinyl_case_ii) {
+    case_two_entries.push_back({VINYL, vinyl_mass});
+  }
+  if (uranium_case_ii) {
+    case_two_entries.push_back({URANIUM, uranium_mass});
+  }
+
+  if (case_two_entries.empty()) {
+    return;
+  }
+
+  if (case_two_entries.size() == 1) {
+    const CaseTwoEntry& entry = case_two_entries.front();
+    SpawnResourceAsteroid(world, base_pos, CCoord(), ship_velocity, entry.mass, entry.material);
+    return;
+  }
+
+  const CaseTwoEntry& first = case_two_entries[0];
+  const CaseTwoEntry& second = case_two_entries[1];
+
+  double m1 = first.mass;
+  double m2 = second.mass;
+  if (m1 < min_mass || m2 < min_mass) {
+    return;
+  }
+
+  double ratio = (m2 > g_fp_error_epsilon) ? (m1 / m2) : 1.0;
+  double delta_magnitude = std::max(1.0, std::min(4.0, g_game_max_speed * 0.25));
+  if (ship_speed < g_game_max_speed - 0.5) {
+    double headroom = g_game_max_speed - ship_speed;
+    double allowed = headroom / std::max(1.0, ratio);
+    if (allowed > 0.5) {
+      delta_magnitude = std::min(delta_magnitude, allowed);
+    }
+  }
+
+  CCoord delta = BuildPerpendicularDelta(ship_velocity, delta_magnitude);
+  CCoord velocity_first = ship_velocity + delta;
+  CCoord velocity_second = ship_velocity - (ratio * delta);
+
+  CCoord offset_first = delta * 0.05;
+  CCoord offset_second = delta * -0.05;
+
+  SpawnResourceAsteroid(world, base_pos, offset_first, velocity_first, m1, first.material);
+  SpawnResourceAsteroid(world, base_pos, offset_second, velocity_second, m2, second.material);
+}
+}  // namespace
 
 ///////////////////////////////////////////
 // Helper functions (must be defined before use in member functions)
@@ -2840,6 +3065,16 @@ void CShip::LogShipDestroyed() {
     pmyTeam->GetWorld()->LogAudioEvent(
         MakeTeamEventSuffix(pmyTeam, "ship_destroyed.default"),
         teamIndex, 0.0, 1, GetName());
+  }
+  bool use_new_destruction = true;
+  if (g_pParser && !g_pParser->UseNewFeature("ship-destruction")) {
+    use_new_destruction = false;
+  }
+  if (use_new_destruction) {
+    CWorld* world = GetWorld();
+    if (world) {
+      SpawnShipResourceDebris(*this, world);
+    }
   }
   CThing::KillThing();
 }

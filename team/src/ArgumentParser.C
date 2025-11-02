@@ -61,6 +61,7 @@ void ArgumentParser::InitializeFeatures() {
   features["physics"] = true;              // New: correct collision physics and momentum conservation
   features["collision-handling"] = true;   // New: deterministic snapshot/command collision pipeline (fixes multi-hit bugs)
   features["cargo-calc"] = true;           // New: tolerant cargo capacity checks for asteroid ingestion
+  features["ship-destruction"] = true;     // New: drop cargo/fuel debris on ship destruction
 
   // Security features
   features["laser-exploit"] = false;       // New: TOCTOU vulnerability patched (validate before firing)
@@ -134,6 +135,7 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
         "legacy-initial-orientation", "Use legacy initial orientation (all ships face east, asymmetric)")(
         "legacy-facing-detection", "Use legacy IsFacing (ignores toroidal shortest path)")(
         "legacy-cargo-calc", "Use strict cargo capacity check when collecting asteroids (legacy behavior)")(
+        "legacy-ship-destruction", "Use legacy ship destruction (no cargo/fuel debris)")(
         "announcer-velocity-clamping", "Enable velocity clamping announcements");
 
     // Feature bundles
@@ -390,6 +392,9 @@ bool ArgumentParser::Parse(int argc, char* argv[]) {
     if (result.count("legacy-cargo-calc")) {
       features["cargo-calc"] = false;  // Use strict legacy cargo capacity comparisons
     }
+    if (result.count("legacy-ship-destruction")) {
+      features["ship-destruction"] = false;  // Disable debris spawning on ship destruction
+    }
     if (result.count("announcer-velocity-clamping")) {
       features["announcer-velocity-clamping"] = true;
     }
@@ -420,6 +425,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["collision-handling"] = true;   // Enable improved collision processing
     features["laser-exploit"] = false;      // Patch exploit
     features["docking"] = true;              // Fix docking
+    features["ship-destruction"] = true;     // Enable debris spawning
   } else if (bundle == "legacy-mode") {
     features["collision-detection"] = false;
     features["velocity-limits"] = false;
@@ -432,6 +438,7 @@ void ArgumentParser::ApplyBundle(const std::string& bundle) {
     features["rangecheck-bug"] = true;      // Enable range check bug for legacy mode
     features["initial-orientation"] = false; // Enable asymmetric orientation for legacy mode
     features["facing-detection"] = false;   // Use legacy facing for legacy mode
+    features["ship-destruction"] = false;   // Preserve legacy ship destruction behavior
     // Set timing and physics parameters to default values for legacy mode
     game_turn_duration_ = 1.0;
     physics_simulation_dt_ = 0.2;
@@ -506,10 +513,14 @@ bool ArgumentParser::ParseConfigJson(const std::string& content) {
           features["velocity-limits"] = !(value == "true");
         } else if (key == "legacy-cargo-calc") {
           features["cargo-calc"] = !(value == "true");
+        } else if (key == "legacy-ship-destruction") {
+          features["ship-destruction"] = !(value == "true");
         } else if (key == "announcer-velocity-clamping") {
           features[key] = (value == "true");
         } else if (key == "cargo-calc") {
           features["cargo-calc"] = (value == "true");
+        } else if (key == "ship-destruction") {
+          features["ship-destruction"] = (value == "true");
         }
       }
     } else if (inOptions && line.find(":") != std::string::npos) {
@@ -603,6 +614,9 @@ bool ArgumentParser::SaveConfig(const std::string& filename) const {
     } else if (name == "velocity-limits") {
       // Convert to legacy-velocity-limits boolean format
       file << "    \"legacy-velocity-limits\": " << (useNew ? "false" : "true");
+    } else if (name == "ship-destruction") {
+      // Convert to legacy-ship-destruction boolean format
+      file << "    \"legacy-ship-destruction\": " << (useNew ? "false" : "true");
     } else {
       // Other features use direct boolean format
       file << "    \"" << name << "\": " << (useNew ? "true" : "false");
