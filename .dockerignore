@@ -38,7 +38,8 @@ TEAM_API.md
 
 # Don't exclude scripts - they're needed in the container!
 
-# Exclude vendor downloads
+# Exclude vendor downloads and built dependencies
 vendor/downloads/
+vendor/local/
 vendor/*.tar.gz
 vendor/*.zip

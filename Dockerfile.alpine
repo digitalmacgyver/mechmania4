@@ -11,15 +11,16 @@ RUN apk add --no-cache \
     sdl2_image-dev \
     sdl2_ttf-dev \
     sdl2_mixer-dev \
+    libmodplug-dev \
     pkgconfig
 
 # Copy source code
 WORKDIR /build
 COPY . .
 
-# Build the project
+# Build the project (disable vendored deps, use system packages)
 RUN mkdir -p build && cd build && \
-    cmake .. && \
+    cmake -DMM4_AUTO_VENDOR_DEPS=OFF .. && \
     make -j$(nproc)
 
 # Runtime stage - minimal Alpine image
@@ -31,6 +32,7 @@ RUN apk add --no-cache \
     sdl2_image \
     sdl2_ttf \
     sdl2_mixer \
+    libmodplug \
     libstdc++ \
     mesa-gl \
     ttf-dejavu
