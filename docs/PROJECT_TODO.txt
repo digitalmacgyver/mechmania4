@@ -13,6 +13,8 @@ Best parameters saved to: /home/viblio/coding_projects/mm_claude/teams/evo/outpu
 
 /home/viblio/coding_projects/mm_claude/teams/evo/output/EvoAI_params_best_pid609893.txt
 
+/home/viblio/coding_projects/mm_claude/teams/evo/output/EvoAI_params_best_pid974292.txt
+
 == EVO Combat ==
 
 For our next improvements:
@@ -673,10 +675,6 @@ Not re-enableable:
 * Game option to prevent docking at enemy bases (set at start time of
   either the server or observer) (counts as collision with asteroid
   for damage?)
-
-* Game option to prevent asteroid dust due to collision - if a
-  collision happens and you can't pick up and it would result in too
-  small due to break, no break.
 
 ####################### END ENGINE TODO #############################
 
