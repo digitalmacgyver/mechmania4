@@ -46,7 +46,7 @@ void MagicBag::clear() {
 
 // --- EvoAI (CTeam) Implementation ---
 
-EvoAI::EvoAI() : mb(NULL), hunter_config_count_(0), loaded_param_file_("") {
+EvoAI::EvoAI() : mb(NULL), loaded_param_file_(""), hunter_config_count_(0) {
     // Initialize parameters for GA tuning
 
     // Resource Management

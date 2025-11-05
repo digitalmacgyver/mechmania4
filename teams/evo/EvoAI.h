@@ -18,12 +18,12 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <limits>
 
 typedef std::map<std::string, double> ParamMap;
 
 // --- Data Structures ---
 
-// FuelTraj: Represents a trajectory and the fuel used to achieve it
 class FuelTraj {
 public:
     double fuel_used;
@@ -32,7 +32,6 @@ public:
     FuelTraj() : fuel_used(-1.0), order_kind(O_THRUST), order_mag(0.0) {}
 };
 
-// Entry: Represents a potential target in the MagicBag
 class Entry {
 public:
     CThing *thing;
@@ -41,7 +40,6 @@ public:
     Entry() : thing(NULL), turns_total(0.0) {}
 };
 
-// MagicBag: Central planning data structure
 class MagicBag {
 private:
     std::vector<std::vector<Entry*>> table;
@@ -54,21 +52,16 @@ public:
     void clear();
 };
 
-// Strategic Assessment: Global state analysis
 struct StrategicAssessment {
-    // Key strategic flags
     bool no_hunting_targets;
     bool no_more_points;
     bool fuel_constrained;
     bool endgame;
-    // Dynamically determined number of hunters needed this turn
     int active_hunters_needed;
-    // Resource tracking
     double uranium_left;
     double vinyl_left;
 };
 
-// Ship Roles
 enum ShipRole {
     GATHERER,
     HUNTER
@@ -80,7 +73,6 @@ class EvoAI : public CTeam {
 public:
     EvoAI();
     ~EvoAI();
-
     void Init();
     void Turn();
 
@@ -90,24 +82,18 @@ public:
     void InitializeLogging() {}
     void LogWorldState() {}
 
-    // Static configuration
     static bool s_loggingEnabled;
     static std::string s_paramFile;
     static std::string s_logFile;
-
-    // Core members accessible by Brains
     MagicBag* mb;
     StrategicAssessment strategy;
-    std::vector<ShipRole> ship_roles_; // Dynamically assigned roles
-
-    // Navigation function
+    std::vector<ShipRole> ship_roles_;
     FuelTraj determine_orders(CThing* thing, double time, CShip* ship);
-
 private:
     ParamMap params_;
     ParamMap default_params_;  // Store default parameter values
     std::string loaded_param_file_;  // Track which file was loaded
-    int hunter_config_count_; // Number of ships configured with high fuel capacity in Init
+    int hunter_config_count_;
     void LoadParameters();
     void PopulateMagicBag();
     void AssessStrategy();
@@ -115,7 +101,8 @@ private:
     void PrintStartupInfo();  // Print parameter information at startup
 };
 
-// Structure to cache GA parameters
+
+// Structure to cache GA parameters (UPDATED with new Targeting Weights)
 struct CachedParams {
     // Resource thresholds
     double LOW_FUEL_THRESHOLD;
@@ -132,6 +119,7 @@ struct CachedParams {
     double COMBAT_OVERKILL_BUFFER;
     // Strategy
     double STRATEGY_ENDGAME_TURN;
+
     // Targeting Weights
     double TARGET_WEIGHT_SHIP_BASE;
     double TARGET_WEIGHT_STATION_BASE;
@@ -139,11 +127,11 @@ struct CachedParams {
     double TARGET_WEIGHT_SHIP_CARGO;
     double TARGET_WEIGHT_STATION_VINYL;
     double TARGET_WEIGHT_DISTANCE_PENALTY;
+    // NEW: Prioritize low shields
     double TARGET_WEIGHT_SHIP_LOW_SHIELD;
 };
 
 // --- UnifiedBrain (CBrain Implementation) ---
-// Handles both Gathering and Hunting logic based on the dynamic role.
 class UnifiedBrain : public CBrain {
 public:
     UnifiedBrain(EvoAI* pTeam, ParamMap* params);
@@ -152,7 +140,7 @@ public:
 private:
     EvoAI* pmyEvoTeam_;
     CachedParams cache_;
-    CThing* pTarget; // Used by Hunter logic for persistence
+    CThing* pTarget;
 
     // Initialization
     void CacheParameters(ParamMap* params);
@@ -171,6 +159,7 @@ private:
     void ExecuteHunter();
     void SelectTarget();
     bool AttemptToShoot(CThing* target);
+    // NEW: Helper function for line of sight check
     bool CheckLineOfFire(const CCoord& origin, const CTraj& beam, CThing* target, double target_dist);
 };
 
