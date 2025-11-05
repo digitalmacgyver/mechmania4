@@ -75,6 +75,16 @@ EvoAI::EvoAI() : mb(NULL), hunter_config_count_(0), loaded_param_file_("") {
     // Strategy
     params_["STRATEGY_ENDGAME_TURN"] = 270.0;
 
+    // Targeting Weights (Initialized with reasonable defaults)
+    params_["TARGET_WEIGHT_SHIP_BASE"] = 1000.0;
+    params_["TARGET_WEIGHT_STATION_BASE"] = 500.0;
+    params_["TARGET_WEIGHT_SHIP_FUEL"] = 5.0;      // Value enemy fuel reserves
+    params_["TARGET_WEIGHT_SHIP_CARGO"] = 20.0;    // Value enemy cargo (denial of points)
+    params_["TARGET_WEIGHT_STATION_VINYL"] = 30.0; // Value station vinyl depletion
+    params_["TARGET_WEIGHT_DISTANCE_PENALTY"] = 1.0; // Penalty per unit distance
+    // NEW: Prioritize low shields (Value per point of missing shield)
+    params_["TARGET_WEIGHT_SHIP_LOW_SHIELD"] = 15.0;
+
     // Save default parameters before loading from file
     default_params_ = params_;
 
@@ -470,6 +480,16 @@ void UnifiedBrain::CacheParameters(ParamMap* params) {
     cache_.COMBAT_LASER_EFFICIENCY_RATIO = getParam("COMBAT_LASER_EFFICIENCY_RATIO", 3.0);
     cache_.COMBAT_OVERKILL_BUFFER = getParam("COMBAT_OVERKILL_BUFFER", 1.0);
     cache_.STRATEGY_ENDGAME_TURN = getParam("STRATEGY_ENDGAME_TURN", 270.0);
+
+    // Targeting Weights
+    cache_.TARGET_WEIGHT_SHIP_BASE = getParam("TARGET_WEIGHT_SHIP_BASE", 1000.0);
+    cache_.TARGET_WEIGHT_STATION_BASE = getParam("TARGET_WEIGHT_STATION_BASE", 500.0);
+    cache_.TARGET_WEIGHT_SHIP_FUEL = getParam("TARGET_WEIGHT_SHIP_FUEL", 5.0);
+    cache_.TARGET_WEIGHT_SHIP_CARGO = getParam("TARGET_WEIGHT_SHIP_CARGO", 20.0);
+    cache_.TARGET_WEIGHT_STATION_VINYL = getParam("TARGET_WEIGHT_STATION_VINYL", 30.0);
+    cache_.TARGET_WEIGHT_DISTANCE_PENALTY = getParam("TARGET_WEIGHT_DISTANCE_PENALTY", 1.0);
+    // NEW:
+    cache_.TARGET_WEIGHT_SHIP_LOW_SHIELD = getParam("TARGET_WEIGHT_SHIP_LOW_SHIELD", 15.0);
 }
 
 void UnifiedBrain::Decide() {
@@ -745,32 +765,27 @@ void UnifiedBrain::ExecuteHunter() {
     }
 }
 
-// Select the highest priority combat target (IFF aware)
+// UPDATED: Implements weighted scoring including low shield prioritization
 void UnifiedBrain::SelectTarget() {
-    // 1. Validate current target
+    // 1. Validate current target (Validation logic remains the same)
     if (pTarget && pTarget->IsAlive()) {
-        // IFF Check
         if (pTarget->GetTeam() != NULL && pTarget->GetTeam() != pShip->GetTeam()) {
-            
-            // Vulnerability Check: Ensure ships aren't docked
             if (pTarget->GetKind() == SHIP && ((CShip*)pTarget)->IsDocked()) {
-                pTarget = NULL; 
+                pTarget = NULL;
             }
-            // Efficiency Check: Ensure stations have vinyl
             else if (pTarget->GetKind() == STATION && ((CStation*)pTarget)->GetVinylStore() < 0.1) {
                 pTarget = NULL;
             }
-
         } else {
             pTarget = NULL;
         }
     }
 
-    // 2. If target is invalid, find a new one
+    // 2. If target is invalid, find a new one using weighted scoring
     if (!pTarget) {
         CWorld* pWorld = pShip->GetWorld();
         CThing* best_target = NULL;
-        double best_score = -1.0;
+        double best_score = -std::numeric_limits<double>::infinity();
 
         for (unsigned int index = pWorld->UFirstIndex; index != BAD_INDEX; index = pWorld->GetNextIndex(index)) {
             CThing* thing = pWorld->GetThing(index);
@@ -782,22 +797,41 @@ void UnifiedBrain::SelectTarget() {
 
             if (thing->GetKind() == SHIP) {
                 CShip* enemy = (CShip*)thing;
-                if (enemy->IsDocked()) continue;
+                if (enemy->IsDocked()) continue; // IMPORTANT: Never target docked ships
 
-                score = 1000.0;
-                if (enemy->GetAmount(S_CARGO) > 0.1) {
-                    score += 500.0;
-                }
+                // Apply weights
+                score += cache_.TARGET_WEIGHT_SHIP_BASE;
+
+                // Fuel (potential recovery + reduced threat)
+                score += enemy->GetAmount(S_FUEL) * cache_.TARGET_WEIGHT_SHIP_FUEL;
+
+                // Cargo (potential recovery/denial of enemy score)
+                score += enemy->GetAmount(S_CARGO) * cache_.TARGET_WEIGHT_SHIP_CARGO;
+
+                // NEW: Prioritize low shields. Use 50.0 as a practical maximum for normalization.
+                const double MAX_PRACTICAL_SHIELDS = 50.0;
+                double current_shields = enemy->GetAmount(S_SHIELD);
+
+                // Calculate bonus based on how much damage they have already taken
+                double missing_shields = std::max(0.0, MAX_PRACTICAL_SHIELDS - current_shields);
+
+                score += missing_shields * cache_.TARGET_WEIGHT_SHIP_LOW_SHIELD;
+
             } else if (thing->GetKind() == STATION) {
-                if (((CStation*)thing)->GetVinylStore() > 0.1) {
-                    score = 1500.0;
-                } else {
-                    continue; 
-                }
+                CStation* station = (CStation*)thing;
+                double vinyl_store = station->GetVinylStore();
+
+                if (vinyl_store < 0.1) continue;
+
+                // Apply weights
+                score += cache_.TARGET_WEIGHT_STATION_BASE;
+                score += vinyl_store * cache_.TARGET_WEIGHT_STATION_VINYL;
             }
 
-            score -= dist;
+            // Penalize distance
+            score -= dist * cache_.TARGET_WEIGHT_DISTANCE_PENALTY;
 
+            // Keep the highest score
             if (score > best_score) {
                 best_score = score;
                 best_target = thing;
@@ -807,7 +841,56 @@ void UnifiedBrain::SelectTarget() {
     }
 }
 
-// Implements advanced shooting logic: Efficiency, Overkill Prevention, and Lead calculation.
+// NEW: Geometric Line Segment-Circle Intersection Test for Obstruction Avoidance
+// Checks if the beam intersects any obstacle closer than the target using T+1 predictions.
+// This replaces the use of CWorld::LaserHits.
+bool UnifiedBrain::CheckLineOfFire(const CCoord& origin, const CTraj& beam, CThing* target, double target_dist) {
+    CWorld* pWorld = pShip->GetWorld();
+
+    // Calculate the unit vector in the beam direction
+    CTraj UnitBeam(1.0, beam.theta);
+
+    // Iterate through all potential obstacles
+    for (unsigned int index = pWorld->UFirstIndex; index != BAD_INDEX; index = pWorld->GetNextIndex(index)) {
+        CThing* obstacle = pWorld->GetThing(index);
+
+        // Skip invalid, dead, the shooter itself, and the target
+        if (!obstacle || !obstacle->IsAlive() || obstacle == pShip || obstacle == target) continue;
+
+        // Predict obstacle position at T+1s (when the laser fires)
+        CCoord ObstaclePos = obstacle->PredictPosition(g_game_turn_duration);
+        double ObstacleRadius = obstacle->GetSize();
+
+        // Vector from laser origin to obstacle center (Toroidally aware)
+        CTraj VectToObstacle = origin.VectTo(ObstaclePos);
+
+        // 1. Calculate the projection distance (t) of VectToObstacle onto the UnitBeam.
+        // t is the distance from the origin to the point on the beam line closest to the obstacle center.
+        // We use the dot product method
+        double t = VectToObstacle.Dot(UnitBeam);
+
+        // 2. Check if the closest point is on the segment AND closer than the target
+        // We use a small epsilon (0.001) for robustness.
+        if (t < 0.001 || t > (target_dist - 0.001)) {
+            // Closest point is behind the shooter (t<0) or beyond the target (t>target_dist).
+            continue;
+        }
+
+        // 3. Calculate the distance squared from the obstacle center to this closest point.
+        // By Pythagoras: |VectToObstacle|^2 = t^2 + distance_to_line^2
+        // We use squared values to avoid expensive sqrt operations.
+        double dist_to_line_sq = (VectToObstacle.rho * VectToObstacle.rho) - (t * t);
+
+        // 4. Check for intersection
+        if (dist_to_line_sq < (ObstacleRadius * ObstacleRadius)) {
+            // Intersection detected! The beam is blocked by the obstacle (friendly, asteroid, or other enemy).
+            return false; // Blocked
+        }
+    }
+    return true; // Line of fire is clear to the target
+}
+
+// UPDATED: Uses CheckLineOfFire instead of CWorld::LaserHits
 bool UnifiedBrain::AttemptToShoot(CThing* target) {
     // Constants (Defined in GameConstants.h, used here for calculation)
     const double DAMAGE_PER_REMAINING_LENGTH = 30.0; // g_laser_mass_scale_per_remaining_unit
@@ -878,23 +961,32 @@ bool UnifiedBrain::AttemptToShoot(CThing* target) {
         }
     }
 
-    // 6. Execute Orders
-    
-    // Final check: Ensure the beam actually hits the target 
+    // 6. UPDATED: Friendly Fire / Obstruction Check (Manual Implementation)
     if (B_opt > distance_D + 0.01) {
+
+        CTraj LaserTraj(B_opt, target_angle);
+
+        // Check if the path is clear from MyPos (T+1)
+        if (!CheckLineOfFire(MyPos, LaserTraj, target, distance_D)) {
+            // Shot is blocked by an obstacle or friendly. Abort.
+            return false;
+        }
+
+        // 7. Execute Orders (Line of fire is clear)
+
         // Calculate the required turn delta
         double angle_error = target_angle - pShip->GetOrient();
         while (angle_error > PI) angle_error -= PI2;
         while (angle_error < -PI) angle_error += PI2;
 
-        // Issue Turn order
+        // Issue Turn order (This cancels any previous thrust order)
         pShip->SetOrder(O_TURN, angle_error);
 
-        // Issue Laser order (engine checks fuel and clamps if necessary)
+        // Issue Laser order
         pShip->SetOrder(O_LASER, B_opt);
         return true;
     }
 
-    // Decided not to shoot (beam doesn't reach)
-    return false; 
+    // Decided not to shoot
+    return false;
 }

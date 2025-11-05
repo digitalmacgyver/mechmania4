@@ -132,6 +132,14 @@ struct CachedParams {
     double COMBAT_OVERKILL_BUFFER;
     // Strategy
     double STRATEGY_ENDGAME_TURN;
+    // Targeting Weights
+    double TARGET_WEIGHT_SHIP_BASE;
+    double TARGET_WEIGHT_STATION_BASE;
+    double TARGET_WEIGHT_SHIP_FUEL;
+    double TARGET_WEIGHT_SHIP_CARGO;
+    double TARGET_WEIGHT_STATION_VINYL;
+    double TARGET_WEIGHT_DISTANCE_PENALTY;
+    double TARGET_WEIGHT_SHIP_LOW_SHIELD;
 };
 
 // --- UnifiedBrain (CBrain Implementation) ---
@@ -163,6 +171,7 @@ private:
     void ExecuteHunter();
     void SelectTarget();
     bool AttemptToShoot(CThing* target);
+    bool CheckLineOfFire(const CCoord& origin, const CTraj& beam, CThing* target, double target_dist);
 };
 
 #endif // EVOAI_H
