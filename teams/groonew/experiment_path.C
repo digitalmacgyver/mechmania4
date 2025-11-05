@@ -18,7 +18,7 @@
 
 /*
 Build with:
-g++ -I../../team/src ../../team/src/Coord.C ../../team/src/Sendable.C ../../team/src/Traj.C experiment_path.C
+g++ -I../../team/src ../../team/src/Coord.C ../../team/src/Sendable.C ../../team/src/Traj.C ../../team/src/GameConstants.C experiment_path.C
 */
 
 
