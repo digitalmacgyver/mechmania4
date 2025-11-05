@@ -17,7 +17,9 @@ from datetime import datetime
 
 # --- Configuration (Constants) ---
 
-# Define the parameters (Genome)
+# --- Configuration (Constants) ---
+
+# Define the parameters (Genome) - UPDATED: Added new targeting weights
 PARAMETERS = {
     # --- Resource Management ---
     "LOW_FUEL_THRESHOLD": (2.0, 20.0),
@@ -41,6 +43,19 @@ PARAMETERS = {
     "COMBAT_LASER_EFFICIENCY_RATIO": (1.5, 5.0),
     "COMBAT_OVERKILL_BUFFER": (0.0, 5.0),
 
+    # Combat Targeting Weights
+    "TARGET_WEIGHT_SHIP_BASE": (500.0, 2000.0),
+    "TARGET_WEIGHT_STATION_BASE": (100.0, 1500.0),
+    # NEW: Value enemy fuel reserves
+    "TARGET_WEIGHT_SHIP_FUEL": (0.0, 20.0),
+    # NEW: Value enemy cargo (denial of points)
+    "TARGET_WEIGHT_SHIP_CARGO": (5.0, 50.0),
+    # NEW: Value station vinyl depletion
+    "TARGET_WEIGHT_STATION_VINYL": (10.0, 60.0),
+    # NEW: Value per point of missing shield (prioritizes easier kills)
+    "TARGET_WEIGHT_SHIP_LOW_SHIELD": (5.0, 50.0), 
+    "TARGET_WEIGHT_DISTANCE_PENALTY": (0.5, 5.0),
+
     # --- Strategy ---
     "STRATEGY_ENDGAME_TURN": (250.0, 295.0)
 }
@@ -48,7 +63,6 @@ PARAMETERS = {
 
 PARAM_KEYS = list(PARAMETERS.keys())
 NUM_PARAMS = len(PARAMETERS.keys())
-
 # GA Settings (Defaults)
 DEFAULT_POPULATION_SIZE = 30
 DEFAULT_NUM_GENERATIONS = 50
